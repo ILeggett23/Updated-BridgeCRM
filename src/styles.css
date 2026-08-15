@@ -3674,6 +3674,35 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .relationship-profile--editor .contact-information .card-section-head h2 { font-family: var(--font-editorial); font-size: 25px; font-weight: var(--font-weight-medium); }
 .relationship-profile--editor .contact-information .form-grid { grid-template-columns: 1fr; gap: var(--space-4); margin-top: var(--space-5); }
 .relationship-profile--editor .contact-edit-actions { position: sticky; bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-2)); z-index: 3; margin: var(--space-6) calc(-1 * var(--space-2)) 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: color-mix(in srgb,var(--color-page) 95%,transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.relationship-edit-form { display: grid; gap: 0; }
+.relationship-edit-section { border-bottom: 1px solid var(--color-border); }
+.relationship-edit-section:first-child { border-top: 1px solid var(--color-border); }
+.relationship-edit-section > summary { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; list-style: none; }
+.relationship-edit-section > summary::-webkit-details-marker { display: none; }
+.relationship-edit-section > summary > span { min-width: 0; display: grid; gap: 3px; }
+.relationship-edit-section > summary strong { color: var(--color-text-primary); font-size: 16px; font-weight: var(--font-weight-medium); }
+.relationship-edit-section > summary small { overflow: hidden; color: var(--color-text-tertiary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.relationship-edit-section > summary .app-icon { width: 18px; height: 18px; color: var(--color-text-tertiary); transition: transform var(--motion-fast); }
+.relationship-edit-section[open] > summary .app-icon { transform: rotate(180deg); }
+.relationship-edit-section__body { display: grid; gap: 15px; padding: 2px 0 20px; }
+.relationship-edit-section__body textarea { min-height: 132px; }
+.profile-editor-note { margin: 12px 0 0; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.45; text-align: center; }
+.capture-detail-sheet { height: min(82dvh, 780px); max-height: min(82dvh, 780px); }
+.capture-detail-sheet .modal-head { align-items: flex-start; }
+.capture-detail-sheet .modal-head h2 { font-size: 24px; line-height: 1.1; }
+.capture-detail-form { display: grid; gap: 0; }
+.capture-detail-person { min-height: 68px; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--color-border); }
+.capture-detail-person > span { min-width: 0; display: grid; gap: 2px; }
+.capture-detail-person strong { overflow: hidden; font-family: var(--font-editorial); font-size: 19px; font-weight: var(--font-weight-medium); text-overflow: ellipsis; white-space: nowrap; }
+.capture-detail-person small { color: var(--color-text-tertiary); font-size: 12px; }
+.capture-detail-section { display: grid; gap: 14px; padding: 20px 0; border-bottom: 1px solid var(--color-border); }
+.capture-detail-section > h3 { margin: 0; font-family: var(--font-editorial); font-size: 20px; font-weight: var(--font-weight-medium); }
+.capture-detail-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.capture-detail-fields .field:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.capture-detail-fields textarea { min-height: 104px; }
+.capture-detail-note { margin: 16px 0 0; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }
+.capture-detail-actions { position: sticky; bottom: calc(-1 * var(--space-4)); z-index: 2; grid-template-columns: minmax(0,.6fr) minmax(0,1fr); margin: 12px calc(-1 * var(--space-4)) calc(-1 * var(--space-4)); padding: 12px var(--space-4) calc(var(--space-4) + var(--safe-bottom)); border-top: 1px solid var(--color-border); background: color-mix(in srgb,var(--color-page) 96%,transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+@media (max-width: 359px) { .capture-detail-fields { grid-template-columns: 1fr; } .capture-detail-fields .field { grid-column: 1; } }
 .profile-history-screen .presentation-screen__body { padding-top: 0; }
 .profile-history-screen .activity-filters { top: calc(var(--safe-top) + 59px); margin-inline: calc(-1 * max(var(--space-5), var(--safe-left))) calc(-1 * max(var(--space-5), var(--safe-right))); padding: 10px max(var(--space-5),var(--safe-right)) 9px max(var(--space-5),var(--safe-left)); overflow-x: auto; display: flex; gap: 8px; border-bottom: 1px solid var(--color-border); border-radius: 0; background: color-mix(in srgb,var(--color-page) 95%,transparent); scrollbar-width: none; }
 .profile-history-screen .activity-filters button { min-width: max-content; min-height: 38px; padding-inline: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); font-size: 13px; }
@@ -4204,7 +4233,7 @@ body .bridge-pattern-shell > .main {
 }
 .quick-capture-wizard__back .app-icon { width: 18px; height: 18px; }
 .quick-capture-wizard__progress {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--capture-step-count, 4), minmax(0, 1fr));
   gap: 6px;
 }
 .quick-capture-wizard__progress span { height: 3px; }
