@@ -1,6 +1,6 @@
 # BridgeCRM
 
-BridgeCRM is a private, offline-first relationship CRM and installable PWA. This
+BridgeCRM is a local-first, offline relationship CRM and installable PWA. This
 repository is the standalone source tree copied from the deployed BridgeCRM
 Human Network application at release `1.3.2` (source commit
 `9f1eff12685ea6f0a08d12c8b8e0b3bcad20df2a`). It does not require ChatGPT Sites
@@ -15,7 +15,7 @@ until the production data checks in
 - Node.js 22 or newer
 - npm 10 or newer
 - A modern browser for the PWA
-- A Cloudflare account only when developing or deploying the hosted API
+- A Cloudflare account only when deliberately developing or deploying the optional hosted API
 
 ## Quick start
 
@@ -26,9 +26,9 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:4173>. The ordinary development server uses browser
-storage and a small local state endpoint; it does not write to production D1 or
-R2.
+Open <http://localhost:4173>. Bridge opens directly without a sign-in screen.
+The ordinary development server stores data in browser localStorage and
+IndexedDB; it does not write to production D1 or R2.
 
 Available commands:
 
@@ -43,8 +43,9 @@ npm run cloudflare:deploy:dry
 
 ## Local full-stack development
 
-The Cloudflare Worker provides accounts, sync, secure scorecards, hosted push
-notifications, and backups. To run it locally without touching production:
+The optional Cloudflare Worker provides legacy accounts, sync, hosted
+scorecards, push notifications, and backups. It is not required to run the
+GitHub Pages or local web app:
 
 ```bash
 cp .dev.vars.example .dev.vars
@@ -52,10 +53,9 @@ npm run cloudflare:migrate:local
 npm run cloudflare:dev
 ```
 
-Open <http://localhost:8787>. On that origin the frontend automatically uses the
-local Worker API. Keep `AUTH_ENABLED=false` for normal local CRM work. Enabling
-accounts requires the development secrets and services described in
-[CLOUD_ACCOUNTS.md](CLOUD_ACCOUNTS.md).
+Open <http://localhost:8787> to work on the optional API. The standalone app
+does not load its account client, so it remains local-first even when that
+Worker is available.
 
 ## Architecture
 
@@ -63,10 +63,8 @@ accounts requires the development secrets and services described in
   application shell
 - `src/*-logic.js`: contacts, engagement, communications, analytics,
   relationship health, network, scorecard, and release logic
-- `src/account-client.js`: IndexedDB-backed account session and offline sync
-  queue
-- `src/server/account-runtime.js`: authentication, accounts, sync, backup, and
-  account-management API runtime
+- `src/account-client.js` and `src/server/account-runtime.js`: retained optional
+  hosted-account implementation; neither is loaded by the standalone app
 - `src/sw.js`, `src/manifest.webmanifest`: PWA cache, notifications, navigation,
   and install behavior
 - `drizzle/`: ordered D1 schema migrations
@@ -75,11 +73,10 @@ accounts requires the development secrets and services described in
 - `dev.mjs`: dependency-free local development server
 - `tests/`: Node test suite
 
-The CRM remains usable without an account. Anonymous data is persisted in
-browser localStorage and IndexedDB. Signed-in data is cached locally and synced
-through the Worker to D1. R2 stores logical user backup objects. Pipeline stage
-definitions and analytics remain in the production application logic; this
-migration does not change them.
+The CRM opens without an account and persists data in browser localStorage and
+IndexedDB. Pipeline stage definitions and analytics remain in the production
+application logic; this migration does not change them. Use Bridge's JSON
+backup/export tools to move local data between browsers or devices.
 
 ## Configuration
 
@@ -102,7 +99,7 @@ Important variables:
 | `BRIDGE_API_BASE` | Optional frontend API override for a custom host |
 
 Production secrets belong in the deployment provider's secret manager, not in
-Git or `wrangler.jsonc`.
+Git or `wrangler.jsonc`. They are unnecessary for the standalone web app.
 
 ## Build output
 
@@ -117,16 +114,14 @@ Sites project metadata.
 ## Deployment
 
 The frontend can be hosted on GitHub Pages, Cloudflare Pages, Netlify, Vercel,
-or any static HTTPS host. The existing Cloudflare Worker can remain the API
-during the staged migration.
+or any static HTTPS host. GitHub Pages needs no account, database, secret, or
+Cloudflare service to open and use the CRM.
 
 Before publishing a new frontend origin:
 
-1. add that exact origin to `ALLOWED_ORIGINS`;
-2. set `PUBLIC_APP_URL` to the new HTTPS URL;
-3. add the hostname to the Turnstile widget;
-4. verify account email links, scorecards, Web Push, sync, and PWA installation;
-5. keep the ChatGPT Site online until D1/R2 and browser-data checks pass.
+1. deploy the static `src/` files;
+2. verify the PWA installation and browser-local persistence;
+3. keep an exported JSON backup of important local data.
 
 For a new Cloudflare account, create a D1 database and private R2 bucket, update
 the non-secret binding identifiers in `wrangler.jsonc`, store secrets with
@@ -141,14 +136,12 @@ source-to-standalone dependency and data inventory.
 ## Data safety
 
 - No production data is stored in this Git repository.
-- Local browser records stay on the device unless explicitly exported or
-  migrated through the signed-in sync flow.
-- D1 and R2 must be backed up before changing bindings or retiring the Site.
-- The old Site deployment must remain available until the standalone frontend
-  has been verified with real accounts and data.
+- Local browser records stay on the device unless explicitly exported.
+- Export a JSON backup before clearing browser data or moving to another device.
+- The legacy hosted deployment stays available independently of this standalone
+  GitHub Pages application.
 
 ## GitHub
 
 Use `main` as the default branch. GitHub Actions runs the same npm build and test
-suite on pushes and pull requests. Keep the repository private while it contains
-deployment topology and operational documentation.
+suite on pushes and pull requests.
