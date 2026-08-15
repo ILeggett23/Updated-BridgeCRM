@@ -1,0 +1,198 @@
+(function installBridgeEngagementLogic(global) {
+  const PIPELINE_STAGES = new Set(["PQI", "QI/P", "FUP", "LA", "CNA", "Proposal", "Follow-Up", "Order Placed", "Active Customer"]);
+  const pipelineEventStage = event => String(event?.toStage || event?.stage || "");
+
+  const dayKey = value => {
+    const date = value ? new Date(value) : new Date();
+    if (Number.isNaN(date.getTime())) return "";
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  function normalizeExcludedDates(value) {
+    if (!Array.isArray(value)) return [];
+    const valid = value.filter(item => {
+      if (typeof item !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(item)) return false;
+      const [year, month, day] = item.split("-").map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+    });
+    return [...new Set(valid)].sort();
+  }
+
+  function normalizeRestRules(value) {
+    if (!Array.isArray(value)) return [];
+    const normalized = value.flatMap(rule => {
+      if (!rule || typeof rule !== "object") return [];
+      if (rule.frequency === "weekly") {
+        const weekdays = [...new Set((Array.isArray(rule.weekdays) ? rule.weekdays : []).map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b);
+        return weekdays.length ? [{ frequency: "weekly", weekdays }] : [];
+      }
+      if (rule.frequency === "monthly") {
+        const day = Number(rule.day);
+        return Number.isInteger(day) && day >= 1 && day <= 31 ? [{ frequency: "monthly", day }] : [];
+      }
+      if (rule.frequency === "yearly") {
+        const date = String(rule.date || "");
+        if (!/^\d{2}-\d{2}$/.test(date)) return [];
+        const [month, day] = date.split("-").map(Number);
+        const candidate = new Date(2000, month - 1, day);
+        return candidate.getMonth() === month - 1 && candidate.getDate() === day ? [{ frequency: "yearly", date }] : [];
+      }
+      return [];
+    });
+    const seen = new Set();
+    return normalized.filter(rule => {
+      const key = rule.frequency === "weekly" ? `weekly:${rule.weekdays.join(",")}` : rule.frequency === "monthly" ? `monthly:${rule.day}` : `yearly:${rule.date}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function matchesRestRule(date, rule) {
+    if (rule.frequency === "weekly") return rule.weekdays.includes(date.getDay());
+    if (rule.frequency === "monthly") return date.getDate() === rule.day;
+    if (rule.frequency === "yearly") return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` === rule.date;
+    return false;
+  }
+
+  function dailyGoalMetrics(state, now = new Date()) {
+    const goal = Math.max(1, Number(state.settings?.dailyGoal) || 5);
+    const today = dayKey(now);
+    const counts = new Map();
+    const excludedDates = normalizeExcludedDates(state.settings?.streakExcludedDates);
+    const restRules = normalizeRestRules(state.settings?.streakRestRules);
+    const excludedDays = new Set(excludedDates.filter(key => key <= today));
+    const isExcludedDay = date => excludedDays.has(dayKey(date)) || restRules.some(rule => matchesRestRule(date, rule));
+
+    (state.contacts || []).flatMap(contact => contact.conversations || []).forEach(log => {
+      if (!log.isCountedConversation) return;
+      const occurredAt = new Date(log.conversationDate || log.createdAt);
+      if (Number.isNaN(occurredAt.getTime()) || occurredAt > now) return;
+      const key = dayKey(occurredAt);
+      if (!key || key > today) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    const completedDays = new Set([...counts].filter(([, count]) => count >= goal).map(([key]) => key));
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = dayKey(yesterdayDate);
+    const todayComplete = completedDays.has(today);
+    const yesterdayComplete = completedDays.has(yesterday);
+    const todayExcluded = isExcludedDay(todayDate);
+
+    // Keep the last earned streak visible while today's goal is still in progress.
+    // Rest days are neutral: they preserve continuity but never add to the streak.
+    const streakEndDate = todayComplete || todayExcluded ? todayDate : yesterdayDate;
+    let goalStreak = 0;
+    const cursor = new Date(streakEndDate);
+    while (true) {
+      const key = dayKey(cursor);
+      if (isExcludedDay(cursor)) {
+        cursor.setDate(cursor.getDate() - 1);
+        continue;
+      }
+      if (!completedDays.has(key)) break;
+      goalStreak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return {
+      goal,
+      today,
+      todayCount: counts.get(today) || 0,
+      todayComplete,
+      yesterday,
+      yesterdayComplete,
+      completedDayCount: completedDays.size,
+      goalStreak,
+      excludedDates,
+      restRules,
+      todayExcluded
+    };
+  }
+
+  function achievementMetrics(state) {
+    const contacts = state.contacts || [];
+    const counted = contacts.flatMap(contact => contact.conversations || []).filter(log => log.isCountedConversation);
+    const dailyGoal = dailyGoalMetrics(state);
+    const followUps = contacts.flatMap(contact => contact.followUps || []);
+    const completedFollowUps = followUps.filter(item => item.status === "completed" || item.completedAt).length;
+    const pipelineEvents = contacts.flatMap(contact => contact.stageEvents || []).filter(event => PIPELINE_STAGES.has(pipelineEventStage(event)));
+    return {
+      contacts: contacts.length,
+      conversations: counted.length,
+      followUpsScheduled: followUps.length,
+      followUpsCompleted: completedFollowUps,
+      pipelineMoves: pipelineEvents.length,
+      launches: contacts.flatMap(contact => contact.stageEvents || []).filter(event => pipelineEventStage(event) === "LA").length,
+      favoritePlaces: (state.places || []).filter(place => place.isFavorite).length,
+      savedPlaces: (state.places || []).length,
+      goalDays: dailyGoal.completedDayCount,
+      goalStreak: dailyGoal.goalStreak
+    };
+  }
+
+  const definitions = [
+    { id: "first-contact", category: "Getting Started", name: "First Connection", description: "Add your first contact.", metric: "contacts", target: 1, icon: "userPlus" },
+    { id: "first-conversation", category: "Getting Started", name: "Conversation Starter", description: "Log your first counted conversation.", metric: "conversations", target: 1, icon: "chat" },
+    { id: "bridge-builder", category: "Getting Started", name: "Bridge Builder", description: "Build a list of 5 contacts.", metric: "contacts", target: 5, icon: "link" },
+    { id: "getting-organized", category: "Getting Started", name: "Getting Organized", description: "Schedule your first follow-up.", metric: "followUpsScheduled", target: 1, icon: "calendarCheck" },
+    { id: "first-step-forward", category: "Getting Started", name: "First Step Forward", description: "Move a contact into a pipeline stage.", metric: "pipelineMoves", target: 1, icon: "rocket" },
+    { id: "opening-doors", category: "Conversations", name: "Opening Doors", description: "Log 10 counted conversations.", metric: "conversations", target: 10, icon: "sparkles" },
+    { id: "momentum-builder", category: "Conversations", name: "Momentum Builder", description: "Log 25 counted conversations.", metric: "conversations", target: 25, icon: "fire" },
+    { id: "connector", category: "Conversations", name: "Connector", description: "Log 50 counted conversations.", metric: "conversations", target: 50, icon: "link" },
+    { id: "community-builder", category: "Conversations", name: "Community Builder", description: "Log 100 counted conversations.", metric: "conversations", target: 100, icon: "network" },
+    { id: "goal-getter", category: "Consistency", name: "Goal Getter", description: "Complete your daily conversation goal.", metric: "goalDays", target: 1, icon: "target" },
+    { id: "three-day-spark", category: "Consistency", name: "Three-Day Spark", description: "Complete your daily goal 3 days in a row.", metric: "goalStreak", target: 3, icon: "fire" },
+    { id: "one-week-momentum", category: "Consistency", name: "One-Week Momentum", description: "Complete your daily goal 7 days in a row.", metric: "goalStreak", target: 7, icon: "calendar" },
+    { id: "consistency-wins", category: "Consistency", name: "Consistency Wins", description: "Complete your daily goal 14 days in a row.", metric: "goalStreak", target: 14, icon: "award" },
+    { id: "unstoppable", category: "Consistency", name: "Unstoppable", description: "Complete your daily goal 30 days in a row.", metric: "goalStreak", target: 30, icon: "trophy" },
+    { id: "follow-through", category: "Follow-Ups", name: "Follow Through", description: "Complete your first scheduled follow-up.", metric: "followUpsCompleted", target: 1, icon: "circleCheck" },
+    { id: "reliable", category: "Follow-Ups", name: "Reliable", description: "Complete 10 follow-ups.", metric: "followUpsCompleted", target: 10, icon: "calendarCheck" },
+    { id: "relationship-builder", category: "Follow-Ups", name: "Relationship Builder", description: "Complete 25 follow-ups.", metric: "followUpsCompleted", target: 25, icon: "handshake" },
+    { id: "trust-builder", category: "Follow-Ups", name: "Trust Builder", description: "Complete 50 follow-ups.", metric: "followUpsCompleted", target: 50, icon: "award" },
+    { id: "first-launch", category: "Pipeline", name: "First Launch", description: "Record your first launch.", metric: "launches", target: 1, icon: "rocket" },
+    { id: "favorite-stop", category: "Organization", name: "Favorite Stop", description: "Save your first favorite networking place.", metric: "favoritePlaces", target: 1, icon: "star" },
+    { id: "places-to-go", category: "Organization", name: "Places to Go", description: "Save 3 useful networking places.", metric: "savedPlaces", target: 3, icon: "location" }
+  ];
+
+  function evaluateAchievements(state, unlocked = {}) {
+    const metrics = achievementMetrics(state);
+    const newlyUnlocked = [];
+    const progress = definitions.map(definition => {
+      const current = Number(metrics[definition.metric]) || 0;
+      const unlockDate = unlocked[definition.id] || null;
+      if (!unlockDate && current >= definition.target) newlyUnlocked.push(definition.id);
+      return { ...definition, current, unlockedAt: unlockDate, complete: Boolean(unlockDate) || current >= definition.target };
+    });
+    return { metrics, progress, newlyUnlocked };
+  }
+
+  function dueReminderEvents(state, now = new Date()) {
+    const settings = state.settings || {};
+    if (!settings.notificationsEnabled) return [];
+    const events = [];
+    if (settings.followUpNotifications) {
+      (state.contacts || []).filter(contact => !contact.archivedAt && !contact.isFilteredOut).forEach(contact => {
+        (contact.followUps || []).filter(item => (item.status || (item.completedAt ? "completed" : "scheduled")) === "scheduled" && !item.notificationSentAt).forEach(item => {
+          const due = new Date(item.dueDate);
+          if (!Number.isNaN(due.getTime()) && due <= now) events.push({ type: "followup", contact, followUp: item });
+        });
+      });
+    }
+    if (settings.dailyReminderEnabled && state.meta?.dailyReminderSentDate !== dayKey(now)) {
+      const [hour, minute] = String(settings.dailyReminderTime || "09:00").split(":").map(Number);
+      const reminderAt = new Date(now); reminderAt.setHours(hour || 0, minute || 0, 0, 0);
+      const todayCount = (state.contacts || []).flatMap(contact => contact.conversations || []).filter(log => log.isCountedConversation && dayKey(log.conversationDate || log.createdAt) === dayKey(now)).length;
+      const goal = Math.max(1, Number(settings.dailyGoal) || 5);
+      if (now >= reminderAt && todayCount < goal) events.push({ type: "daily", remaining: goal - todayCount, date: dayKey(now) });
+    }
+    return events;
+  }
+
+  global.BridgeEngagement = Object.freeze({ achievementMetrics, dailyGoalMetrics, dayKey, definitions, dueReminderEvents, evaluateAchievements, normalizeExcludedDates, normalizeRestRules });
+})(globalThis);
