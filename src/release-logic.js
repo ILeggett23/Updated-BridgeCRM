@@ -1,8 +1,8 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.2",
-    assetVersion: "v1.3.2",
+    version: "1.3.3",
+    assetVersion: "v1.3.3",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
@@ -17,8 +17,8 @@
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Unified settings",
-        description: "Account, notifications, sync, and scorecard screens now match Bridge's approved mobile presentation."
+        title: "Open directly",
+        description: "Bridge now opens as a local-first CRM without an account or sign-in screen."
       })
     ])
   });
