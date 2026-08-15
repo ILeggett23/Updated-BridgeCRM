@@ -1,0 +1,79 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const app = fs.readFileSync(path.join(root, "src", "app.js"), "utf8");
+const styles = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const index = fs.readFileSync(path.join(root, "src", "index.html"), "utf8");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "src", "manifest.webmanifest"), "utf8"));
+
+test("Phase 15E Settings root and focused subpages are addressable", () => {
+  for (const section of ["profile","goals","notifications","preferences","data","account","sessions","backup","privacy","about"]) {
+    assert.match(app, new RegExp(`SETTINGS_SECTIONS[^\\n]+["\\']${section}["\\']`));
+    assert.match(app, new RegExp(`data-settings-section-open="\\$\\{escapeHTML\\(section\\)\\}"`));
+  }
+  for (const label of ["Profile","Password","Signed-in devices","Conversation goals","Streak & achievements","Conversation reminders","Follow-up reminders","Relationship settings","Sync status","Backup & export","Scorecards and sharing","About and support"]) assert.ok(app.includes(label), `missing Settings destination ${label}`);
+  assert.ok(app.includes("presentationParentURL(screen = ui.routedScreen)"));
+  assert.ok(app.includes('screen === "settings" && ui.routedSection && ui.routedSection !== "root"'));
+  assert.equal(app.includes("function settingsDisclosure("), false);
+});
+
+test("split Settings forms merge only controls rendered on the current page", () => {
+  assert.ok(app.includes("const hasControl=name=>Boolean(form.elements.namedItem(name))"));
+  assert.ok(app.includes('if(hasControl("dailyGoal"))next.dailyGoal='));
+  assert.ok(app.includes('if(hasControl("followUpNotifications"))next.followUpNotifications='));
+  assert.ok(app.includes('if(hasControl("healthScoresVisible"))next.healthScoresVisible='));
+  assert.equal(app.includes('name="healthNotificationsEnabled"'), false);
+  assert.ok(app.includes("Bridge stores the existing preference for compatibility"));
+});
+
+test("approved appearance is fixed while accessibility preferences remain active", () => {
+  assert.equal(app.includes('"appearance"'), false);
+  assert.equal(app.includes("settingsAppearanceContent"), false);
+  assert.equal(app.includes("settingsAccentDraft"), false);
+  assert.equal(app.includes('name="theme"'), false);
+  assert.equal(app.includes('name="accent"'), false);
+  assert.equal(app.includes('name="compact"'), false);
+  assert.match(app, /delete next\.settings\.theme;[\s\S]*delete next\.settings\.accent;[\s\S]*delete next\.settings\.compact;/);
+  assert.match(app, /function applyFixedAppearance\(\)/);
+  assert.match(styles, /:root \{[\s\S]*color-scheme: light;/);
+  assert.equal(styles.includes("prefers-color-scheme: dark"), false);
+  assert.equal(styles.includes('[data-theme="dark"]'), false);
+  assert.equal(styles.includes(".accent-dot"), false);
+  assert.match(styles, /@media \(prefers-contrast: more\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(index, /<meta name="theme-color" content="#f5f2ec"\s*\/?>/);
+  assert.equal(manifest.theme_color, "#f5f2ec");
+  assert.equal(manifest.background_color, "#f5f2ec");
+});
+
+test("goals and notification screens disclose production capability honestly", () => {
+  assert.ok(app.includes("function goalPeriodMetrics("));
+  assert.ok(app.includes("countedConversations(weekRange).length"));
+  assert.ok(app.includes("countedConversations(monthRange).length"));
+  assert.ok(app.includes("Stalled-relationship and weekly-recap notifications are not shown"));
+  assert.ok(app.includes("Health notifications are not delivered"));
+  assert.ok(app.includes("no production scheduler currently sends relationship-health reminders"));
+  assert.equal(app.includes("weeklyGoal*3"), false);
+});
+
+test("account, data, and scorecard presentation retains production actions", () => {
+  for (const id of ["syncAccountNow","changeAccountPassword","signOutAccount","deleteBridgeAccount","createCloudBackup","exportAccountData","exportBackup","exportCSV","importBackup"]) assert.ok(app.includes(`id="${id}"`), `missing production action ${id}`);
+  assert.ok(app.includes("await accountClient.revokeSession("));
+  assert.ok(app.includes("await accountClient.restoreBackup(action.backupId, password, confirmation)"));
+  assert.ok(app.includes("data-open-scorecard-settings"));
+  assert.ok(app.includes('navigatePresentation("scorecard"'));
+  assert.ok(app.includes("Phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls are never shared"));
+  assert.ok(app.includes("Revoke link"));
+});
+
+test("Settings rows use the shared responsive and reduced-motion presentation system", () => {
+  assert.match(styles, /\.settings-nav-row \{[^}]*min-height: 68px/);
+  assert.match(styles, /\.settings-nav-row__copy strong \{[^}]*font-size: 15px/);
+  assert.match(styles, /\.settings-route-stack \{/);
+  assert.match(styles, /@media \(max-width: 359px\)[\s\S]+\.settings-nav-row/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]+\.presentation-screen \{ animation: none !important; \}/);
+});
