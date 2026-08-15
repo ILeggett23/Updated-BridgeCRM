@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const app = fs.readFileSync(path.join(root, "src", "app.js"), "utf8");
+const foundation = fs.readFileSync(path.join(root, "src", "ui-foundation.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 
 test("Phase 15B focused screens have stable presentation URLs and one shared header", () => {
@@ -16,9 +17,10 @@ test("Phase 15B focused screens have stable presentation URLs and one shared hea
   ]) assert.match(app, new RegExp(`PRESENTATION_SCREENS[^\\n]+[\"']${screen}[\"']`));
 
   assert.match(app, /function presentationURL\(/);
-  assert.match(app, /function ScreenHeader\(/);
-  assert.match(app, /data-presentation-back/);
-  assert.match(app, /id="presentationTitle" tabindex="-1"/);
+  assert.match(app, /createBridgeFrontendFoundation/);
+  assert.match(foundation, /function ScreenHeader\(/);
+  assert.match(foundation, /data-presentation-back/);
+  assert.match(foundation, /id="presentationTitle" tabindex="-1"/);
   assert.match(app, /if\(ui\.routedScreen==="settings"\).*settingsModal\(\{routed:true\}\)/);
 });
 
@@ -29,7 +31,7 @@ test("presentation navigation supports browser history, focus return, and scroll
   assert.match(app, /window\.scrollTo\(\{ top:Number\(event\.state\?\.bridgeScrollY\) \|\| 0/);
   assert.match(app, /bridgeFocusSelector/);
   assert.match(app, /focusPresentationEntry\(\)/);
-  assert.match(app, /presentation-screen--\$\{escapeHTML\(ui\.routeDirection\)\}/);
+  assert.match(foundation, /presentation-screen--\$\{escapeHTML\(ui\.routeDirection \|\| "forward"\)\}/);
   assert.match(styles, /\.presentation-screen--back \{ animation-name: ui-step-back-in; \}/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]+\.presentation-screen \{ animation: none !important; \}/);
 });

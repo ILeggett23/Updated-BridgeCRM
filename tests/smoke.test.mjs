@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const foundation = await readFile(new URL("../src/ui-foundation.js", import.meta.url), "utf8");
 const analyticsLogic = await readFile(new URL("../src/analytics-logic.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 const devServer = await readFile(new URL("../dev.mjs", import.meta.url), "utf8");
@@ -73,7 +74,9 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.3"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.4"'));
+  assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
+  assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
   assert.ok(source.includes('const $$ = (selector, root = document) => [...root.querySelectorAll(selector)]'));
   assert.match(source, /startBridge\(\)\.catch\(error => \{/);
@@ -389,19 +392,20 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.settings-route-stack'));
   assert.ok(source.includes('class="hn-account-workspace"'));
   assert.ok(source.includes('Backup & export'));
-  assert.ok(source.includes('profile:"Profile"'));
+  assert.ok(source.includes('profile:"Account"'));
+  assert.ok(source.includes('data:"Data & sync"'));
   assert.ok(source.includes('Changing your password signs out other devices'));
   assert.ok(source.includes('const hasControl=name=>Boolean(form.elements.namedItem(name))'));
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.3 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.3"));
-  assert.ok(page.includes("./styles.css?v=1.3.3"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.3"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.3"));
-  assert.ok(page.includes("./app.js?v=1.3.3"));
-  assert.ok(worker.includes("bridge-app-v1.3.3"));
+test("v1.3.4 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.4"));
+  assert.ok(page.includes("./styles.css?v=1.3.4"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.4"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.4"));
+  assert.ok(page.includes("./app.js?v=1.3.4"));
+  assert.ok(worker.includes("bridge-app-v1.3.4"));
 });
 
 test("the GitHub Pages client opens locally without loading the Cloudflare account gate", async () => {
@@ -413,7 +417,8 @@ test("the GitHub Pages client opens locally without loading the Cloudflare accou
   assert.ok(source.includes('mode: "local"'));
   assert.equal(page.includes("account-client.js"), false);
   assert.equal(serviceWorker.includes("account-client.js"), false);
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.3", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.4", ROOT).href)'));
+  assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));
 });
@@ -512,7 +517,7 @@ test("SwiftUI-inspired motion is scoped and search avoids per-keystroke rebuilds
   assert.ok(source.includes("lastRenderedPage"));
   assert.ok(source.includes('shouldAnimatePage ? "page-enter"'));
   assert.ok(source.includes("searchRenderTimer=setTimeout"));
-  assert.ok(source.includes('aria-current="page"'));
+  assert.ok(foundation.includes('aria-current="page"'));
   assert.ok(styles.includes(".page.page-enter"));
   assert.ok(styles.includes("--motion-standard"));
   assert.equal(styles.includes(".page { width: 100%; max-width: 1280px; margin: 0 auto; animation:"), false);
@@ -552,11 +557,11 @@ test("selection indicators and mobile dock share exact border-box geometry", () 
 });
 
 test("Bridge shell preserves route controls in the approved mobile navigation", () => {
-  assert.ok(source.includes('class="app-shell bridge-pattern-shell"'));
-  assert.ok(source.includes('aria-label="Primary navigation"'));
-  assert.ok(source.includes('id="quickCreateButton"'));
-  assert.ok(source.includes('data-open-people'));
-  assert.ok(source.includes('data-open-pipeline'));
+  assert.ok(foundation.includes('class="app-shell bridge-pattern-shell"'));
+  assert.ok(foundation.includes('aria-label="Primary navigation"'));
+  assert.ok(foundation.includes('id="quickCreateButton"'));
+  assert.ok(foundation.includes('data-open-people'));
+  assert.ok(foundation.includes('data-open-pipeline'));
   assert.ok(styles.includes('body .bridge-pattern-shell'));
   assert.ok(styles.includes('body .bridge-pattern-nav .quick-create-button'));
   assert.ok(styles.includes('transform: translateY(-8px)'));
@@ -646,6 +651,12 @@ test("existing contact information is read-only until Edit is selected", () => {
   assert.ok(source.includes('id="contactInfoForm"'));
   assert.ok(source.includes('id="cancelContactInfoEdit"'));
   assert.ok(source.includes('id="editTrackingForm"'));
+  const contactInformationSource = source.slice(source.indexOf("function contactInformation"), source.indexOf("function contactHealthCard"));
+  assert.ok(contactInformationSource.includes('class="contact-information relationship-edit-form"'));
+  assert.ok(contactInformationSource.includes('name="placeId"'));
+  assert.ok(contactInformationSource.includes('name="newPlaceName"'));
+  assert.ok(contactInformationSource.includes('name="dateFirstMet"'));
+  assert.ok(source.includes("const place=quickCapturePlace(f);c.placeId=place.placeId;c.placeName=place.placeName"));
   assert.ok(source.includes('Discard your unsaved contact changes?'));
   assert.equal(source.includes('id="editContactForm"'), false);
 });
@@ -712,18 +723,18 @@ test("Bridge design tokens and shared primitives form one compact semantic syste
     "--motion-duration-standard:",
   ]) assert.ok(styles.includes(token), `missing ${token}`);
   for (const primitive of ["Button", "SurfaceCard", "MetricCard", "MetricGrid", "Avatar", "StatusBadge", "IconButton", "ProgressBar", "ListRow", "Chip", "Menu", "SectionHeader", "SegmentedControl", "Tabs", "InformationRow", "SearchField", "FilterControl", "DateNavigator", "EmptyState", "FeedbackState", "LoadingSkeleton", "MobileSheet", "ConfirmDialog", "ChartCard"]) {
-    assert.ok(source.includes(`function ${primitive}`), `missing ${primitive}`);
+    assert.ok(foundation.includes(`function ${primitive}`), `missing ${primitive}`);
   }
   assert.ok(styles.includes(".ui-editorial-heading"));
   for (const selector of [".ui-metric-grid", ".ui-tabs", ".ui-information-row", ".ui-search-field", ".ui-filter-control", ".ui-date-navigator", ".ui-mobile-sheet", ".ui-confirm-dialog", ".ui-chart-card"]) {
     assert.ok(styles.includes(selector), `missing ${selector}`);
   }
   assert.ok(styles.includes(".ui-segmented > button[aria-pressed=\"true\"]"));
-  assert.ok(source.includes('role="alertdialog" aria-modal="true"'));
-  assert.ok(source.includes('role="tablist" aria-label="${escapeHTML(label)}"'));
-  assert.ok(source.includes('aria-controls="${escapeHTML(prefix)}-panel-${escapeHTML(value)}"'));
+  assert.ok(foundation.includes('role="alertdialog" aria-modal="true"'));
+  assert.ok(foundation.includes('role="tablist" aria-label="${escapeHTML(label)}"'));
+  assert.ok(foundation.includes('aria-controls="${escapeHTML(prefix)}-panel-${escapeHTML(value)}"'));
   assert.ok(source.includes("function bindSharedPrimitiveEvents()"));
-  assert.ok(source.includes("data-ui-dialog-close"));
+  assert.ok(foundation.includes("data-ui-dialog-close"));
   assert.ok(styles.includes("--color-border-strong: #d5cec0;"));
   assert.ok(styles.includes("@media (prefers-reduced-motion: reduce)"));
 });

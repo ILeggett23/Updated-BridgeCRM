@@ -22,7 +22,7 @@ test("Phase 15D activity composer keeps reference ordering and production-only a
   assert.match(app,/applyQuickCaptureDetails\(contact,form,occurredAt,'quick-other-activity'\)/);
 });
 
-test("Conversation and Meeting use the reference atomic four-step form",()=>{
+test("Every capture mode uses a reference-style atomic progressive form",()=>{
   const conversation=sourceBetween("function quickCaptureConversationForm","function quickCaptureCommunicationForm");
   assert.match(conversation,/const steps=\["person","place","learned","next"\]/);
   assert.match(conversation,/id="quickConversationForm"/);
@@ -32,6 +32,23 @@ test("Conversation and Meeting use the reference atomic four-step form",()=>{
   assert.match(conversation,/quickCaptureNextAction\(\)/);
   assert.match(conversation,/quickCaptureTrackingFields\(\)/);
   assert.match(conversation,/Date, stage, and activity details/);
+  const communication=sourceBetween("function quickCaptureCommunicationForm","function quickCaptureContactForm");
+  assert.match(communication,/const steps=call\?\["person","outcome","notes","next"\]:\["person","notes","next"\]/);
+  assert.match(communication,/id="quickCommunicationForm"/);
+  const contact=sourceBetween("function quickCaptureContactForm","function quickCaptureActionForm");
+  assert.match(contact,/const steps=\["person","details"\]/);
+  assert.match(contact,/id="quickContactForm"/);
+  assert.match(contact,/quickCapturePlacePicker\(\)/);
+  const followUp=sourceBetween("function quickCaptureActionForm","function quickCaptureNoteForm");
+  assert.match(followUp,/const steps=\["person","when"\]/);
+  assert.match(followUp,/id="quickActionForm"/);
+  const other=sourceBetween("function quickCaptureNoteForm","function quickCapturePlace(form");
+  assert.match(other,/const steps=\["person","learned"\]/);
+  assert.match(other,/id="quickNoteForm"/);
+  for(const capture of [conversation,communication,contact,followUp,other]) {
+    assert.match(capture,/quickCaptureWizardProgress\(steps\)/);
+    assert.equal((capture.match(/<form/g)||[]).length,1);
+  }
 });
 
 test("Real person and place pickers never rely on demo records",()=>{
@@ -71,4 +88,15 @@ test("Wizard presentation supports safe areas, reduced motion, and touch-sized c
     ".quick-capture-next"
   ]) assert.ok(styles.includes(contract),`missing ${contract}`);
   assert.match(app,/quickCreateFocusReturn\?\.isConnected\?quickCreateFocusReturn:\$\('\[aria-label="Capture what happened"\]'\)/);
+});
+
+test("profile call and text logging reuse the capture sheet visual grammar",()=>{
+  const modal=sourceBetween("function communicationLogModal","function discardContactEdit");
+  assert.match(modal,/class="modal call-log-modal capture-detail-sheet"/);
+  assert.match(modal,/class="call-log-form capture-detail-form"/);
+  assert.match(modal,/Pipeline and activity details/);
+  assert.match(modal,/Communication logs never increase the Conversations metric/);
+  for(const contract of [".capture-detail-sheet",".capture-detail-person",".capture-detail-section",".capture-detail-actions"]) {
+    assert.ok(styles.includes(contract),`missing ${contract}`);
+  }
 });

@@ -50,6 +50,14 @@ test("scheduled follow-ups carry the exact contact and follow-up destination", (
   assert.equal(target.searchParams.get("followUp"), "followup-7");
 });
 
+test("foreground follow-up reminders use the same exact in-app destination", () => {
+  const reminderSource = appSource.slice(
+    appSource.indexOf("async function checkReminders"),
+    appSource.indexOf("function startReminderChecks")
+  );
+  assert.match(reminderSource, /page=followups&contact=\$\{encodeURIComponent\(event\.contact\.id\)\}&followUp=\$\{encodeURIComponent\(event\.followUp\.id\)\}&notification=1/);
+});
+
 test("the PWA constrains click targets and routes warm launches in-app", () => {
   assert.match(serviceWorker, /candidate\.origin !== APP_ROOT\.origin/);
   assert.match(serviceWorker, /candidate\.pathname\.startsWith\(rootPath\)/);
