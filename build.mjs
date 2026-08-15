@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 
 const htmlTemplate = await readFile(new URL("./src/index.html", import.meta.url), "utf8");
 const css = await readFile(new URL("./src/styles.css", import.meta.url), "utf8");
+const uiFoundation = await readFile(new URL("./src/ui-foundation.js", import.meta.url), "utf8");
 const contactLogic = await readFile(new URL("./src/contact-logic.js", import.meta.url), "utf8");
 const engagementLogic = await readFile(new URL("./src/engagement-logic.js", import.meta.url), "utf8");
 const communicationLogic = await readFile(new URL("./src/communication-logic.js", import.meta.url), "utf8");
@@ -47,6 +48,7 @@ const html = htmlTemplate
 
 const worker = `const PAGE = ${JSON.stringify(html)};
 const STYLES = ${JSON.stringify(css)};
+const UI_FOUNDATION = ${JSON.stringify(uiFoundation)};
 const CONTACT_LOGIC = ${JSON.stringify(contactLogic)};
 const ENGAGEMENT_LOGIC = ${JSON.stringify(engagementLogic)};
 const COMMUNICATION_LOGIC = ${JSON.stringify(communicationLogic)};
@@ -398,6 +400,7 @@ async function handleRequest(request, env) {
     if (accountResponse) return accountResponse;
     if (url.pathname === "/api/health") return json({ ok: true });
     if (url.pathname === "/styles.css") return new Response(STYLES, { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
+    if (url.pathname === "/ui-foundation.js") return new Response(UI_FOUNDATION, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (FONT_ASSETS[url.pathname]) return new Response(binaryFromBase64(FONT_ASSETS[url.pathname]), { headers: { "content-type": "font/woff2", "cache-control": "public, max-age=31536000, immutable", "cross-origin-resource-policy": "same-origin" } });
     if (url.pathname === "/contact-logic.js") return new Response(CONTACT_LOGIC, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (url.pathname === "/engagement-logic.js") return new Response(ENGAGEMENT_LOGIC, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
@@ -609,6 +612,7 @@ await mkdir(new URL("./dist/server/", import.meta.url), { recursive: true });
 await mkdir(new URL("./dist/fonts/", import.meta.url), { recursive: true });
 await writeFile(new URL("./dist/server/index.js", import.meta.url), worker);
 await writeFile(new URL("./dist/index.html", import.meta.url), html);
+await writeFile(new URL("./dist/ui-foundation.js", import.meta.url), uiFoundation);
 await writeFile(new URL("./dist/config.js", import.meta.url), config);
 await writeFile(new URL("./dist/account-client.js", import.meta.url), accountClient);
 await Promise.all([

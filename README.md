@@ -117,6 +117,10 @@ The frontend can be hosted on GitHub Pages, Cloudflare Pages, Netlify, Vercel,
 or any static HTTPS host. GitHub Pages needs no account, database, secret, or
 Cloudflare service to open and use the CRM.
 
+Pushes to `main` automatically build and publish the standalone frontend with
+the GitHub Pages workflow. The public site is available at
+<https://ileggett23.github.io/Updated-BridgeCRM/> after the deployment finishes.
+
 Before publishing a new frontend origin:
 
 1. deploy the static `src/` files;
