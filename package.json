@@ -1,0 +1,24 @@
+{
+  "name": "bridgecrm",
+  "version": "1.3.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env dev.mjs",
+    "preview": "node --env-file-if-exists=.env dev.mjs",
+    "build": "node --env-file-if-exists=.env build.mjs",
+    "test": "node --env-file-if-exists=.env build.mjs && node --test tests/*.test.mjs",
+    "check": "npm run test",
+    "cloudflare:dev": "node --env-file-if-exists=.env build.mjs && wrangler dev",
+    "cloudflare:deploy:dry": "node --env-file-if-exists=.env build.mjs && wrangler deploy --dry-run",
+    "cloudflare:deploy": "node --env-file-if-exists=.env build.mjs && wrangler deploy",
+    "cloudflare:migrate:local": "wrangler d1 migrations apply bridge-crm-production --local",
+    "cloudflare:migrate": "wrangler d1 migrations apply bridge-crm-production --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
