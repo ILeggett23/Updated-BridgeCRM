@@ -800,6 +800,12 @@ async function startBridge() {
     return;
   }
   if (!accountClient) {
+    accountContext = {
+      ...accountContext,
+      mode: "local",
+      authenticated: false,
+      status: { state: "local", message: "Saved on this device", pending: 0, conflicts: 0 }
+    };
     await loadState();
     return;
   }
@@ -2785,16 +2791,15 @@ function settingsRootContent(s,metrics){
   const user=accountContext.user||{};
   const profileName=[user.firstName||s.firstName,user.lastName||s.lastName].filter(Boolean).join(" ")||"Bridge profile";
   const profileDetail=[profileName,s.businessName].filter(Boolean).join(" · ");
-  const sessionDetail=accountModeActive()?(ui.accountPanelLoaded?`${ui.accountSessions.length} device${ui.accountSessions.length===1?"":"s"}`:"Review signed-in devices"):"Sign in to manage devices";
   const [reminderHour,reminderMinute]=String(s.dailyReminderTime||"09:00").split(":").map(Number);
   const reminderTime=new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(2000,0,1,reminderHour||0,reminderMinute||0));
   const conversationReminder=s.dailyReminderEnabled?`Daily nudge at ${reminderTime}`:"Off";
   const followUpReminder=s.followUpNotifications?"On, at the scheduled time":"Off";
   const groups=[
-    settingsNavigationGroup("Account",`${settingsNavigationRow("Profile",profileDetail,"profile")}${settingsNavigationRow("Password",accountModeActive()?"Manage account security":"Available after sign in","profile")}${settingsNavigationRow("Signed-in devices",sessionDetail,"profile")}`),
+    settingsNavigationGroup("Profile",settingsNavigationRow("Profile",profileDetail,"profile")),
     settingsNavigationGroup("Goals",`${settingsNavigationRow("Conversation goals",`${s.dailyGoal} daily · ${s.weeklyGoal} weekly · ${s.monthlyGoal} monthly`,"goals")}${settingsNavigationRow("Streak & achievements",`${metrics.goalStreak} day streak`,"goals")}`),
     settingsNavigationGroup("Notifications",`${settingsNavigationRow("Conversation reminders",conversationReminder,"notifications")}${settingsNavigationRow("Follow-up reminders",followUpReminder,"notifications")}`),
-    settingsNavigationGroup("Data & sync",`${settingsNavigationRow("Sync status",accountModeActive()?accountSyncLabel():"Stored on this device","data")}${settingsNavigationRow("Backup & export","Cloud and on-device recovery tools","backup")}`),
+    settingsNavigationGroup("Data",`${settingsNavigationRow("Storage","Saved on this device","data")}${settingsNavigationRow("Backup & export","Download or restore your local data","backup")}`),
     settingsNavigationGroup("Privacy & sharing",settingsNavigationRow("Scorecards and sharing","Link privacy and deletion behavior","privacy")),
     settingsNavigationGroup("About Bridge",settingsNavigationRow("About and support",`Version ${APP_RELEASE.version}`,"about")),
     settingsNavigationGroup("Preferences",settingsNavigationRow("Relationship settings","Health, cadence, follow-up defaults, and week layout","preferences"))
@@ -2809,7 +2814,7 @@ function settingsProfileContent(s){
   const user=accountContext.user||{};const displayName=[firstName,lastName].filter(Boolean).join(" ")||"Bridge profile";const signedIn=accountModeActive();const sessions=Array.isArray(ui.accountSessions)?ui.accountSessions:[];
   const identity=`<header class="settings-account-identity"><div class="account-avatar">${escapeHTML(initials(displayName||user.email||"B"))}</div><div><h2>${escapeHTML(displayName)}</h2>${user.email?`<p>${escapeHTML(user.email)}</p>`:""}<small class="${signedIn?"is-synced":""}"><i aria-hidden="true"></i>${signedIn?"Signed in and synced":"Stored on this device"}</small></div></header>`;
   const profile=`<section class="settings-reference-section settings-account-profile-fields"><h2>Profile</h2><div class="settings-reference-fields">${field("First name",`<input name="firstName" value="${escapeHTML(firstName)}" placeholder="First name" autocomplete="given-name">`)}${field("Last name",`<input name="lastName" value="${escapeHTML(lastName)}" placeholder="Last name" autocomplete="family-name">`)}${field("Business name",`<input name="businessName" value="${escapeHTML(s.businessName)}" placeholder="Business">`)}</div></section>`;
-  const security=signedIn?`<section class="settings-reference-section settings-account-security"><h2>Security</h2><div class="settings-reference-rows"><button type="button" id="changeAccountPassword">Change password</button><button type="button" class="is-danger" id="signOutAccount">Sign out</button></div></section>`:`<section class="settings-reference-section settings-account-security"><h2>Security</h2><p class="settings-reference-note">Sign in through the existing Bridge account flow to manage password and device security.</p></section>`;
+  const security=signedIn?`<section class="settings-reference-section settings-account-security"><h2>Security</h2><div class="settings-reference-rows"><button type="button" id="changeAccountPassword">Change password</button><button type="button" class="is-danger" id="signOutAccount">Sign out</button></div></section>`:"";
   const devices=signedIn?`<section class="settings-reference-section settings-account-devices"><h2>Signed-in devices</h2><div class="account-session-list">${!ui.accountPanelLoaded?`<p class="settings-reference-note">Loading devices…</p>`:sessions.length?sessions.map(accountSessionRow).join(""):`<p class="settings-reference-note">No active sessions found.</p>`}</div></section>`:"";
   return `${identity}${profile}${security}${devices}`;
 }
@@ -2823,17 +2828,17 @@ function settingsPreferencesContent(s){
   return `${settingsSection("Workflow",workflow)}${settingsSection("Relationship health",relationshipHealthSettings(s))}`;
 }
 function settingsDataContent(){
-  if(!accountModeActive())return `<section class="settings-sync-status"><strong>Stored on this device</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · cloud sync is available after sign in</p></section><section class="settings-reference-section"><h2>Backup & export</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="backup">Open backup and export tools</button></div></section>`;
+  if(!accountModeActive())return `<section class="settings-sync-status"><strong>Stored on this device</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · saved in this browser</p></section><section class="settings-reference-section"><h2>Backup & export</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="backup">Open backup and export tools</button></div></section>`;
   const status=accountContext.status||{};const pending=Number(status.pending||0);const conflicts=Number(status.conflicts||0);const syncedAt=status.lastSyncedAt?fmtDateTime(status.lastSyncedAt):"Not synced yet";
   return `<section class="settings-sync-status"><strong><i aria-hidden="true"></i>${escapeHTML(accountSyncLabel())}</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · ${pending} pending · ${conflicts} conflict${conflicts===1?"":"s"} · last sync ${escapeHTML(syncedAt)}</p></section><section class="settings-reference-section"><h2>Sync</h2><div class="settings-reference-rows"><button type="button" id="syncAccountNow">Sync now</button><button type="button" data-settings-section-open="sessions">Review signed-in devices</button></div></section><section class="settings-reference-section"><h2>Backup & export</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="backup">Open backup and export tools</button></div></section>`;
 }
 function settingsBackupContent(){
-  const cloud=accountModeActive()?`${settingsSection("Cloud backup",accountWorkspaceSettings({section:"backup"}))}`:settingsCapabilityNote("Cloud backup unavailable","Sign-in-dependent cloud backup controls are not available in this workspace.");
+  const cloud=accountModeActive()?`${settingsSection("Cloud backup",accountWorkspaceSettings({section:"backup"}))}`:"";
   return `${cloud}${settingsSection("On this device",dataAndBackupSettings())}<p class="settings-note">Restore continues to require explicit confirmation before replacing the current Bridge data.</p>`;
 }
 function settingsAccountContent(section){
   if(accountModeActive())return accountWorkspaceSettings({section});
-  return EmptyState(section==="sessions"?"Sessions unavailable":"Account unavailable","Sign in through the existing Bridge account flow to manage account security, synchronization, sessions, and cloud backups.");
+  return EmptyState("No account required","Bridge opens directly on this device. Edit your profile from Settings and use local backups to move your data.");
 }
 function settingsPrivacyContent(){
   return `<section class="settings-privacy-hero"><span class="ui-eyebrow">Private by default</span><h2>Share only what you choose</h2><p>Scorecard links exclude phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls.</p><button class="button primary" type="button" data-open-scorecard-settings>${icons.share}<span>Preview and share scorecard</span></button></section>${settingsSection("Sharing behavior",`${settingsRow("Link lifetime",`<strong>7 days</strong>`)}${settingsRow("Contact details",`<strong>Opt-in per link</strong>`)}${settingsRow("Account deletion",`<strong>Revokes account links</strong>`)}`)}${settingsCapabilityNote("Link management","A newly created link can be revoked from its result screen. Bridge does not currently expose a persistent list of older share links.")}`;
@@ -2852,7 +2857,7 @@ function settingsModal({routed=false}={}){
   const saveSections=new Set(["profile","goals","notifications","preferences"]);
   const body=settingsPageForm(section,contentBySection[section]||contentBySection.root,saveSections.has(section));
   const coveredByAccountAction=Boolean(ui.accountAction);
-  if(routed){const titles={root:"Settings",profile:"Account",goals:"Conversation goals",notifications:"Notifications",preferences:"Relationship settings",data:"Data & sync",account:"Account",sessions:"Signed-in devices",backup:"Backup & export",privacy:"Privacy & sharing",about:"About Bridge"};return PresentationScreen(body,{title:titles[section]||"Settings",eyebrow:"",className:`settings-screen settings-screen--${escapeHTML(section)}`,large:section==="root"});}
+  if(routed){const titles={root:"Settings",profile:"Profile",goals:"Conversation goals",notifications:"Notifications",preferences:"Relationship settings",data:"Data",account:"Local workspace",sessions:"Local workspace",backup:"Backup & export",privacy:"Privacy & sharing",about:"About Bridge"};return PresentationScreen(body,{title:titles[section]||"Settings",eyebrow:"",className:`settings-screen settings-screen--${escapeHTML(section)}`,large:section==="root"});}
   return `<div class="modal-backdrop hn-settings-backdrop" id="settingsBackdrop" ${coveredByAccountAction?'aria-hidden="true" inert':""}><section class="modal hn-settings-modal" role="dialog" ${coveredByAccountAction?"":'aria-modal="true"'} aria-labelledby="settingsTitle"><header class="modal-head hn-settings-head"><div><span class="ui-eyebrow">Bridge preferences</span><h2 id="settingsTitle">Settings</h2><p>Shape how you stay close to the people who matter.</p></div>${IconButton("close","Close settings",{className:"close-modal"})}</header><div class="modal-body hn-settings-body">${body}</div></section></div>`;
 }
 function settingsSection(title,content){return SurfaceCard(`${SectionHeader(title,{level:2})}<div class="hn-settings-section__content">${content}</div>`,{className:"settings-section hn-settings-section"});}
