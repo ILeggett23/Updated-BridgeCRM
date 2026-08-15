@@ -73,7 +73,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.2"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.3"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
   assert.ok(source.includes('const $$ = (selector, root = document) => [...root.querySelectorAll(selector)]'));
   assert.match(source, /startBridge\(\)\.catch\(error => \{/);
@@ -367,7 +367,7 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(source.includes('Bridge preferences'));
   assert.ok(source.includes('function settingsMomentumSummary(metrics)'));
   assert.ok(source.includes('function settingsNavigationGroup(title,content)'));
-  assert.ok(source.includes('settingsNavigationGroup("Account"'));
+  assert.ok(source.includes('settingsNavigationGroup("Profile"'));
   assert.ok(source.includes('settingsNavigationGroup("Notifications"'));
   assert.ok(source.includes('settingsNavigationRow("Conversation reminders"'));
   assert.ok(source.includes('settingsNavigationRow("Follow-up reminders"'));
@@ -388,30 +388,32 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.settings-nav-row'));
   assert.ok(styles.includes('.settings-route-stack'));
   assert.ok(source.includes('class="hn-account-workspace"'));
-  assert.ok(source.includes('Signed-in devices'));
   assert.ok(source.includes('Backup & export'));
-  assert.ok(source.includes('profile:"Account"'));
+  assert.ok(source.includes('profile:"Profile"'));
   assert.ok(source.includes('Changing your password signs out other devices'));
   assert.ok(source.includes('const hasControl=name=>Boolean(form.elements.namedItem(name))'));
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.2 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.2"));
-  assert.ok(page.includes("./styles.css?v=1.3.2"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.2"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.2"));
-  assert.ok(page.includes("./app.js?v=1.3.2"));
-  assert.ok(worker.includes("bridge-app-v1.3.2"));
+test("v1.3.3 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.3"));
+  assert.ok(page.includes("./styles.css?v=1.3.3"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.3"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.3"));
+  assert.ok(page.includes("./app.js?v=1.3.3"));
+  assert.ok(worker.includes("bridge-app-v1.3.3"));
 });
 
-test("the GitHub Pages client is configured for the Cloudflare API", async () => {
+test("the GitHub Pages client opens locally without loading the Cloudflare account gate", async () => {
   const config = await readFile(new URL("../src/config.js", import.meta.url), "utf8");
   const serviceWorker = await readFile(new URL("../src/sw.js", import.meta.url), "utf8");
   assert.ok(config.includes("https://bridge-crm-api.bridgecrm-zayway.workers.dev"));
   assert.ok(source.includes("globalThis.BridgeConfig?.apiBase"));
   assert.ok(source.includes("const apiFetch = (path, options) => fetch(apiURL(path), options)"));
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.2", ROOT).href)'));
+  assert.ok(source.includes('mode: "local"'));
+  assert.equal(page.includes("account-client.js"), false);
+  assert.equal(serviceWorker.includes("account-client.js"), false);
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.3", ROOT).href)'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));
 });
