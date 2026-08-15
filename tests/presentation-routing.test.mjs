@@ -57,8 +57,8 @@ test("invalid deep links fail safely and Settings subpages reuse existing contro
   assert.match(app, /ui\.routedError = placeId \? "This place no longer exists\."/);
   assert.match(app, /ui\.routedError = "That Settings section is not available\."/);
   assert.match(app, /const SETTINGS_SECTIONS = \["root", "profile", "goals", "notifications", "preferences", "data", "account", "sessions", "backup", "privacy", "about"\]/);
-  assert.match(app, /settingsNavigationRow\("Password"/);
-  assert.match(app, /Sign in through the existing Bridge account flow to manage account security, synchronization, sessions, and cloud backups/);
+  assert.match(app, /settingsNavigationGroup\("Profile"/);
+  assert.match(app, /No account required/);
   assert.match(styles, /\.settings-nav-row \{/);
 });
 
