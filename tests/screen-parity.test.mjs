@@ -39,12 +39,15 @@ test("Phase 15F stage details derive their rail and metrics from canonical pipel
   assert.match(styles,/\.pipeline-stage-detail__metrics/);
 });
 
-test("Phase 15F Follow-Ups presents timing segments and retains completed history",()=>{
+test("Follow-Ups uses the compact Action Center queue and retains lifecycle actions",()=>{
   for(const value of ["today","upcoming","overdue"])assert.match(app,new RegExp(`data-action-view=\\"${value}\\"`));
   assert.match(app,/data-action-view="completed"/);
   assert.match(app,/Completed follow-ups remain in relationship history/);
-  for(const action of ["followup-card__reschedule","followup-card__done","followup-card__relationship","followup-card__delete"])assert.match(app,new RegExp(action));
+  for(const action of ["followup-card__reschedule","followup-card__done","followUpRescheduleSheet","data-followup-delete"])assert.match(app,new RegExp(action));
+  assert.doesNotMatch(app,/followup-card__reschedule-form/);
+  assert.doesNotMatch(app,/followups-home__title/);
   assert.match(styles,/\.followups-home__status \{ display: grid; grid-template-columns: repeat\(3/);
+  assert.match(styles,/\.followup-card \{ padding: 21px 0;/);
 });
 
 test("Phase 15F routed analytics renders only real detailed calculations",()=>{
