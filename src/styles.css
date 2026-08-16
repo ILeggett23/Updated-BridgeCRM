@@ -3172,73 +3172,69 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
   .prospect-stage__body { margin-left: 27px; }
 }
 
-/* Phase 8 — follow-through queue, using the existing follow-up lifecycle. */
-.followups-home { width: min(100%, var(--app-max-width)); min-height: 100%; padding: 22px 20px calc(var(--nav-height) + var(--safe-bottom) + 32px); color: var(--color-text-primary); background: var(--color-page); }
+/* Follow-ups use the compact Action Center queue from the approved redesign. */
+.followups-home { width: min(100%, var(--app-max-width)); min-height: 100%; padding: 24px 20px calc(var(--nav-height) + var(--safe-bottom) + 32px); color: var(--color-text-primary); background: var(--color-page); }
 .followups-home__header { display: grid; gap: 7px; }
 .followups-home__header .ui-eyebrow { color: var(--color-text-tertiary); }
-.followups-home__header h1 { margin: 0; font-family: var(--font-display); font-size: 39px; font-weight: var(--font-weight-regular); line-height: 1; letter-spacing: -.035em; }
-.followups-home__header > p { max-width: 32ch; margin: 0; color: var(--color-text-tertiary); font-size: 15px; line-height: 1.4; }
-.followups-home__status { width: 100%; margin-top: 13px; }
-.followups-home__status button { min-height: 42px; }
-.followups-home__status button[aria-pressed="true"] { color: var(--color-surface); background: var(--color-text-primary); }
+.followups-home__header h1 { margin: 0; font-family: var(--font-display); font-size: clamp(41px, 11vw, 48px); font-weight: var(--font-weight-regular); line-height: .96; letter-spacing: -.045em; }
+.followups-home__summary { margin: 10px 0 0; color: var(--color-text-tertiary); font-size: 15px; line-height: 1.4; }
+.followups-home__status { width: 100%; margin-top: 23px; padding: 0; gap: 24px; }
+.followups-home__status button { min-height: 46px; padding: 0 0 12px; color: var(--color-text-tertiary); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 17px; font-weight: var(--font-weight-regular); letter-spacing: -.025em; }
+.followups-home__status button[aria-selected="true"] { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+.followups-home__status button[aria-selected="true"]::after { right: 0; bottom: -1px; left: 0; height: 3px; background: var(--color-text-primary); }
 .followup-offline-note { margin: 14px 0 -3px; padding: 9px 11px; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface); font-size: 12px; }
-.followups-home__queue { display: grid; gap: 28px; margin-top: 27px; }
+.followups-home__queue { display: grid; gap: 18px; margin-top: 12px; }
 .followups-home__queue--completed { gap: 0; }
-.followup-queue { display: grid; gap: 12px; }
-.followup-queue__head { min-height: 39px; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
-.followup-queue__head > div { min-width: 0; }
-.followup-queue__head .ui-eyebrow { display: block; margin-bottom: 4px; color: var(--color-text-tertiary); }
-.followup-queue__head h2 { margin: 0; font-size: 21px; font-weight: var(--font-weight-semibold); letter-spacing: -.025em; }
-.followup-queue__head p { max-width: 31ch; margin: 4px 0 0; color: var(--color-text-tertiary); font-size: 13px; line-height: 1.4; }
-.followup-queue__count { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); font-size: 13px; font-weight: var(--font-weight-medium); }
-.followup-queue--overdue .followup-queue__count { color: var(--color-overdue); border-color: color-mix(in srgb, var(--color-overdue) 35%, var(--color-border)); }
-.followup-queue__list { display: grid; gap: 10px; }
-.followup-queue__empty { min-height: 48px; margin: 0; display: flex; align-items: center; color: var(--color-text-tertiary); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); font-size: 14px; }
-.followup-card { padding: 16px; display: grid; gap: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-subtle); }
-.followup-card.is-overdue { border-color: color-mix(in srgb, var(--color-overdue) 30%, var(--color-border)); }
+.followup-queue { display: grid; }
+.followup-queue__list { display: grid; }
+.followup-card { padding: 21px 0; display: grid; gap: 0; border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; background: transparent; box-shadow: none; }
+.followup-card:first-child { padding-top: 17px; }
 .followup-card__identity { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.followup-card__person { min-width: 0; padding: 0; display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 10px; color: inherit; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
-.followup-card__avatar { width: 42px; height: 42px; color: var(--color-brand-strong); background: var(--color-brand-soft); font-size: 13px; }
-.followup-card__person > span:last-child { min-width: 0; display: grid; gap: 3px; }
-.followup-card__person strong { overflow: hidden; color: var(--color-text-primary); font-size: 17px; font-weight: var(--font-weight-medium); letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
-.followup-card__person small { overflow: hidden; color: var(--color-text-tertiary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.followup-card__due { max-width: 14ch; flex: 0 0 auto; color: var(--color-brand-strong); font-size: 12px; font-weight: var(--font-weight-semibold); line-height: 1.25; text-align: right; }
+.followup-card__person { min-width: 0; padding: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 12px; color: inherit; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
+.followup-card__avatar { width: 48px; height: 48px; color: var(--color-brand-strong); background: var(--color-brand-soft); font-size: 15px; }
+.followup-card__person > span:last-child { min-width: 0; }
+.followup-card__person strong { overflow: hidden; color: var(--color-text-primary); font-size: 18px; font-weight: var(--font-weight-medium); letter-spacing: -.03em; text-overflow: ellipsis; white-space: nowrap; }
+.followup-card__due { max-width: 14ch; flex: 0 0 auto; color: var(--color-text-tertiary); font-size: 13px; font-weight: var(--font-weight-medium); line-height: 1.25; text-align: right; }
 .is-overdue .followup-card__due { color: var(--color-overdue); }
-.followup-card__note { margin: 0; padding-left: 11px; color: var(--color-text-primary); border-left: 2px solid var(--color-border-strong); font-size: 17px; line-height: 1.38; }
-.followup-card__context { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--color-text-tertiary); font-size: 12px; }
-.followup-card__stage { padding: 4px 8px; color: var(--color-brand-strong); border-radius: 999px; background: var(--color-brand-soft); font-weight: var(--font-weight-semibold); }
-.followup-card__actions { padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--color-border); }
-.followup-card__communication { display: flex; gap: 5px; }
-.followup-card__communication :is(a,button), .followup-card__reschedule, .followup-card__done { min-height: 38px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface); box-shadow: none; font-size: 12px; font-weight: var(--font-weight-medium); text-decoration: none; }
-.followup-card__communication :is(a,button) .app-icon, .followup-card__reschedule .app-icon, .followup-card__done .app-icon { width: 16px; height: 16px; }
+.followup-card__last-interaction { margin: 4px 0 0 60px; color: var(--color-text-tertiary); font-size: 13px; line-height: 1.3; }
+.followup-card__note { margin: 12px 0 0 60px; color: var(--color-text-secondary); font-size: 17px; line-height: 1.35; }
+.followup-card__context { margin: 12px 0 0 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--color-text-tertiary); font-size: 12px; }
+.followup-card__stage { padding: 5px 10px; color: var(--color-brand-strong); border-radius: 999px; background: var(--color-brand-soft); font-weight: var(--font-weight-semibold); }
+.followup-card__actions { margin: 16px 0 0 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.followup-card__communication { display: contents; }
+.followup-card__communication :is(a,button), .followup-card__reschedule, .followup-card__done { min-height: 42px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--color-text-secondary); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xs); background: transparent; box-shadow: none; font-size: 13px; font-weight: var(--font-weight-medium); text-decoration: none; }
+.followup-card__communication :is(a,button) .app-icon, .followup-card__reschedule .app-icon, .followup-card__done .app-icon { width: 17px; height: 17px; }
 .followup-card__communication button:disabled { color: var(--color-text-tertiary); background: var(--surface-muted); opacity: .7; }
-.followup-card__reschedule { margin-left: auto; }
 .followup-card__done { color: var(--color-surface); border-color: var(--color-text-primary); background: var(--color-text-primary); }
 .followup-card__relationship { min-height: 34px; padding: 0; display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-secondary); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 12px; font-weight: var(--font-weight-medium); }
 .followup-card__relationship .app-icon { width: 15px; height: 15px; }
 .followup-card__delete { width: 32px; height: 32px; margin-left: auto; display: grid; place-items: center; color: var(--color-text-tertiary); border: 0; border-radius: 50%; background: transparent; box-shadow: none; }
 .followup-card__delete .app-icon { width: 16px; height: 16px; }
-.followup-card__reschedule-form { grid-column: auto; padding: 13px 0 0; grid-template-columns: 1fr; gap: 10px; border-top: 1px solid var(--color-border); }
-.followup-card__reschedule-form .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.followup-card__reschedule-form .form-actions .button { width: 100%; }
-.followup-card.is-completed { gap: 10px; opacity: .82; box-shadow: none; }
+.followup-card.is-completed { gap: 0; opacity: .82; box-shadow: none; }
 .followup-card.is-completed .followup-card__note { color: var(--color-text-secondary); }
-.followup-card__completed { display: flex; align-items: center; gap: 7px; color: var(--color-text-tertiary); font-size: 12px; }
+.followup-card__completed { margin: 14px 0 0 60px; display: flex; align-items: center; gap: 7px; color: var(--color-text-tertiary); font-size: 12px; }
 .followup-card__completed > span:first-child { width: 17px; height: 17px; color: var(--color-positive); }
 .followup-card__completed .followup-card__relationship { margin-left: auto; }
-.followups-empty { min-height: 210px; padding: 28px 20px; display: grid; place-content: center; justify-items: center; gap: 13px; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); text-align: center; }
+.followups-empty { min-height: 190px; padding: 28px 20px; display: grid; place-content: center; justify-items: center; gap: 13px; color: var(--color-text-secondary); border-block: 1px solid var(--color-border); text-align: center; }
 .followups-empty > span { width: 35px; height: 35px; display: grid; place-items: center; color: var(--color-positive); border-radius: 50%; background: var(--color-brand-soft); }
 .followups-empty > span .app-icon { width: 20px; height: 20px; }
 .followups-empty h2 { margin: 0 0 5px; color: var(--color-text-primary); font-size: 20px; font-weight: var(--font-weight-medium); letter-spacing: -.02em; }
 .followups-empty p { max-width: 29ch; margin: 0; font-size: 14px; line-height: 1.45; }
-.followups-home__loading { margin-top: 30px; padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.followups-home__loading { margin-top: 28px; padding: 18px 0; border-block: 1px solid var(--color-border); }
+.followups-history-toggle { width: max-content; min-height: 42px; margin-top: 4px; padding: 0; display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-secondary); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; font-weight: var(--font-weight-medium); }
+.followups-history-toggle span { color: var(--color-text-tertiary); }
+.followup-reschedule-sheet__form { display: grid; gap: var(--space-4); }
+.followup-reschedule-sheet__form > p { margin: 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.45; }
+.followup-reschedule-sheet__form .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.followup-reschedule-sheet__form .form-actions .button { width: 100%; }
+.followup-reschedule-sheet__delete { width: max-content; min-height: 38px; margin-top: var(--space-2); padding: 0; display: inline-flex; align-items: center; gap: 7px; color: var(--color-overdue); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; }
+.followup-reschedule-sheet__delete .app-icon { width: 16px; height: 16px; }
 
 @media (max-width: 359px) {
   .followups-home { padding-inline: 14px; }
-  .followup-card { padding: 13px; }
-  .followup-card__actions { gap: 6px; }
-  .followup-card__communication :is(a,button), .followup-card__reschedule, .followup-card__done { padding-inline: 8px; }
-  .followup-card__communication span, .followup-card__reschedule span { display: none; }
+  .followup-card__actions { margin-left: 0; gap: 6px; }
+  .followup-card__last-interaction, .followup-card__note, .followup-card__context, .followup-card__completed { margin-left: 0; }
+  .followup-card__communication :is(a,button), .followup-card__reschedule, .followup-card__done { padding-inline: 9px; }
 }
 
 /* Phase 9 — saved relationship places, rendered from existing place/contact records. */
@@ -3736,17 +3732,8 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .pipeline-stage-detail__history > div span { color: var(--color-text-secondary); }
 .pipeline-stage-detail__history > div time { color: var(--color-text-tertiary); }
 
-.followups-home__title { display: flex; align-items: end; justify-content: space-between; gap: var(--space-4); }
-.followups-home__title > div { display: grid; gap: 7px; }
-.followups-history-toggle { min-height: 38px; padding: 0 12px; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); box-shadow: none; font-size: 12px; }
-.followups-history-toggle span { margin-left: 3px; color: var(--color-text-tertiary); }
-.followups-history-toggle.is-active { color: var(--color-page); border-color: var(--color-text-primary); background: var(--color-text-primary); }
-.followups-history-toggle.is-active span { color: inherit; }
-.followups-home__status { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 3px; }
-.followups-home__status button { min-width: 0; padding-inline: 5px; font-size: 12px; }
-.followups-home__queue { gap: 0; margin-top: 22px; }
-.followup-card { padding: 14px; gap: 10px; border-radius: var(--radius-sm); box-shadow: none; }
-.followup-card__note { font-size: 16px; }
+.followups-home__status { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.followups-home__status button { min-width: 0; }
 
 .place-detail__metrics { grid-template-columns: repeat(4,minmax(0,1fr)); }
 .place-detail__metrics > div { padding-inline: 7px; }
@@ -3769,10 +3756,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
   .pipeline-stage-detail__person small { font-size: 12px; }
   .pipeline-stage-detail__history > div { grid-template-columns: minmax(0,1fr) auto; }
   .pipeline-stage-detail__history > div span { display: none; }
-  .followups-home__title { align-items: center; }
-  .followups-home__title h1 { font-size: 36px; white-space: nowrap; }
-  .followups-history-toggle { padding-inline: 9px; }
-  .followups-home__status button { font-size: 11px; }
+  .followups-home__status button { font-size: 13px; }
   .place-detail__metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .place-detail__metrics > div:nth-child(2) { border-right: 0; }
   .place-detail__metrics > div:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
@@ -3950,7 +3934,7 @@ body .bridge-pattern-shell > .main {
 .today-momentum__summary span:last-child { color: var(--color-text-tertiary); }
 
 /* People */
-.people-home__header { margin-bottom: 4px; }
+.people-home__header { margin-bottom: 12px; }
 .people-home__header h1 { font-size: 26px; letter-spacing: -.025em; line-height: 1.15; }
 .people-home__places { width: 36px; height: 36px; flex-basis: 36px; }
 .people-home__places .app-icon { width: 19px; height: 19px; stroke-width: 1.8; }
@@ -3964,7 +3948,12 @@ body .bridge-pattern-shell > .main {
 .people-home__search input { font-size: 14.5px; letter-spacing: 0; }
 .people-home__filters { gap: 8px; margin-top: 12px; padding-bottom: 4px; }
 .people-home__quick-filter,
-.people-home__filter-button { min-height: 40px; padding-inline: 12px; font-size: 13px; }
+.people-home__filter-button {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 20px;
+}
 .people-home__count { margin: 16px 0 6px; font-size: 10px; letter-spacing: .1em; }
 .people-list { border-top: 0; }
 .people-row { border-bottom-color: var(--color-surface-soft); }
@@ -4419,13 +4408,19 @@ body .bridge-pattern-shell > .main {
 .settings-sync-status p { margin: 8px 0 0; color: var(--color-text-tertiary); font-size: 13px; line-height: 1.45; }
 
 .scorecard-share-screen .presentation-screen__body { padding-top: 8px; }
-.scorecard-share-screen .scorecard-design-preview { padding: 20px; border-radius: var(--radius-lg); box-shadow: none; }
+.scorecard-share-screen .scorecard-design-preview { gap: 8px; padding: 20px; border-radius: var(--radius-lg); box-shadow: none; }
+.scorecard-share-screen .scorecard-design-preview .ui-eyebrow { color: var(--color-text-tertiary); }
 .scorecard-share-screen .scorecard-design-preview h3 { font-size: 20px; letter-spacing: -.02em; }
-.scorecard-share-screen .scorecard-design-metrics { gap: 24px 48px; padding: 18px 0; }
+.scorecard-share-screen .scorecard-design-metrics { gap: 12px 0; padding: 12px 0; }
 .scorecard-share-screen .scorecard-design-metric span { font-size: 12.5px; }
 .scorecard-share-screen .scorecard-design-metric strong { font-size: 28px; }
-.scorecard-share-screen .scorecard-scope-options { gap: 9px; }
-.scorecard-share-screen .share-scope-option { min-height: 66px; padding: 14px; }
+.scorecard-share-screen .scorecard-share-form { gap: 12px; padding-top: 24px; }
+.scorecard-share-screen .scorecard-scope-options { gap: 8px; }
+.scorecard-share-screen .share-scope-option { min-height: 64px; padding: 12px 14px; }
+.scorecard-share-screen .share-scope-option input { width: 14px; height: 14px; margin-top: 3px; accent-color: var(--color-text-primary); }
+.scorecard-share-screen .share-scope-option:has(input:checked) { box-shadow: none; }
+.scorecard-share-screen .share-scope-option strong { font-size: 14.5px; line-height: 20px; }
+.scorecard-share-screen .share-scope-option small { font-size: 12.5px; line-height: 16px; }
 .scorecard-share-screen .scorecard-create-link { min-height: 50px; }
 
 @media (max-width: 359px) {
