@@ -812,11 +812,13 @@ test("global Capture exposes every approved progressive composer", () => {
   assert.ok(styles.includes("body .bridge-pattern-nav .quick-create-button"));
   assert.ok(styles.includes("box-shadow: var(--shadow-float)"));
   assert.ok(source.includes('aria-label="Capture what happened"'));
-  for (const choice of ['["conversation","Conversation"', '["call","Call"', '["text","Text"', '["meeting","Meeting"', '["action","Follow-up"', '["contact","Add person"', 'data-quick-mode="note"']) {
+  for (const choice of ['["conversation","Conversation"', '["call","Call"', '["text","Text"', '["meeting","Meeting"', '["action","Follow-up"', '["contact","Add person"']) {
     assert.ok(source.includes(choice));
   }
   const modalSource = source.slice(source.indexOf("function quickCreateModal"), source.indexOf("function closeQuickCreate"));
   assert.ok(modalSource.includes('data-quick-mode="${mode}"'));
+  assert.equal(modalSource.includes('data-quick-mode="note"'), false);
+  assert.equal(modalSource.includes("Other activity · note, MSA, or DTM"), false);
   assert.equal(modalSource.includes("disabled"), false);
   assert.ok(source.includes("function quickCaptureAdvanced"));
   assert.ok(source.includes("function quickCaptureConversationForm"));

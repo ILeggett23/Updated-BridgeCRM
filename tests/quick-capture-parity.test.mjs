@@ -12,13 +12,14 @@ function sourceBetween(start,end) {
   return app.slice(app.indexOf(start),app.indexOf(end));
 }
 
-test("Phase 15D activity composer keeps reference ordering and production-only activities",()=>{
+test("Activity composer keeps the six reference choices while retaining production-only activity writes",()=>{
   const modal=sourceBetween("function quickCreateModal","function closeQuickCreate");
   const ordered=["conversation","call","text","meeting","action","contact"];
   let cursor=-1;
   for(const mode of ordered){const next=modal.indexOf(`[\"${mode}\"`);assert.ok(next>cursor,`${mode} should retain composer order`);cursor=next;}
-  assert.match(modal,/class="capture-other-action"[^>]+data-quick-mode="note"/);
-  assert.match(modal,/Other activity · note, MSA, or DTM/);
+  assert.doesNotMatch(modal,/class="capture-other-action"|<button[^>]+data-quick-mode="note"/);
+  assert.match(app,/function quickCaptureNoteForm/);
+  assert.match(app,/#quickNoteForm/);
   assert.match(app,/applyQuickCaptureDetails\(contact,form,occurredAt,'quick-other-activity'\)/);
 });
 
@@ -28,6 +29,7 @@ test("Every capture mode uses a reference-style atomic progressive form",()=>{
   assert.match(conversation,/id="quickConversationForm"/);
   assert.equal((conversation.match(/<form/g)||[]).length,1);
   assert.match(conversation,/quickCapturePersonPicker\(contacts,\{allowNew:true\}\)/);
+  assert.match(conversation,/data-new-person-fields hidden/);
   assert.match(conversation,/quickCapturePlacePicker\(\)/);
   assert.match(conversation,/quickCaptureNextAction\(\)/);
   assert.match(conversation,/quickCaptureTrackingFields\(\)/);
@@ -59,6 +61,7 @@ test("Real person and place pickers never rely on demo records",()=>{
   assert.match(people,/contacts\.filter\(contact=>!recentIds\.has/);
   assert.match(people,/data-capture-recent/);
   assert.match(people,/data-capture-new-person/);
+  assert.match(people,/data-new-person-name hidden/);
   assert.match(places,/state\.places/);
   assert.match(places,/contact\.placeId/);
   assert.match(places,/data-capture-new-place/);
@@ -72,6 +75,8 @@ test("Step validation protects required data and final submission retains produc
   assert.match(validation,/Add what happened before continuing/);
   assert.match(validation,/Choose a valid follow-up time/);
   assert.match(binding,/duplicate=isCallablePhone/);
+  assert.match(binding,/\$\$\('\[data-new-person-name\],\[data-new-person-fields\]'/);
+  assert.match(binding,/section\.dataset\.captureNewPersonActive="true"/);
   assert.match(binding,/applyQuickCaptureDetails\(contact,form,occurredAt/);
   assert.match(binding,/isCountedConversation:true/);
   assert.match(binding,/queueSave\(meeting\?'Meeting saved':'Conversation saved'\)/);

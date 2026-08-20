@@ -49,10 +49,10 @@ test("auto-archive blocks only scheduled or open follow-ups and retains closed l
   assert.ok(contacts.filter(contact => contact.archivedAt).every(contact => contact.followUps.length === 1));
 });
 
-test("Person Profile reschedules only its earliest active follow-up in place", () => {
+test("Person Profile compact reschedule moves only its earliest active follow-up in place", () => {
   const handler = appSource.slice(
-    appSource.indexOf("$('#setFollowUpForm')?.addEventListener('submit'"),
-    appSource.indexOf("$('#completeFollowUp')?.addEventListener('click'")
+    appSource.indexOf("$$('[data-profile-reschedule]').forEach"),
+    appSource.indexOf("$('#contactInfoForm')?.addEventListener('input'")
   );
   const reschedule = appSource.slice(
     appSource.indexOf("function rescheduleFollowUp"),
@@ -60,8 +60,8 @@ test("Person Profile reschedules only its earliest active follow-up in place", (
   );
 
   assert.match(handler, /c\.followUps\.filter\(isScheduledFollowUp\)\.sort/);
-  assert.match(handler, /if\(active\)rescheduleFollowUp\(active,dueDate\)/);
-  assert.match(handler, /else createFollowUp\(c,dueDate,'Follow up'\)/);
+  assert.match(handler, /rescheduleFollowUp\(active,addDays\(new Date\(active\.dueDate\),3\)\.toISOString\(\)\)/);
+  assert.doesNotMatch(handler, /createFollowUp/);
   assert.doesNotMatch(handler, /replaceScheduledFollowUp/);
   assert.match(reschedule, /item\.rescheduleHistory\.push/);
   assert.match(reschedule, /item\.notificationSentAt = null/);

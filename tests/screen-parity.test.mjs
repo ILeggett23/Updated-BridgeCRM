@@ -47,7 +47,33 @@ test("Follow-Ups uses the compact Action Center queue and retains lifecycle acti
   assert.doesNotMatch(app,/followup-card__reschedule-form/);
   assert.doesNotMatch(app,/followups-home__title/);
   assert.match(styles,/\.followups-home__status \{ display: grid; grid-template-columns: repeat\(3/);
-  assert.match(styles,/\.followup-card \{ padding: 21px 0;/);
+  assert.match(styles,/\.followups-home \{ width: 100%; min-height: 100%; padding: 0;/);
+  assert.match(styles,/\.followups-home__header h1 \{[^}]*font-size: 26px;/);
+  assert.match(styles,/\.followup-card \{ padding: 16px 0;/);
+  assert.match(styles,/\.followup-card__avatar \{ width: 40px; height: 40px;/);
+  assert.match(styles,/\.followup-card__communication :is\(a,button\), \.followup-card__reschedule, \.followup-card__done \{ min-height: 34px;/);
+});
+
+test("Shared mobile parity keeps search focus, Capture sheets, and Profile scale compact",()=>{
+  assert.match(styles,/\.ui-search-field:focus-within \{ border-color: var\(--color-text-primary\); box-shadow: none; \}/);
+  assert.match(styles,/\.quick-capture-picker__search:focus-within \{ border-color: var\(--color-text-primary\); box-shadow: none; \}/);
+  assert.match(styles,/\.quick-create-modal \{ position: relative; height: auto; max-height: 92dvh; display: flex; flex-direction: column; overflow: hidden; \}/);
+  assert.match(styles,/\.quick-create-modal\.has-step \{\s*height: auto;\s*min-height: 0;\s*max-height: 92dvh;/);
+  assert.match(styles,/\.profile-identity h2 \{[^}]*font-size: 28px;/);
+  assert.match(styles,/\.profile-quick-actions > a, \.profile-quick-actions > button \{[^}]*min-height: 62px;/);
+  assert.match(styles,/\.profile-next-action__content p \{[^}]*font-size: 15\.5px;/);
+});
+
+test("Person Profile keeps next-action rescheduling compact and routes new actions through Capture",()=>{
+  const profile=app.slice(app.indexOf("function profileNextAction"),app.indexOf("function profileBridgeBrief"));
+  const bindings=app.slice(app.indexOf("function bindContactModalEvents"),app.indexOf("function bindActivityHistoryEvents"));
+  assert.match(profile,/data-profile-reschedule/);
+  assert.match(profile,/data-profile-followup/);
+  assert.doesNotMatch(profile,/profile-followup-editor|Choose a new time|setFollowUpForm/);
+  assert.match(bindings,/ui\.quickCreateMode="action"/);
+  assert.match(bindings,/ui\.quickCreateContactId=c\.id/);
+  assert.match(bindings,/addDays\(new Date\(active\.dueDate\),3\)\.toISOString\(\)/);
+  assert.doesNotMatch(bindings,/#setFollowUpForm|#removeFollowUp/);
 });
 
 test("Phase 15F routed analytics renders only real detailed calculations",()=>{

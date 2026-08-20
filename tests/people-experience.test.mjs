@@ -66,6 +66,12 @@ test("People presentation retains production search filters and uses exact canon
   assert.match(source, /Customer: \["CNA", "Proposal", "Follow-Up", "Order Placed", "Active Customer"\]/);
   assert.ok(source.includes('data-clear-people-search'));
   assert.ok(source.includes('renderPeopleSearchSuggestions'));
+  assert.ok(source.includes('class="people-search-screen__header"'));
+  assert.ok(source.includes('<h2>Most recent</h2>'));
+  assert.ok(source.includes('<h2>Places</h2>'));
+  assert.equal(source.includes('people-search-screen__filters'), false);
+  assert.ok(source.includes('const meta=matchContext||'));
+  assert.equal(source.includes('people-row__match-context'), false);
   assert.ok(source.includes('navigatePresentation("person"'));
   assert.ok(source.includes('getFilteredContacts({ignoreSearch:true})'));
 });
