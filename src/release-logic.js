@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.5",
-    assetVersion: "v1.3.5",
+    version: "1.3.6",
+    assetVersion: "v1.3.6",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "bridge",
-        title: "Faster, tighter capture",
-        description: "Capture now uses the compact six-action sheet and keeps person selection focused on the next useful choice."
+        title: "One cohesive Bridge",
+        description: "Today, People, Pipeline, Insights, Settings, forms, cards, and dialogs now share the same compact mobile design system."
       }),
       Object.freeze({
         icon: "plus",
-        title: "Search and follow-ups stay compact",
-        description: "People Search, relationship profiles, and the Action Center now match the approved mobile spacing and interaction patterns."
+        title: "Faster everyday interactions",
+        description: "People Search, swipe actions, profile headers, and navigation now stay responsive without unnecessary page rebuilds or layout shifts."
       }),
       Object.freeze({
         icon: "circleCheck",
         title: "Your data stays put",
-        description: "This update changes the shared presentation layer without changing your relationships, pipelines, or local storage."
+        description: "The update preserves your relationships, follow-ups, analytics, exact pipeline stages, history, and local or account-backed storage."
       })
     ])
   });

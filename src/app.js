@@ -1,9 +1,9 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.5";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.6";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const { archiveInactiveContacts, hasConversationInRange, latestConversationTime, matchesVisibilityFilter, normalizePipelineStages, resolveCurrentPipelineStage, restoreContact, setFilteredOut, sortContacts } = globalThis.BridgeLogic;
-const { dailyGoalMetrics, dayKey, definitions: ACHIEVEMENTS, dueReminderEvents, evaluateAchievements, normalizeExcludedDates, normalizeRestRules } = globalThis.BridgeEngagement;
+const { dailyGoalMetrics, dayKey, definitions: ACHIEVEMENTS, dueReminderEvents, evaluateAchievements, normalizeExcludedDates, normalizeRestRules, todaySwipeDecision } = globalThis.BridgeEngagement;
 const { analyticsRange, buildInsightsModel, inAnalyticsRange, uniquePhoneCaptures } = globalThis.BridgeAnalytics;
 const { canonicalPhone, phoneIdentity, telHref, smsHref } = globalThis.BridgeCommunication;
 const { createSnapshot, scorecardSummary } = globalThis.BridgeScorecard || {};
@@ -276,29 +276,33 @@ let ui = {
   accountSessions: [],
   accountPanelError: "",
   accountPanelLoaded: false,
+  confirmation: null,
   routedScreen: null,
   routedSection: "",
   routedError: "",
   routeDirection: "forward",
+  routeEntryMotion: "",
   saveTimer: null
 };
 const {
   AppShell, ScreenHeader, PresentationScreen, navSelectionIndex,
   Button, SurfaceCard, IconButton, StatusBadge, ProgressBar, SegmentedControl,
-  Avatar, ListRow, Chip, Menu, MetricCard, MetricGrid, SectionHeader, Tabs,
+  Avatar, ListRow, SettingsRow, ToggleRow, Chip, Menu, MetricCard, MetricGrid, SectionHeader, Tabs,
   InformationRow, SearchField, FilterControl, DateNavigator, EmptyState,
   FeedbackState, LoadingSkeleton, MobileSheet, ConfirmDialog, ChartCard
 } = createBridgeFrontendFoundation({ escapeHTML, initials, icons, getRouteState: () => ui });
-let lastRenderedPage = null;
-let lastRenderedContactMode = null;
 let lastRenderedNavSelection = null;
+let lastRenderedPresentationKey = "";
 let searchRenderTimer = null;
+const todayActionLocks = new Set();
 let releaseFocusReturn = null;
 let scorecardFocusReturn = null;
 let quickCreateFocusReturn = null;
 let settingsFocusReturn = null;
 let accountActionFocusReturn = null;
 let accountActionFocusSelector = "";
+let profileHeaderScrollCleanup = null;
+let profileHeaderScrollSync = null;
 let conversationDraft = null;
 let conversationDraftDirty = false;
 const launchParams = new URLSearchParams(location.search);
@@ -329,11 +333,11 @@ let accountContext = {
 let anonymousSnapshot = null;
 let accountUnsubscribe = null;
 let presentationHistoryIndex = Number.isInteger(history.state?.bridgeIndex) ? history.state.bridgeIndex : 0;
-let scrollStateFrame = 0;
+let scrollStateTimer = 0;
 let suppressPeopleSearchRouteOnce = false;
 
 const PRESENTATION_QUERY_KEYS = ["screen", "person", "place", "stage", "section"];
-const SETTINGS_SECTIONS = ["root", "profile", "goals", "notifications", "preferences", "data", "account", "sessions", "backup", "privacy", "about"];
+const SETTINGS_SECTIONS = ["root", "profile", "goals", "notifications", "preferences", "health", "archive", "data", "account", "sessions", "backup", "privacy", "about"];
 const PRESENTATION_SCREENS = ["people-search", "person", "person-timeline", "person-edit", "pipeline-stage", "stage-transition", "place", "analytics-detail", "goals", "achievements", "scorecard", "settings"];
 
 function presentationPath(url = location.href) {
@@ -368,6 +372,8 @@ function routeFocusSelector(element) {
 function writeCurrentHistoryState(extra = {}) {
   history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:window.scrollY, ...extra }, "", presentationPath());
 }
+function cancelPendingScrollState() { if(scrollStateTimer){clearTimeout(scrollStateTimer);scrollStateTimer=0;} }
+function flushScrollHistoryState() { cancelPendingScrollState();writeCurrentHistoryState(); }
 
 function clearPresentationState() {
   ui.routedScreen = null;
@@ -464,7 +470,7 @@ function applyPresentationRoute(url = location.href, { renderNow = false, direct
 }
 
 function navigatePresentation(screen, values = {}, { replace = false, opener = document.activeElement } = {}) {
-  if(conversationDraftDirty&&!discardConversationDraft())return false;
+  if(conversationDraftDirty){discardConversationDraft(()=>navigatePresentation(screen,values,{replace,opener}));return false;}
   const routeDefaults = screen === "pipeline-stage" || screen === "stage-transition" ? { page:"contacts", mode:"pipeline" }
     : screen === "place" ? { page:"contacts", mode:"places" }
     : screen === "analytics-detail" || screen === "scorecard" ? { page:"analytics", mode:"list" }
@@ -472,6 +478,7 @@ function navigatePresentation(screen, values = {}, { replace = false, opener = d
     : { page:"contacts", mode:"list" };
   const next = presentationURL({ ...routeDefaults, role:values.role || ui.pipelineRole, screen, ...values });
   const focusSelector = routeFocusSelector(opener);
+  flushScrollHistoryState();
   writeCurrentHistoryState(focusSelector ? { bridgeFocusSelector:focusSelector } : {});
   const nextIndex = replace ? presentationHistoryIndex : presentationHistoryIndex + 1;
   const nextState = { ...(history.state || {}), bridgeIndex:nextIndex, bridgeScrollY:0, bridgeParentURL:presentationPath(presentationParentURL(screen)) };
@@ -479,15 +486,16 @@ function navigatePresentation(screen, values = {}, { replace = false, opener = d
   else history.pushState(nextState, "", presentationPath(next));
   presentationHistoryIndex = nextIndex;
   applyPresentationRoute(next, { renderNow:true, direction:"forward" });
-  requestAnimationFrame(() => { window.scrollTo({ top:0, left:0, behavior:"auto" }); focusPresentationEntry(); });
+  requestAnimationFrame(() => { window.scrollTo({ top:0, left:0, behavior:"auto" }); profileHeaderScrollSync?.(); focusPresentationEntry(); });
   return true;
 }
 
 function navigateMain(page, { mode = page === "contacts" ? "list" : ui.contactMode, role = ui.pipelineRole, replace = false, opener = document.activeElement } = {}) {
-  if (ui.contactEditing && !discardContactEdit()) return false;
-  if(conversationDraftDirty&&!discardConversationDraft())return false;
+  if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(()=>navigateMain(page,{mode,role,replace,opener}));return false;}
+  if(conversationDraftDirty){discardConversationDraft(()=>navigateMain(page,{mode,role,replace,opener}));return false;}
   const next = presentationURL({ page, mode, role });
   if (presentationPath(next) === presentationPath()) return false;
+  flushScrollHistoryState();
   writeCurrentHistoryState({ bridgeFocusSelector:routeFocusSelector(opener) });
   const nextIndex = replace ? presentationHistoryIndex : presentationHistoryIndex + 1;
   const nextState = { ...(history.state || {}), bridgeIndex:nextIndex, bridgeScrollY:0 };
@@ -495,31 +503,34 @@ function navigateMain(page, { mode = page === "contacts" ? "list" : ui.contactMo
   else history.pushState(nextState, "", presentationPath(next));
   presentationHistoryIndex = nextIndex;
   applyPresentationRoute(next, { renderNow:true, direction:"forward" });
-  requestAnimationFrame(() => window.scrollTo({ top:0, left:0, behavior:"auto" }));
+  requestAnimationFrame(() => { window.scrollTo({ top:0, left:0, behavior:"auto" }); profileHeaderScrollSync?.(); });
   return true;
 }
 
 function presentationBack() {
-  if (ui.contactEditing && !discardContactEdit()) return;
-  if(conversationDraftDirty&&!discardConversationDraft())return;
+  if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(presentationBack);return;}
+  if(conversationDraftDirty){discardConversationDraft(presentationBack);return;}
   const parent = presentationParentURL();
+  flushScrollHistoryState();
   const stateParent = String(history.state?.bridgeParentURL || "");
   if (stateParent && history.state?.bridgeIndex > 0) { history.back(); return; }
   const nextIndex = presentationHistoryIndex;
   history.replaceState({ ...(history.state || {}), bridgeIndex:nextIndex, bridgeScrollY:0 }, "", presentationPath(parent));
   applyPresentationRoute(parent, { renderNow:true, direction:"back" });
-  requestAnimationFrame(() => { window.scrollTo({ top:0, left:0, behavior:"auto" }); focusPresentationEntry(); });
+  requestAnimationFrame(() => { window.scrollTo({ top:0, left:0, behavior:"auto" }); profileHeaderScrollSync?.(); focusPresentationEntry(); });
 }
 
 function initializePresentationHistory() {
   if (!Number.isInteger(history.state?.bridgeIndex)) history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:window.scrollY }, "", presentationPath());
   window.addEventListener("popstate", event => {
+    cancelPendingScrollState();
     const nextIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
     const direction = nextIndex < presentationHistoryIndex ? "back" : "forward";
     presentationHistoryIndex = nextIndex;
     applyPresentationRoute(location.href, { renderNow:true, direction });
     requestAnimationFrame(() => {
       window.scrollTo({ top:Number(event.state?.bridgeScrollY) || 0, left:0, behavior:"auto" });
+      profileHeaderScrollSync?.();
       const selector = String(event.state?.bridgeFocusSelector || "");
       if (selector) {
         if (selector === "#contactSearch") suppressPeopleSearchRouteOnce = true;
@@ -529,9 +540,10 @@ function initializePresentationHistory() {
     });
   });
   window.addEventListener("scroll", () => {
-    if (scrollStateFrame) return;
-    scrollStateFrame = requestAnimationFrame(() => { scrollStateFrame = 0; writeCurrentHistoryState(); });
+    if(scrollStateTimer)clearTimeout(scrollStateTimer);
+    scrollStateTimer=setTimeout(()=>{scrollStateTimer=0;writeCurrentHistoryState();},120);
   }, { passive:true });
+  window.addEventListener("pagehide",flushScrollHistoryState);
 }
 
 initializePresentationHistory();
@@ -1451,20 +1463,27 @@ function bindAccountMigrationEvents() {
   });
 
   $("#startWithEmptyAccount")?.addEventListener("click", async () => {
-    if (ui.accountBusy || !confirm("Start this account without copying the data already saved in this browser? The browser-only copy will remain available if account mode is later disabled.")) return;
-    ui.accountBusy = true;
-    render();
-    try {
-      await accountClient.skipLocalMigration(anonymousSnapshot || defaultState());
-      ui.accountMigrationOpen = false;
-      ui.accountBusy = false;
-      render();
-      showToast("Account started without copying browser-only data");
-    } catch (error) {
-      ui.accountBusy = false;
-      render();
-      showToast(error?.message || "Bridge could not save that migration choice");
-    }
+    if (ui.accountBusy) return;
+    requestConfirmation({
+      title:"Start with an empty account?",
+      message:"The data already saved in this browser will not be copied. The browser-only copy remains available if account mode is later disabled.",
+      confirmLabel:"Start empty",
+      onConfirm:async()=>{
+        ui.accountBusy = true;
+        render();
+        try {
+          await accountClient.skipLocalMigration(anonymousSnapshot || defaultState());
+          ui.accountMigrationOpen = false;
+          ui.accountBusy = false;
+          render();
+          showToast("Account started without copying browser-only data");
+        } catch (error) {
+          ui.accountBusy = false;
+          render();
+          showToast(error?.message || "Bridge could not save that migration choice");
+        }
+      }
+    });
   });
 }
 
@@ -1472,7 +1491,7 @@ function accountActionModal() {
   const action = ui.accountAction;
   if (!action) return "";
   const busy = ui.accountBusy ? "disabled" : "";
-  const close = `<button class="icon-button close-account-action" type="button" aria-label="Close" ${busy}>${icons.close}</button>`;
+  const close = `<button class="ui-icon-button close-account-action" type="button" aria-label="Close" ${busy}>${icons.close}</button>`;
 
   if (action.type === "restore-backup") {
     const contacts = Number(action.counts?.contacts || 0);
@@ -1609,25 +1628,28 @@ function bindAccountActionEvents() {
 
 function render() {
   const app = $("#app");
+  profileHeaderScrollCleanup?.();
+  profileHeaderScrollCleanup=null;
+  profileHeaderScrollSync=null;
   if (ui.sharedScorecard || ui.sharedScorecardLoading || ui.sharedScorecardError) {
     document.body.classList.remove("modal-open");
     app.innerHTML = renderSharedScorecard();
     bindSharedScorecardEvents();
     return;
   }
-  const shouldAnimatePage = lastRenderedPage !== ui.page;
-  const shouldAnimateContactMode = ui.page === "contacts" && lastRenderedPage === "contacts" && lastRenderedContactMode !== ui.contactMode;
   const previousNavSelection=lastRenderedNavSelection;
   const nextNavSelection=navSelectionIndex();
-  const transientModalOpen=Boolean(ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
+  const nextPresentationKey=ui.routedScreen?presentationPath():"";
+  ui.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey?ui.routeDirection:"";
+  const transientModalOpen=Boolean(ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
   document.body.classList.toggle("modal-open",transientModalOpen);
-  const pageClass = shouldAnimatePage ? "page-enter" : shouldAnimateContactMode ? "mode-enter" : "";
-  app.innerHTML = `${AppShell(renderPage(), { pageClass, inert: Boolean(ui.accountAction) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}`;
-  lastRenderedPage = ui.page;
-  if (ui.page === "contacts") lastRenderedContactMode = ui.contactMode;
+  app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}`;
+  lastRenderedPresentationKey=nextPresentationKey;
+  ui.routeEntryMotion="";
   lastRenderedNavSelection=nextNavSelection;
   bindCommonEvents();
   bindSharedPrimitiveEvents();
+  if (ui.confirmation) bindConfirmationEvents();
   bindPageEvents();
   if (ui.settingsOpen) bindSettingsEvents();
   if (ui.achievementsOpen) bindAchievementEvents();
@@ -1641,8 +1663,11 @@ function render() {
   if (ui.accountAction) bindAccountActionEvents();
   const navIndicator=$('.nav-selection-indicator');
   if(navIndicator&&previousNavSelection!==null&&previousNavSelection!==nextNavSelection&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
-    const from=Math.max(0,previousNavSelection);const to=Math.max(0,nextNavSelection);
-    navIndicator.animate([{transform:`translateX(${from*100}%)`,opacity:previousNavSelection<0?0:1},{transform:`translateX(${to*100}%)`,opacity:nextNavSelection<0?0:1}],{duration:320,easing:'cubic-bezier(.16,1,.3,1)'});
+    const from=previousNavSelection;const to=nextNavSelection;
+    const frames=from<0&&to>=0?[{transform:`translateX(${to*100}%)`,opacity:0},{transform:`translateX(${to*100}%)`,opacity:1}]
+      :from>=0&&to<0?[{transform:`translateX(${from*100}%)`,opacity:1},{transform:`translateX(${from*100}%)`,opacity:0}]
+      :[{transform:`translateX(${from*100}%)`,opacity:1},{transform:`translateX(${to*100}%)`,opacity:1}];
+    navIndicator.animate(frames,{duration:320,easing:'cubic-bezier(.16,1,.3,1)'});
   }
   if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
   else if (ui.releaseNotesPending && !blockingModalOpen()) setTimeout(maybePresentReleaseNotes, 0);
@@ -1672,7 +1697,45 @@ function bindSharedScorecardEvents() {
 }
 
 function blockingModalOpen() {
-  return Boolean(ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
+  return Boolean(ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
+}
+
+function requestConfirmation({ title, message, confirmLabel = "Confirm", danger = false, onConfirm, onCancel = null }) {
+  if (ui.confirmation) return false;
+  ui.confirmation = { title, message, confirmLabel, danger, onConfirm, onCancel };
+  render();
+  return true;
+}
+
+function confirmationDialog() {
+  const confirmation=ui.confirmation;
+  if(!confirmation)return "";
+  return ConfirmDialog(confirmation.title,confirmation.message,{
+    id:"bridgeConfirmDialog",
+    className:confirmation.danger?"ui-confirm-dialog--danger":"",
+    confirmLabel:confirmation.confirmLabel,
+    confirmAttributes:'id="bridgeConfirmAction"'
+  });
+}
+
+function bindConfirmationEvents() {
+  const confirmation=ui.confirmation;
+  const dialog=$("#bridgeConfirmDialog [data-ui-dialog]");
+  if(!confirmation||!dialog)return;
+  let resolved=false;
+  const cancel=()=>{
+    if(resolved)return;
+    resolved=true;
+    if(ui.confirmation===confirmation)ui.confirmation=null;
+    confirmation.onCancel?.();
+  };
+  dialog.addEventListener("bridge:dialogclose",cancel,{once:true});
+  $("#bridgeConfirmAction")?.addEventListener("click",()=>{
+    if(resolved)return;
+    resolved=true;
+    if(ui.confirmation===confirmation)ui.confirmation=null;
+    confirmation.onConfirm?.();
+  },{once:true});
 }
 
 function queueAutomaticReleaseNotes() {
@@ -1843,13 +1906,23 @@ function quickCapturePersonPicker(contacts,{allowNew=false}={}) {
   const recentIds=new Set(recent.map(contact=>String(contact.id)));const ordered=[...recent,...contacts.filter(contact=>!recentIds.has(String(contact.id)))];
   return `<div class="quick-capture-picker" data-capture-person-picker><input type="hidden" name="contactId" value="${escapeHTML(selectedId)}"><label class="quick-capture-picker__search"><span class="sr-only">Search people</span>${icons.search}<input type="search" data-capture-person-search autocomplete="off" autocapitalize="words" placeholder="Who did you meet?"></label><div class="quick-capture-picker__heading"><span>${recent.length?"Recent people":"People"}</span><small data-capture-person-count>${recent.length}</small></div><div class="quick-capture-picker__list" data-capture-person-list>${ordered.map(contact=>`<button type="button" class="quick-capture-picker__row${selectedId===String(contact.id)?" is-selected":""}" data-capture-person-id="${escapeHTML(contact.id)}" data-capture-recent="${recentIds.has(String(contact.id))}" data-capture-search-value="${escapeHTML([contact.fullName,contact.placeName,contact.phoneNumber].filter(Boolean).join(" ").toLowerCase())}" ${recentIds.has(String(contact.id))?"":"hidden"}>${Avatar(contact.fullName,{size:"small"})}<span><strong>${escapeHTML(contact.fullName||"Unnamed person")}</strong><small>${escapeHTML(peopleRelativeDate(peopleActivityAt(contact)))}</small></span><i>${selectedId===String(contact.id)?"Selected":""}</i></button>`).join("")}</div>${allowNew?`<button class="quick-capture-picker__new" type="button" data-capture-new-person hidden>${icons.userPlus}<span>Add <strong data-capture-new-person-label>new person</strong></span>${icons.chevronRight}</button><div data-new-person-name hidden>${field("New person name",'<input name="fullName" autocomplete="name" placeholder="Full name">')}</div>`:""}</div>`;
 }
-function quickCapturePlaceActivityAt(place) {
-  return state.contacts.filter(contact=>String(contact.placeId||"")===String(place.id)||String(contact.placeName||"").toLowerCase()===String(place.name||"").toLowerCase()).map(peopleActivityAt).filter(Boolean).sort((left,right)=>new Date(right)-new Date(left))[0]||null;
+function quickCapturePlaceActivityMap() {
+  const activity=new Map();
+  for(const contact of state.contacts){
+    const at=peopleActivityAt(contact);if(!at)continue;
+    const keys=[contact.placeId?`id:${String(contact.placeId)}`:"",contact.placeName?`name:${String(contact.placeName).toLowerCase()}`:""].filter(Boolean);
+    for(const key of keys){const current=activity.get(key);if(!current||new Date(at)>new Date(current))activity.set(key,at);}
+  }
+  return activity;
+}
+function quickCapturePlaceActivityAt(place,activity=quickCapturePlaceActivityMap()) {
+  return activity.get(`id:${String(place.id)}`)||activity.get(`name:${String(place.name||"").toLowerCase()}`)||null;
 }
 function quickCapturePlacePicker() {
-  const places=[...state.places].sort((left,right)=>Number(right.isFavorite)-Number(left.isFavorite)||new Date(quickCapturePlaceActivityAt(right)||0)-new Date(quickCapturePlaceActivityAt(left)||0)||left.name.localeCompare(right.name));
+  const activity=quickCapturePlaceActivityMap();
+  const places=[...state.places].sort((left,right)=>Number(right.isFavorite)-Number(left.isFavorite)||new Date(quickCapturePlaceActivityAt(right,activity)||0)-new Date(quickCapturePlaceActivityAt(left,activity)||0)||left.name.localeCompare(right.name));
   const suggestions=places.slice(0,4);
-  return `<div class="quick-capture-picker quick-capture-place-picker" data-capture-place-picker><select name="placeId" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">None</option>${places.map(place=>`<option value="${escapeHTML(place.id)}">${escapeHTML(place.name)}</option>`).join("")}</select>${suggestions.length?`<div class="quick-capture-place-suggestions" aria-label="Favorite and recent places">${suggestions.map(place=>`<button type="button" data-capture-place-id="${escapeHTML(place.id)}">${place.isFavorite?icons.star:""}<span>${escapeHTML(place.name.split("—")[0].trim())}</span></button>`).join("")}</div>`:""}<label class="quick-capture-picker__search"><span class="sr-only">Search places</span>${icons.location}<input type="search" data-capture-place-search autocomplete="off" placeholder="Search or create a place"></label><div class="quick-capture-picker__list" data-capture-place-list>${places.map(place=>`<button type="button" class="quick-capture-picker__row" data-capture-place-id="${escapeHTML(place.id)}" data-capture-search-value="${escapeHTML(String(place.name||"").toLowerCase())}"><span><strong>${escapeHTML(place.name)}</strong><small>${place.isFavorite?"Favorite place":quickCapturePlaceActivityAt(place)?`Used ${fmtDate(quickCapturePlaceActivityAt(place))}`:"Saved place"}</small></span><i></i></button>`).join("")}</div><button class="quick-capture-picker__new" type="button" data-capture-new-place hidden>${icons.plus}<span>Create <strong data-capture-new-place-label>place</strong></span>${icons.chevronRight}</button><div class="quick-capture-new-place" data-capture-new-place-fields hidden>${field("New place",'<input name="newPlaceName" placeholder="Place name">')}<label class="quick-capture-check"><input type="checkbox" name="favoritePlace"><span>Save as a favorite</span></label></div></div>`;
+  return `<div class="quick-capture-picker quick-capture-place-picker" data-capture-place-picker><select name="placeId" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">None</option>${places.map(place=>`<option value="${escapeHTML(place.id)}">${escapeHTML(place.name)}</option>`).join("")}</select>${suggestions.length?`<div class="quick-capture-place-suggestions" aria-label="Favorite and recent places">${suggestions.map(place=>`<button type="button" data-capture-place-id="${escapeHTML(place.id)}">${place.isFavorite?icons.star:""}<span>${escapeHTML(place.name.split("—")[0].trim())}</span></button>`).join("")}</div>`:""}<label class="quick-capture-picker__search"><span class="sr-only">Search places</span>${icons.location}<input type="search" data-capture-place-search autocomplete="off" placeholder="Search or create a place"></label><div class="quick-capture-picker__list" data-capture-place-list>${places.map(place=>{const usedAt=quickCapturePlaceActivityAt(place,activity);return `<button type="button" class="quick-capture-picker__row" data-capture-place-id="${escapeHTML(place.id)}" data-capture-search-value="${escapeHTML(String(place.name||"").toLowerCase())}"><span><strong>${escapeHTML(place.name)}</strong><small>${place.isFavorite?"Favorite place":usedAt?`Used ${fmtDate(usedAt)}`:"Saved place"}</small></span><i></i></button>`;}).join("")}</div><button class="quick-capture-picker__new" type="button" data-capture-new-place hidden>${icons.plus}<span>Create <strong data-capture-new-place-label>place</strong></span>${icons.chevronRight}</button><div class="quick-capture-new-place" data-capture-new-place-fields hidden>${field("New place",'<input name="newPlaceName" placeholder="Place name">')}<label class="quick-capture-check"><input type="checkbox" name="favoritePlace"><span>Save as a favorite</span></label></div></div>`;
 }
 function quickCaptureWizardFooter({last=false,saveLabel="Save conversation"}={}) { return `<footer class="quick-capture-wizard__footer">${last?`<button class="button primary" type="submit">${icons.check}<span>${escapeHTML(saveLabel)}</span></button>`:`<button class="button primary" type="button" data-capture-step-next>Continue</button>`}</footer>`; }
 function quickCaptureWizardStep(key,title,content,{first=false,last=false,saveLabel="Save conversation"}={}) { return `<section class="quick-capture-wizard__step" data-capture-step="${key}" ${first?"":"hidden"}><header><h3>${escapeHTML(title)}</h3></header>${content}${quickCaptureWizardFooter({last,saveLabel})}</section>`; }
@@ -1935,7 +2008,7 @@ function quickCreateModal() {
   if(ui.quickCreateMode==="action")content=quickCaptureActionForm(activeContacts);
   if(ui.quickCreateMode==="note")content=quickCaptureNoteForm(activeContacts);
   const titles={conversation:"Conversation",call:"Call",text:"Text",meeting:"Meeting",action:"Follow-up",contact:"Add person",note:"Other activity"};
-  return `<div class="modal-backdrop quick-create-backdrop${continuing?" is-continuing":""}" id="quickCreateBackdrop"><section class="modal quick-create-modal${ui.quickCreateMode?" has-step":""}" role="dialog" aria-modal="true" aria-labelledby="quickCreateTitle"><header class="modal-head"><div><span class="eyebrow">Capture</span><h2 id="quickCreateTitle">${ui.quickCreateMode?titles[ui.quickCreateMode]:"What happened?"}</h2></div><button class="icon-button" id="closeQuickCreate" type="button" aria-label="Close">${icons.close}</button></header><div class="modal-body${ui.quickCreateMode?" motion-step":""}">${content}</div></section></div>`;
+  return `<div class="modal-backdrop quick-create-backdrop${continuing?" is-continuing":""}" id="quickCreateBackdrop"><section class="modal quick-create-modal${ui.quickCreateMode?" has-step":""}" role="dialog" aria-modal="true" aria-labelledby="quickCreateTitle"><header class="modal-head"><div><span class="eyebrow">Capture</span><h2 id="quickCreateTitle">${ui.quickCreateMode?titles[ui.quickCreateMode]:"What happened?"}</h2></div><button class="ui-icon-button" id="closeQuickCreate" type="button" aria-label="Close">${icons.close}</button></header><div class="modal-body${ui.quickCreateMode?" motion-step":""}">${content}</div></section></div>`;
 }
 
 function closeQuickCreate() {
@@ -2033,16 +2106,42 @@ function presentationMissing(title, message) {
   return PresentationScreen(EmptyState(title,message,{className:"presentation-screen__empty"}),{title:"Unavailable",eyebrow:"Bridge"});
 }
 
+function presentationMotionClass() {
+  const direction=escapeHTML(ui.routeDirection||"forward");
+  return `presentation-screen--${direction}${ui.routeEntryMotion?` presentation-screen--enter presentation-screen--enter-${direction}`:""}`;
+}
+
 function renderPeopleSearchScreen() {
   const hasQuery=Boolean(ui.search.trim());
+  const clearAction=`<button type="button" class="people-search-clear" data-clear-people-search aria-label="Clear search" ${hasQuery?"":"hidden"}>${icons.close}</button>`;
+  const search=SearchField({id:"contactSearch",value:ui.search,placeholder:"Name, place, or something they said",label:"Search people",className:"people-search-screen__search",trailing:clearAction,attributes:"autocapitalize=\"words\""});
+  return `<section class="presentation-screen ${presentationMotionClass()} people-search-screen" data-presentation-screen="people-search"><header class="people-search-screen__header"><button type="button" class="people-search-screen__back" data-presentation-back aria-label="Back">${icons.chevronLeft}</button><h1 class="sr-only">Search people</h1>${search}</header><div class="presentation-screen__body">${peopleSearchBodyMarkup()}</div></section>`;
+}
+
+function peopleSearchBodyMarkup() {
+  const hasQuery=Boolean(ui.search.trim());
+  if(!hasQuery)return renderPeopleSearchSuggestions(peopleVisibleContacts(getFilteredContacts({ignoreSearch:true})));
   const contacts=peopleVisibleContacts(getFilteredContacts());
   const activeContacts=state.contacts.filter(contact=>!contact.archivedAt&&!contact.isFilteredOut);
-  const clearAction=hasQuery?`<button type="button" class="people-search-clear" data-clear-people-search aria-label="Clear search">${icons.close}</button>`:"";
-  const search=SearchField({id:"contactSearch",value:ui.search,placeholder:"Name, place, or something they said",label:"Search people",className:"people-search-screen__search",trailing:clearAction,attributes:"autocapitalize=\"words\""});
-  const body=hasQuery
-    ? `<p class="people-home__count">${contacts.length} ${contacts.length===1?"result":"results"}</p>${renderPeopleList(contacts,activeContacts.length,{query:ui.search,emptyTitle:"No match yet",emptyMessage:"Bridge searches names, places, and everything you've written about someone.",noResults:true})}`
-    : renderPeopleSearchSuggestions(peopleVisibleContacts(getFilteredContacts({ignoreSearch:true})));
-  return `<section class="presentation-screen presentation-screen--${escapeHTML(ui.routeDirection||"forward")} people-search-screen" data-presentation-screen="people-search"><header class="people-search-screen__header"><button type="button" class="people-search-screen__back" data-presentation-back aria-label="Back">${icons.chevronLeft}</button><h1 class="sr-only">Search people</h1>${search}</header><div class="presentation-screen__body">${body}</div></section>`;
+  return `<p class="people-home__count">${contacts.length} ${contacts.length===1?"result":"results"}</p>${renderPeopleList(contacts,activeContacts.length,{query:ui.search,emptyTitle:"No match yet",emptyMessage:"Bridge searches names, places, and everything you've written about someone.",noResults:true})}`;
+}
+
+function bindPeopleSearchResultActions(root) {
+  $$('[data-contact-id]',root).forEach(button=>button.addEventListener('click',()=>navigatePresentation("person",{person:button.dataset.contactId},{opener:button})));
+  $$('[data-place-detail-id]',root).forEach(button=>button.addEventListener('click',()=>{const place=state.places.find(item=>String(item.id)===String(button.dataset.placeDetailId));if(place)navigatePresentation("place",{place:place.id},{opener:button});}));
+}
+
+function refreshPeopleSearchResults(cursor=0) {
+  const body=$(".people-search-screen > .presentation-screen__body");
+  const input=$("#contactSearch");
+  if(!body||!input)return false;
+  body.innerHTML=peopleSearchBodyMarkup();
+  bindPeopleSearchResultActions(body);
+  const clear=$("[data-clear-people-search]");
+  if(clear)clear.hidden=!ui.search.trim();
+  input.focus({preventScroll:true});
+  input.setSelectionRange(cursor,cursor);
+  return true;
 }
 
 function renderPipelineStageScreen() {
@@ -2188,7 +2287,10 @@ function todayNextAction(item, now = new Date()) {
   const overdue = Boolean(followUp && new Date(followUp.dueDate) < now);
   const summary = followUp ? `${todayFollowUpSummary(followUp, now)} · ${todayContactContext(contact, score, now)}` : todayContactContext(contact, score, now);
   const note = String(followUp?.note || "").trim();
-  return `<article class="today-next-card ${overdue ? "is-overdue" : ""}"><div class="today-next-card__identity">${Avatar(name, { size:"large", className:`today-next-card__avatar ${overdue ? "today-next-card__avatar--overdue" : ""}` })}<div><h3>${escapeHTML(name)}</h3><p>${escapeHTML(summary)}</p>${todayStageChip(contact)}</div></div>${note ? `<blockquote>${escapeHTML(note)}</blockquote>` : ""}<div class="today-next-card__actions"><button class="button primary" type="button" data-contact-id="${escapeHTML(contact.id)}">${followUp ? "Follow up" : "Open relationship"}</button><button class="button subtle" type="button" data-contact-id="${escapeHTML(contact.id)}">View</button>${followUp ? `<button class="button subtle today-reschedule-action" type="button" data-action-id="${escapeHTML(contact.id)}:${escapeHTML(followUp.id)}" aria-label="Reschedule follow-up for ${escapeHTML(name)}">${icons.clock}</button><button class="button subtle today-complete-action" type="button" data-today-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}">Done</button>` : ""}</div></article>`;
+  const helpId=followUp?`today-swipe-help-${escapeHTML(followUp.id)}`:"";
+  const card=`<article class="today-next-card ${overdue ? "is-overdue" : ""}" ${helpId?`aria-describedby="${helpId}"`:""}><div class="today-next-card__identity">${Avatar(name, { size:"large", className:`today-next-card__avatar ${overdue ? "today-next-card__avatar--overdue" : ""}` })}<div><h3>${escapeHTML(name)}</h3><p>${escapeHTML(summary)}</p>${todayStageChip(contact)}</div></div>${note ? `<blockquote>${escapeHTML(note)}</blockquote>` : ""}<div class="today-next-card__actions"><button class="button primary" type="button" data-contact-id="${escapeHTML(contact.id)}">${followUp ? "Follow up" : "Open relationship"}</button><button class="button subtle" type="button" data-contact-id="${escapeHTML(contact.id)}">View</button>${followUp ? `<button class="button subtle today-reschedule-action" type="button" data-action-id="${escapeHTML(contact.id)}:${escapeHTML(followUp.id)}" aria-label="Reschedule follow-up for ${escapeHTML(name)}">${icons.clock}</button><button class="button subtle today-complete-action" type="button" data-today-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}" aria-label="Mark follow-up with ${escapeHTML(name)} done">Done</button>` : ""}</div></article>`;
+  if(!followUp)return card;
+  return `<div class="today-swipe-shell" data-today-swipe-card data-today-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}" data-action-id="${escapeHTML(contact.id)}:${escapeHTML(followUp.id)}"><div class="today-swipe-feedback today-swipe-feedback--done" aria-hidden="true">${icons.check}<span>Done</span></div><div class="today-swipe-feedback today-swipe-feedback--reschedule" aria-hidden="true">${icons.clock}<span>Reschedule</span></div>${card}<p class="sr-only" id="${helpId}">Swipe left to mark this follow-up done or right to open rescheduling. The visible buttons provide the same actions.</p></div>`;
 }
 function todayClearAction() { return SurfaceCard(`<div class="today-clear-action"><span>${icons.circleCheck}</span><div><strong>Nothing needs attention right now</strong><p>Your next follow-up or relationship signal will appear here.</p></div><button class="button subtle" type="button" data-page="add">Log conversation</button></div>`, { className:"today-clear-action-card" }); }
 function todayAttentionSection(items, now = new Date()) {
@@ -2289,7 +2391,7 @@ function getFilteredContacts({ignoreSearch=false}={}) {
 }
 function nextFollowUpDate(contact){const active=contact.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];return active?new Date(active.dueDate).getTime():Number.MAX_SAFE_INTEGER;}
 function renderContactList(contacts) { if(!contacts.length)return emptyInline("No contacts found","Try a different filter or add a new conversation.");const scores=relationshipScoreMap();return `<div class="contact-list">${contacts.map(contact=>contactCard(contact,scores.get(String(contact.id)))).join("")}</div>`; }
-function contactCard(contact,score=null) { const follow=contact.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];const latest=latestConversationTime(contact);const team=contact.role==="Team";const actionState=relationshipActionState(contact);const primaryMeta=[contact.role,!team&&stageFor(contact)].filter(Boolean).map(escapeHTML).join(" · ");const relationshipMeta=[!team&&contact.interestLevel?`${escapeHTML(contact.interestLevel)} interest`:"",contact.placeName?escapeHTML(contact.placeName):"",latest?`Last conversation ${fmtDate(new Date(latest).toISOString())}`:""].filter(Boolean).join(" · ");const status=contact.archivedAt?'<span class="ui-status-badge">Archived</span>':contact.isFilteredOut?'<span class="ui-status-badge ui-status-badge--overdue">No-Go</span>':follow?`<span class="ui-status-badge ${new Date(follow.dueDate)<new Date()?"ui-status-badge--overdue":"ui-status-badge--brand"}">${fmtDate(follow.dueDate)}</span>`:team?"":`<span class="ui-status-badge ui-status-badge--uncertain">${escapeHTML(contact.judgement)}</span>`;const trend=relationshipTrendDirection(score);const health=state.settings.healthScoresVisible&&score?`<div class="contact-health"><span class="health-dot health-${score.band.toLowerCase().replaceAll(" ","-")}"></span><strong>${escapeHTML(score.band)}</strong>${score.score===null?"":`<span>${score.score}</span>`}<span>${escapeHTML(trend[0].toUpperCase()+trend.slice(1))}</span>${actionState!=="Covered"?`<span class="${actionState==="Overdue"?"danger-text":""}">${actionState}</span>`:""}</div>`:""; return `<article class="contact-card glass"><button class="contact-card-open" data-contact-id="${contact.id}" aria-label="Open ${escapeHTML(contact.fullName)}"><span class="avatar ui-avatar ui-avatar--small">${initials(contact.fullName)}</span><span class="contact-body"><strong class="contact-name">${escapeHTML(contact.fullName)}</strong><span class="contact-primary-meta">${primaryMeta}</span>${relationshipMeta?`<span class="contact-relationship-meta">${relationshipMeta}</span>`:""}${health}</span><span class="contact-status">${status}</span></button>${isCallablePhone(contact.phoneNumber)?`<div class="contact-quick-actions"><a class="icon-button contact-call" href="${phoneHref(contact.phoneNumber)}" data-communication-contact-id="${contact.id}" data-communication-type="Call" aria-label="Call ${escapeHTML(contact.fullName)}">${icons.phone}</a><a class="icon-button contact-text" href="${messageHref(contact.phoneNumber)}" data-communication-contact-id="${contact.id}" data-communication-type="Text" aria-label="Text ${escapeHTML(contact.fullName)}">${icons.chat}</a></div>`:""}</article>`; }
+function contactCard(contact,score=null) { const follow=contact.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];const latest=latestConversationTime(contact);const team=contact.role==="Team";const actionState=relationshipActionState(contact);const primaryMeta=[contact.role,!team&&stageFor(contact)].filter(Boolean).map(escapeHTML).join(" · ");const relationshipMeta=[!team&&contact.interestLevel?`${escapeHTML(contact.interestLevel)} interest`:"",contact.placeName?escapeHTML(contact.placeName):"",latest?`Last conversation ${fmtDate(new Date(latest).toISOString())}`:""].filter(Boolean).join(" · ");const status=contact.archivedAt?'<span class="ui-status-badge">Archived</span>':contact.isFilteredOut?'<span class="ui-status-badge ui-status-badge--overdue">No-Go</span>':follow?`<span class="ui-status-badge ${new Date(follow.dueDate)<new Date()?"ui-status-badge--overdue":"ui-status-badge--brand"}">${fmtDate(follow.dueDate)}</span>`:team?"":`<span class="ui-status-badge ui-status-badge--uncertain">${escapeHTML(contact.judgement)}</span>`;const trend=relationshipTrendDirection(score);const health=state.settings.healthScoresVisible&&score?`<div class="contact-health"><span class="health-dot health-${score.band.toLowerCase().replaceAll(" ","-")}"></span><strong>${escapeHTML(score.band)}</strong>${score.score===null?"":`<span>${score.score}</span>`}<span>${escapeHTML(trend[0].toUpperCase()+trend.slice(1))}</span>${actionState!=="Covered"?`<span class="${actionState==="Overdue"?"danger-text":""}">${actionState}</span>`:""}</div>`:""; return `<article class="contact-card glass"><button class="contact-card-open" data-contact-id="${contact.id}" aria-label="Open ${escapeHTML(contact.fullName)}"><span class="avatar ui-avatar ui-avatar--small">${initials(contact.fullName)}</span><span class="contact-body"><strong class="contact-name">${escapeHTML(contact.fullName)}</strong><span class="contact-primary-meta">${primaryMeta}</span>${relationshipMeta?`<span class="contact-relationship-meta">${relationshipMeta}</span>`:""}${health}</span><span class="contact-status">${status}</span></button>${isCallablePhone(contact.phoneNumber)?`<div class="contact-quick-actions"><a class="ui-icon-button contact-call" href="${phoneHref(contact.phoneNumber)}" data-communication-contact-id="${contact.id}" data-communication-type="Call" aria-label="Call ${escapeHTML(contact.fullName)}">${icons.phone}</a><a class="ui-icon-button contact-text" href="${messageHref(contact.phoneNumber)}" data-communication-contact-id="${contact.id}" data-communication-type="Text" aria-label="Text ${escapeHTML(contact.fullName)}">${icons.chat}</a></div>`:""}</article>`; }
 function renderPipelineGroup(role, contacts) { const stages=PIPELINES[role] || []; return `<section class="pipeline-role-group contacts-pipeline-group"><header class="pipeline-role-head">${SectionHeader(role === "Customer" ? "Customer relationships" : "Prospect relationships",{eyebrow:"Pipeline",description:"Move each relationship forward when the next step is clear.",level:2})}</header><div class="pipeline-board ${role === "Customer" ? "customer-pipeline" : ""}">${stages.map(stage=>{const group=contacts.filter(c=>c.role===role&&stageFor(c)===stage);const people=group.map(c=>`<button class="pipeline-person contacts-pipeline-person" data-contact-id="${c.id}">${Avatar(c.fullName,{size:"small"})}<span><strong>${escapeHTML(c.fullName)}</strong><small>${escapeHTML(c.interestLevel||"Interest unknown")} interest</small></span></button>`).join("")||'<p class="contacts-pipeline-empty">No relationships in this stage.</p>';return SurfaceCard(`<header class="column-head"><div><span class="ui-eyebrow">${escapeHTML(role)}</span><strong>${escapeHTML(stageLabel(stage))}</strong></div>${StatusBadge(String(group.length),"neutral")}</header><div class="contacts-pipeline-people">${people}</div>`,{className:"pipeline-column contacts-pipeline-column"});}).join("")}</div></section>`; }
 function activePipelineContacts(role) { return state.contacts.filter(contact=>contact.role===role&&!contact.archivedAt&&!contact.isFilteredOut&&PIPELINES[role].includes(currentPipelineStage(contact))); }
 function pipelineStageEnteredAt(contact,stage) {
@@ -2481,7 +2583,12 @@ function renderAdd() {
   const review=step("review",5,"Ready to save?","Bridge will count this as one conversation and keep every selected relationship action.",`<div class="conversation-review-card"><dl aria-live="polite"><div><dt>Person</dt><dd data-conversation-review="person">Add a full name</dd></div><div><dt>Role</dt><dd data-conversation-review="role">Prospect</dd></div><div><dt>Conversation</dt><dd data-conversation-review="conversation">${escapeHTML(todayInput())} · Prospecting</dd></div><div><dt>Place</dt><dd data-conversation-review="place">No place selected</dd></div><div><dt>Next action</dt><dd data-conversation-review="next-action">No follow-up scheduled</dd></div></dl><button class="button primary conversation-save" type="submit">${icons.check}<span>Save conversation</span></button><p class="conversation-save-note">Required fields are marked by your browser. Your existing duplicate-contact check runs before anything is saved.</p></div>`,"conversation-review");
   return `${pageHead("Conversation Studio", "Capture the relationship, context, learning, and next step while it is fresh.")}<form id="addContactForm" class="form-shell conversation-flow" novalidate>${stepNavigation}<div class="conversation-studio-layout"><div class="conversation-studio-main">${person}${context}${learnings}${tracking}${nextStep}</div><aside class="conversation-studio-review" aria-label="Conversation review">${review}</aside></div></form>`;
 }
-function field(label, control, cls="") { return `<label class="field ${cls}"><span>${label}</span>${control}</label>`; }
+function field(label, control, cls="") {
+  const kind=String(control).match(/^<(input|select|textarea)\b/)?.[1];
+  const className=kind?`ui-${kind}`:"";
+  const styled=className?(String(control).match(/^<[^>]+\bclass="/)?String(control).replace('class="',`class="${className} `):String(control).replace(`<${kind}`,`<${kind} class="${className}"`)):control;
+  return `<label class="field ui-field ${cls}"><span>${label}</span>${styled}</label>`;
+}
 function stageCheck(stage,title,{type="checkbox",checked=false,showDescription=true}={}) { const name=type==="radio"?"pipelineStage":stageInputName(stage); const description=showDescription&&title?`<small class="muted">${escapeHTML(title)}</small>`:""; return `<label class="check-tile"><input type="${type}" name="${name}" value="${escapeHTML(stage)}" ${checked?"checked":""}><span><strong>${escapeHTML(stageLabel(stage))}</strong>${description}</span></label>`; }
 function roleStageChecks(role,contact=null) { return (PIPELINES[role] || []).map(stage=>stageCheck(stage,"",{type:"radio",checked:Boolean(contact?.stages?.[stage]),showDescription:false})).join(""); }
 
@@ -2632,7 +2739,7 @@ function insightsPlaces(model) {
   return `<section class="insights-section insights-places" aria-labelledby="insights-places-title"><header><h2 id="insights-places-title">Where you’re connecting</h2><button type="button" data-insights-places>See all</button></header>${model.placeActivity.length?`<div>${model.placeActivity.slice(0,4).map(item=>`<button type="button" data-insights-place-id="${escapeHTML(item.place.id)}"><span><strong>${escapeHTML(item.place.name)}</strong><small>${analyticsCountLabel(item.activePeople,"active relationship")} · ${analyticsCountLabel(item.movements,"movement")}</small></span><b>${item.recordedConversations}</b></button>`).join("")}</div><p class="insights-places__note">Counts are recorded conversations among people linked to each saved place.</p>`:emptyInline("No saved-place activity","Link people to a saved place to see their recorded activity here.")}</section>`;
 }
 function analyticsDetailMetricRow(label,value,{detail="",progress=null,max=1}={}) {
-  const progressMarkup=Number.isFinite(progress)?`<i><span style="width:${Math.max(progress?2:0,Math.round(progress/Math.max(1,max)*100))}%"></span></i>`:"";
+  const progressMarkup=Number.isFinite(progress)?ProgressBar(progress,{label:`${label} activity`,max}):"";
   return `<div class="analytics-detail-metric"><div><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></div>${progressMarkup}${detail?`<small>${escapeHTML(detail)}</small>`:""}</div>`;
 }
 function analyticsDetailActivity(model) {
@@ -2672,19 +2779,19 @@ function renderAnalytics() {
   const placeSummary=busiest?` Your busiest place was ${escapeHTML(busiest.place.name)}.`:"";
   return `<section class="analytics-workspace insights-home" aria-label="Insights">${pageHead("Insights", "Relationship activity and momentum from your existing Bridge data.", IconButton("share","Share scorecard",{attributes:'id="shareScorecard"'}))}<section class="insights-hero" aria-labelledby="insights-period-summary"><span>${escapeHTML(analyticsPeriodEyebrow())}</span>${periodActivity?`<h2 id="insights-period-summary">${summary}</h2><p>${followUpSummary}${placeSummary}</p>`:`<div id="insights-period-summary">${emptyInline("No activity in this period","Open Detailed analytics to choose another period, or log a conversation to begin your Insights history.")}</div>`}</section>${insightsConversationChart(model)}${insightsPipelineIntelligence(model)}<section class="insights-section insights-pipeline-snapshot" aria-labelledby="insights-pipeline-snapshot"><h2 id="insights-pipeline-snapshot">Pipeline activity</h2><p class="insights-section__description">Current stage distribution uses Bridge’s exact Prospect and Customer stages.</p>${insightsStageSnapshot("Prospect",model)}${insightsStageSnapshot("Customer",model)}</section>${insightsFollowUpEffectiveness(model)}${insightsPlaces(model)}${insightsDetailedAnalytics(model,scorecard,previousScorecard)}</section>`;
 }
-function metricBar(label,value,max){return `<div><div class="metric-label"><span>${escapeHTML(String(label))}</span><strong>${value}</strong></div><div class="bar"><span style="width:${value/Math.max(1,max)*100}%"></span></div></div>`;}
+function metricBar(label,value,max){return `<div><div class="metric-label"><span>${escapeHTML(String(label))}</span><strong>${value}</strong></div>${ProgressBar(value,{label:`${String(label)} activity`,max})}</div>`;}
 
 function achievementsModal({ routed=false }={}) {
   const result = evaluateAchievements(state, state.meta.achievements || {});
   const groups = [...new Set(result.progress.map(item => item.category))];
   const content=`<div class="achievement-groups">${groups.map(group => `<section><h3>${escapeHTML(group)}</h3><div class="achievement-grid">${result.progress.filter(item => item.category === group).map(achievementCard).join("")}</div></section>`).join("")}</div>`;
   if(routed)return PresentationScreen(content,{title:"Achievements",eyebrow:"Progress",className:"achievements-screen"});
-  return `<div class="modal-backdrop" id="achievementsBackdrop"><section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="achievementsTitle"><header class="modal-head"><div><span class="eyebrow">Progress</span><h2 id="achievementsTitle">Achievements</h2></div><button class="icon-button close-achievements" aria-label="Close">${icons.close}</button></header><div class="modal-body">${content}</div></section></div>`;
+  return `<div class="modal-backdrop" id="achievementsBackdrop"><section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="achievementsTitle"><header class="modal-head"><div><span class="eyebrow">Progress</span><h2 id="achievementsTitle">Achievements</h2></div><button class="ui-icon-button close-achievements" aria-label="Close">${icons.close}</button></header><div class="modal-body">${content}</div></section></div>`;
 }
 function achievementCard(item) {
   const unlockedAt = state.meta.achievements?.[item.id];
-  const percent = Math.min(100, item.current / Math.max(1, item.target) * 100);
-  return `<article class="achievement-card ${unlockedAt ? "unlocked" : "locked"}"><div class="achievement-badge">${icons[item.icon] || icons.award}</div><div><span class="achievement-category">${unlockedAt ? `Unlocked ${fmtDate(unlockedAt, { month: "short", day: "numeric", year: "numeric" })}` : item.category}</span><h4>${escapeHTML(item.name)}</h4><p>${escapeHTML(item.description)}</p><div class="achievement-progress"><span style="width:${percent}%"></span></div><small>${Math.min(item.current, item.target)} of ${item.target}</small></div></article>`;
+  const current=Math.min(item.current,item.target);
+  return `<article class="achievement-card ${unlockedAt ? "unlocked" : "locked"}"><div class="achievement-badge">${icons[item.icon] || icons.award}</div><div><span class="achievement-category">${unlockedAt ? `Unlocked ${fmtDate(unlockedAt, { month: "short", day: "numeric", year: "numeric" })}` : item.category}</span><h4>${escapeHTML(item.name)}</h4><p>${escapeHTML(item.description)}</p>${ProgressBar(current,{label:`${item.name} progress`,max:item.target})}<small>${current} of ${item.target}</small></div></article>`;
 }
 function bindAchievementEvents() {
   $(".close-achievements")?.addEventListener("click", () => { ui.achievementsOpen = false; render(); });
@@ -2711,7 +2818,7 @@ function accountWorkspaceSettings({ section="account" }={}) {
   if(section==="data")content=`${sync}${settingsNavigationRow("Backups and export","Cloud and on-device recovery tools","backup","download")}`;
   else if(section==="sessions")content=`<section class="settings-focused-group" aria-labelledby="activeSessionsTitle"><div class="settings-focused-group__head"><span class="ui-eyebrow">Security</span><h3 id="activeSessionsTitle">Active sessions</h3><p>Review the devices currently signed in to this Bridge account.</p></div><div class="account-session-list">${!ui.accountPanelLoaded?`<p class="settings-note">Loading sessions…</p>`:sessions.length?sessions.map(accountSessionRow).join(""):`<p class="settings-note">No active sessions found.</p>`}</div></section>`;
   else if(section==="backup")content=accountBackupRows();
-  else content=`<section class="settings-focused-group"><div class="settings-focused-group__head"><span class="ui-eyebrow">Password and access</span><h3>Account security</h3><p>Changing your password signs out other devices. Existing authentication and session rules remain unchanged.</p></div><div class="account-actions hn-account-security-actions"><button class="button subtle" id="changeAccountPassword" type="button" ${ui.accountBusy?"disabled":""}>Change password</button><button class="button subtle" id="signOutAccount" type="button" ${ui.accountBusy?"disabled":""}>Sign out of this device</button></div></section><div class="account-danger-zone"><strong>Delete Bridge account</strong><small>Deletes this account's cloud CRM records, revokes sessions, notifications, and scorecard links. Browser-only data is not silently erased.</small><button class="button destructive" id="deleteBridgeAccount" type="button" ${ui.accountBusy?"disabled":""}>Delete account</button></div>`;
+  else content=`<section class="settings-focused-group"><div class="settings-focused-group__head"><span class="ui-eyebrow">Password and access</span><h3>Account security</h3><p>Changing your password signs out other devices. Existing authentication and session rules remain unchanged.</p></div><div class="account-actions hn-account-security-actions"><button class="button subtle" id="changeAccountPassword" type="button" ${ui.accountBusy?"disabled":""}>Change password</button><button class="button subtle" id="signOutAccount" type="button" ${ui.accountBusy?"disabled":""}>Sign out of this device</button></div></section><section class="settings-reference-section"><h2>Devices</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="sessions">Review signed-in devices</button></div></section><div class="account-danger-zone"><strong>Delete Bridge account</strong><small>Deletes this account's cloud CRM records, revokes sessions, notifications, and scorecard links. Browser-only data is not silently erased.</small><button class="button destructive" id="deleteBridgeAccount" type="button" ${ui.accountBusy?"disabled":""}>Delete account</button></div>`;
   return `<section class="hn-account-workspace" aria-labelledby="bridgeAccountTitle">${profile}${error}${content}</section>`;
 }
 
@@ -2752,7 +2859,7 @@ function accountBackupRow(backup) {
 }
 
 function dataAndBackupSettings() {
-  const local = `${settingsRow("Download all Bridge data",`<button type="button" class="button subtle" id="exportBackup">${icons.download}JSON</button>`)}${settingsRow("Export contacts",`<button type="button" class="button subtle" id="exportCSV">${icons.download}CSV</button>`)}${settingsRow("Restore from JSON backup",`<label class="button subtle">Choose file<input id="importBackup" type="file" accept="application/json" hidden></label>`)}`;
+  const local = `${settingsRow("Download all Bridge data",Button(`${icons.download}<span>JSON</span>`,{tone:"secondary",className:"settings-export-action",attributes:'id="exportBackup"'}))}${settingsRow("Export contacts",Button(`${icons.download}<span>CSV</span>`,{tone:"secondary",className:"settings-export-action",attributes:'id="exportCSV"'}))}${settingsRow("Restore from JSON backup",`<label class="ui-button ui-button--secondary settings-export-action">Choose file<input id="importBackup" type="file" accept="application/json" hidden></label>`)}`;
   return local;
 }
 
@@ -2792,14 +2899,15 @@ function settingsRootContent(s,metrics){
   const reminderTime=new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(2000,0,1,reminderHour||0,reminderMinute||0));
   const conversationReminder=s.dailyReminderEnabled?`Daily nudge at ${reminderTime}`:"Off";
   const followUpReminder=s.followUpNotifications?"On, at the scheduled time":"Off";
+  const accountRow=accountModeActive()?settingsNavigationRow("Account & security","Password, sessions, and account controls","account"):"";
   const groups=[
-    settingsNavigationGroup("Profile",settingsNavigationRow("Profile",profileDetail,"profile")),
-    settingsNavigationGroup("Goals",`${settingsNavigationRow("Conversation goals",`${s.dailyGoal} daily · ${s.weeklyGoal} weekly · ${s.monthlyGoal} monthly`,"goals")}${settingsNavigationRow("Streak & achievements",`${metrics.goalStreak} day streak`,"goals")}`),
-    settingsNavigationGroup("Notifications",`${settingsNavigationRow("Conversation reminders",conversationReminder,"notifications")}${settingsNavigationRow("Follow-up reminders",followUpReminder,"notifications")}`),
-    settingsNavigationGroup("Data",`${settingsNavigationRow("Data & sync",accountModeActive()?accountSyncLabel():"Saved on this device","data")}${settingsNavigationRow("Backup & export","Download or restore your local data","backup")}`),
+    settingsNavigationGroup("Profile",`${settingsNavigationRow("Profile",profileDetail,"profile")}${accountRow}`),
+    settingsNavigationGroup("Goals",settingsNavigationRow("Goals & progress",`${s.dailyGoal} daily · ${s.weeklyGoal} weekly · ${s.monthlyGoal} monthly · ${metrics.goalStreak} day streak`,"goals")),
+    settingsNavigationGroup("Notifications",settingsNavigationRow("Notifications",`${conversationReminder} · follow-ups ${followUpReminder.toLowerCase()}`,"notifications")),
+    settingsNavigationGroup("Relationships",`${settingsNavigationRow("Workflow","Default follow-up and week layout","preferences")}${settingsNavigationRow("Relationship health","Visibility, cadence, and scoring","health")}${settingsNavigationRow("Archive","Inactive-contact behavior","archive")}`),
+    settingsNavigationGroup("Data",`${settingsNavigationRow("Data & sync",accountModeActive()?accountSyncLabel():"Saved on this device","data")}${settingsNavigationRow("Backup & export","Local and cloud backup tools","backup")}`),
     settingsNavigationGroup("Privacy & sharing",settingsNavigationRow("Scorecards and sharing","Link privacy and deletion behavior","privacy")),
-    settingsNavigationGroup("About Bridge",settingsNavigationRow("About and support",`Version ${APP_RELEASE.version}`,"about")),
-    settingsNavigationGroup("Preferences",settingsNavigationRow("Relationship settings","Health, cadence, follow-up defaults, and week layout","preferences"))
+    settingsNavigationGroup("About Bridge",settingsNavigationRow("About & support",`Version ${APP_RELEASE.version}`,"about"))
   ];
   return `<div class="settings-root">${groups.join("")}</div>`;
 }
@@ -2808,12 +2916,10 @@ function settingsRestControls(excludedDates,restRules,restFrequency,todayExclude
 }
 function settingsProfileContent(s){
   const firstName=s.firstName||accountContext.user?.firstName||"";const lastName=s.lastName||accountContext.user?.lastName||"";
-  const user=accountContext.user||{};const displayName=[firstName,lastName].filter(Boolean).join(" ")||"Bridge profile";const signedIn=accountModeActive();const sessions=Array.isArray(ui.accountSessions)?ui.accountSessions:[];
+  const user=accountContext.user||{};const displayName=[firstName,lastName].filter(Boolean).join(" ")||"Bridge profile";const signedIn=accountModeActive();
   const identity=`<header class="settings-account-identity"><div class="account-avatar">${escapeHTML(initials(displayName||user.email||"B"))}</div><div><h2>${escapeHTML(displayName)}</h2>${user.email?`<p>${escapeHTML(user.email)}</p>`:""}<small class="${signedIn?"is-synced":""}"><i aria-hidden="true"></i>${signedIn?"Signed in and synced":"Stored on this device"}</small></div></header>`;
   const profile=`<section class="settings-reference-section settings-account-profile-fields"><h2>Profile</h2><div class="settings-reference-fields">${field("First name",`<input name="firstName" value="${escapeHTML(firstName)}" placeholder="First name" autocomplete="given-name">`)}${field("Last name",`<input name="lastName" value="${escapeHTML(lastName)}" placeholder="Last name" autocomplete="family-name">`)}${field("Business name",`<input name="businessName" value="${escapeHTML(s.businessName)}" placeholder="Business">`)}</div></section>`;
-  const security=signedIn?`<section class="settings-reference-section settings-account-security"><h2>Security</h2><div class="settings-reference-rows"><button type="button" id="changeAccountPassword">Change password</button><button type="button" class="is-danger" id="signOutAccount">Sign out</button></div></section>`:"";
-  const devices=signedIn?`<section class="settings-reference-section settings-account-devices"><h2>Signed-in devices</h2><div class="account-session-list">${!ui.accountPanelLoaded?`<p class="settings-reference-note">Loading devices…</p>`:sessions.length?sessions.map(accountSessionRow).join(""):`<p class="settings-reference-note">No active sessions found.</p>`}</div></section>`:"";
-  return `${identity}${profile}${security}${devices}`;
+  return `${identity}${profile}`;
 }
 function settingsGoalsContent(s,metrics,excludedDates,restRules,restFrequency){
   const goals=`<section class="settings-reference-section settings-goal-targets"><p class="settings-goals-intro">Goals exist to keep you talking to people. They stay quiet in the app — a single line on Today — so relationships stay the main event.</p><h2>Targets</h2><div class="settings-reference-fields">${field("Daily conversations",`<input name="dailyGoal" type="number" min="1" max="100" inputmode="numeric" value="${s.dailyGoal}">`)}${field("Weekly conversations",`<input name="weeklyGoal" type="number" min="1" max="500" inputmode="numeric" value="${s.weeklyGoal}">`)}${field("Monthly conversations",`<input name="monthlyGoal" type="number" min="1" max="2000" inputmode="numeric" value="${s.monthlyGoal}">`)}</div></section>`;
@@ -2821,13 +2927,18 @@ function settingsGoalsContent(s,metrics,excludedDates,restRules,restFrequency){
   return `${goals}${streak}<section class="settings-linked-action"><div><strong>Achievements</strong><small>Progress uses existing production calculations.</small></div><button class="button subtle" type="button" data-open-achievements>View achievements</button></section>`;
 }
 function settingsPreferencesContent(s){
-  const workflow=`${settingsRow("Default follow-up",`<select name="defaultFollowUpDays"><option value="1" ${s.defaultFollowUpDays==1?"selected":""}>1 day</option><option value="2" ${s.defaultFollowUpDays==2?"selected":""}>2 days</option><option value="7" ${s.defaultFollowUpDays==7?"selected":""}>1 week</option></select>`)}${settingsRow("Week starts",`<select name="weekStart"><option value="0" ${s.weekStart==0?"selected":""}>Sunday</option><option value="1" ${s.weekStart==1?"selected":""}>Monday</option></select>`)}<div class="settings-row settings-row-explained"><span><strong>Automatically archive inactive contacts after 30 days</strong><small>Contacts with no pipeline stage, MSA activity, scheduled follow-up, or pipeline progress leave the active list. History remains in Analytics.</small></span><input type="checkbox" name="autoArchiveInactive" ${s.autoArchiveInactive?"checked":""}></div><p class="settings-note">${state.contacts.filter(contact=>contact.archivedAt).length} archived contact${state.contacts.filter(contact=>contact.archivedAt).length===1?"":"s"}. Restore them from the People visibility filter.</p>`;
-  return `${settingsSection("Workflow",workflow)}${settingsSection("Relationship health",relationshipHealthSettings(s))}`;
+  const workflow=`${settingsRow("Default follow-up",`<select name="defaultFollowUpDays"><option value="1" ${s.defaultFollowUpDays==1?"selected":""}>1 day</option><option value="2" ${s.defaultFollowUpDays==2?"selected":""}>2 days</option><option value="7" ${s.defaultFollowUpDays==7?"selected":""}>1 week</option></select>`)}${settingsRow("Week starts",`<select name="weekStart"><option value="0" ${s.weekStart==0?"selected":""}>Sunday</option><option value="1" ${s.weekStart==1?"selected":""}>Monday</option></select>`)}`;
+  return settingsSection("Workflow",workflow);
+}
+function settingsHealthContent(s){return settingsSection("Relationship health",relationshipHealthSettings(s));}
+function settingsArchiveContent(s){
+  const archived=state.contacts.filter(contact=>contact.archivedAt).length;
+  return `<section class="settings-reference-section settings-archive-section"><h2>Inactive contacts</h2><div class="settings-reference-toggle-rows">${ToggleRow("Archive after 30 inactive days",{detail:"Only no-stage prospects without MSA activity, scheduled follow-ups, or pipeline progress leave the active list. History stays in Analytics.",name:"autoArchiveInactive",checked:s.autoArchiveInactive})}</div><p class="settings-reference-note">${archived} archived contact${archived===1?"":"s"}. Restore archived relationships from the People visibility filter.</p></section>`;
 }
 function settingsDataContent(){
-  if(!accountModeActive())return `<section class="settings-sync-status"><strong>Stored on this device</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · saved in this browser</p></section><section class="settings-reference-section"><h2>Backup & export</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="backup">Open backup and export tools</button></div></section>`;
+  if(!accountModeActive())return `<section class="settings-sync-status"><strong>Stored on this device</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · saved in this browser</p></section>`;
   const status=accountContext.status||{};const pending=Number(status.pending||0);const conflicts=Number(status.conflicts||0);const syncedAt=status.lastSyncedAt?fmtDateTime(status.lastSyncedAt):"Not synced yet";
-  return `<section class="settings-sync-status"><strong><i aria-hidden="true"></i>${escapeHTML(accountSyncLabel())}</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · ${pending} pending · ${conflicts} conflict${conflicts===1?"":"s"} · last sync ${escapeHTML(syncedAt)}</p></section><section class="settings-reference-section"><h2>Sync</h2><div class="settings-reference-rows"><button type="button" id="syncAccountNow">Sync now</button><button type="button" data-settings-section-open="sessions">Review signed-in devices</button></div></section><section class="settings-reference-section"><h2>Backup & export</h2><div class="settings-reference-rows"><button type="button" data-settings-section-open="backup">Open backup and export tools</button></div></section>`;
+  return `<section class="settings-sync-status"><strong><i aria-hidden="true"></i>${escapeHTML(accountSyncLabel())}</strong><p>${state.contacts.length} relationship${state.contacts.length===1?"":"s"} · ${pending} pending · ${conflicts} conflict${conflicts===1?"":"s"} · last sync ${escapeHTML(syncedAt)}</p></section><section class="settings-reference-section"><h2>Sync</h2><div class="settings-reference-rows"><button type="button" id="syncAccountNow">Sync now</button></div></section>`;
 }
 function settingsBackupContent(){
   const cloud=accountModeActive()?`${settingsSection("Cloud backup",accountWorkspaceSettings({section:"backup"}))}`:"";
@@ -2838,33 +2949,33 @@ function settingsAccountContent(section){
   return EmptyState("No account required","Bridge opens directly on this device. Edit your profile from Settings and use local backups to move your data.");
 }
 function settingsPrivacyContent(){
-  return `<section class="settings-privacy-hero"><span class="ui-eyebrow">Private by default</span><h2>Share only what you choose</h2><p>Scorecard links exclude phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls.</p><button class="button primary" type="button" data-open-scorecard-settings>${icons.share}<span>Preview and share scorecard</span></button></section>${settingsSection("Sharing behavior",`${settingsRow("Link lifetime",`<strong>7 days</strong>`)}${settingsRow("Contact details",`<strong>Opt-in per link</strong>`)}${settingsRow("Account deletion",`<strong>Revokes account links</strong>`)}`)}${settingsCapabilityNote("Link management","A newly created link can be revoked from its result screen. Bridge does not currently expose a persistent list of older share links.")}`;
+  return `<section class="settings-privacy-hero"><span class="ui-eyebrow">Private by default</span><h2>Share only what you choose</h2><p>Scorecard links exclude phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls. Scope, seven-day expiry, confirmation, and revocation stay in the share flow where they apply.</p>${Button(`${icons.share}<span>Open scorecard sharing</span>`,{tone:"primary",size:"large",attributes:"data-open-scorecard-settings"})}</section>`;
 }
 function settingsAboutContent(){
-  return `${settingsSection("About Bridge",`${settingsRow("Version",`<strong>${escapeHTML(APP_RELEASE.version)}</strong>`)}${settingsRow("What is new",`<button type="button" class="button subtle" id="openReleaseNotes">${icons.sparkles}<span>View release notes</span></button>`)}`)}${settingsSection("Support",`${settingsRow("Send feedback",`<a class="button subtle" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Feedback">Email</a>`)}${settingsRow("Report a bug",`<a class="button subtle" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Bug%20Report">Email</a>`)}`)}`;
+  return `<section class="settings-reference-section"><h2>About Bridge</h2><div class="settings-reference-rows"><div class="ui-settings-row"><span><strong>Version</strong><small>${escapeHTML(APP_RELEASE.version)}</small></span></div><button type="button" id="openReleaseNotes">View release notes</button></div></section><section class="settings-reference-section"><h2>Support</h2><div class="settings-reference-rows settings-support-rows"><a class="ui-settings-row" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Feedback"><span><strong>Send feedback</strong><small>Email feedback about Bridge</small></span><span class="ui-settings-row__end">${icons.chevronRight}</span></a><a class="ui-settings-row" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Bug%20Report"><span><strong>Report a bug</strong><small>Email a bug report</small></span><span class="ui-settings-row__end">${icons.chevronRight}</span></a></div></section>`;
 }
-function settingsPageForm(section,content,save=true){return save?`<form id="settingsForm" class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}<div class="form-actions hn-settings-save"><button class="button primary" type="submit">Save settings</button></div></form>`:`<div class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}</div>`;}
+function settingsPageForm(section,content,save=true){return save?`<form id="settingsForm" class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}<div class="form-actions hn-settings-save">${Button("Save settings",{tone:"primary",size:"large",type:"submit"})}</div></form>`:`<div class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}</div>`;}
 function settingsModal({routed=false}={}){
   const s=state.settings;const section=routed?(ui.routedSection||"root"):"root";
   const excludedDates=normalizeExcludedDates(Array.isArray(ui.settingsExcludedDatesDraft)?ui.settingsExcludedDatesDraft:s.streakExcludedDates);
   const restRules=normalizeRestRules(Array.isArray(ui.settingsRestRulesDraft)?ui.settingsRestRulesDraft:s.streakRestRules);
   const restFrequency=["once","weekly","monthly","yearly"].includes(ui.settingsRestFrequencyDraft)?ui.settingsRestFrequencyDraft:"once";
   const goalMetrics=dailyGoalMetrics({...state,settings:{...s,streakExcludedDates:excludedDates,streakRestRules:restRules}});
-  const contentBySection={root:settingsRootContent(s,goalMetrics),profile:settingsProfileContent(s),goals:settingsGoalsContent(s,goalMetrics,excludedDates,restRules,restFrequency),notifications:notificationSettings(s),preferences:settingsPreferencesContent(s),data:settingsDataContent(),account:settingsAccountContent("account"),sessions:settingsAccountContent("sessions"),backup:settingsBackupContent(),privacy:settingsPrivacyContent(),about:settingsAboutContent()};
-  const saveSections=new Set(["profile","goals","notifications","preferences"]);
+  const contentBySection={root:settingsRootContent(s,goalMetrics),profile:settingsProfileContent(s),goals:settingsGoalsContent(s,goalMetrics,excludedDates,restRules,restFrequency),notifications:notificationSettings(s),preferences:settingsPreferencesContent(s),health:settingsHealthContent(s),archive:settingsArchiveContent(s),data:settingsDataContent(),account:settingsAccountContent("account"),sessions:settingsAccountContent("sessions"),backup:settingsBackupContent(),privacy:settingsPrivacyContent(),about:settingsAboutContent()};
+  const saveSections=new Set(["profile","goals","notifications","preferences","health","archive"]);
   const body=settingsPageForm(section,contentBySection[section]||contentBySection.root,saveSections.has(section));
   const coveredByAccountAction=Boolean(ui.accountAction);
-  if(routed){const titles={root:"Settings",profile:"Account",goals:"Conversation goals",notifications:"Notifications",preferences:"Relationship settings",data:"Data & sync",account:"Account",sessions:"Signed-in devices",backup:"Backup & export",privacy:"Privacy & sharing",about:"About Bridge"};return PresentationScreen(body,{title:titles[section]||"Settings",eyebrow:"",className:`settings-screen settings-screen--${escapeHTML(section)}`,large:section==="root"});}
+  if(routed){const titles={root:"Settings",profile:"Profile",goals:"Goals & progress",notifications:"Notifications",preferences:"Workflow",health:"Relationship health",archive:"Archive",data:"Data & sync",account:"Account & security",sessions:"Signed-in devices",backup:"Backup & export",privacy:"Privacy & sharing",about:"About Bridge"};return PresentationScreen(body,{title:titles[section]||"Settings",eyebrow:"",className:`settings-screen settings-screen--${escapeHTML(section)}`,large:section==="root"});}
   return `<div class="modal-backdrop hn-settings-backdrop" id="settingsBackdrop" ${coveredByAccountAction?'aria-hidden="true" inert':""}><section class="modal hn-settings-modal" role="dialog" ${coveredByAccountAction?"":'aria-modal="true"'} aria-labelledby="settingsTitle"><header class="modal-head hn-settings-head"><div><span class="ui-eyebrow">Bridge preferences</span><h2 id="settingsTitle">Settings</h2><p>Shape how you stay close to the people who matter.</p></div>${IconButton("close","Close settings",{className:"close-modal"})}</header><div class="modal-body hn-settings-body">${body}</div></section></div>`;
 }
 function settingsSection(title,content){return SurfaceCard(`${SectionHeader(title,{level:2})}<div class="hn-settings-section__content">${content}</div>`,{className:"settings-section hn-settings-section"});}
-function settingsRow(label,control,className=""){return `<div class="settings-row ${className}"><span>${label}</span>${control}</div>`;}
+function settingsRow(label,control,className=""){return SettingsRow(label,{end:control,tag:"div",className});}
 function settingsMomentumSummary(metrics){return `<section class="hn-settings-momentum" aria-label="Goal and streak summary"><div><span class="ui-eyebrow">Today</span><strong>${metrics.todayCount} / ${metrics.goal}</strong><small>${metrics.todayExcluded?"Rest day protected":"conversations"}</small></div><div class="hn-settings-momentum__progress">${ProgressBar(metrics.todayCount,{label:"Today's conversation goal",max:metrics.goal})}<span>${metrics.todayComplete?"Daily goal complete":metrics.todayExcluded?"Your streak is protected":"Keep the momentum going"}</span></div><div><span class="ui-eyebrow">Streak</span><strong>${metrics.goalStreak}</strong><small>day${metrics.goalStreak===1?"":"s"}</small></div></section>`;}
 function healthPresetFieldName(role,stage){return `healthPreset_${role.replaceAll(/\W/g,"_")}_${stage.replaceAll(/\W/g,"_")}`;}
 function relationshipHealthSettings(settings){
   const presets=normalizeCadencePresets(settings.healthCadencePresets);
   const roles=Object.entries(DEFAULT_CADENCE_PRESETS).map(([role,stages])=>`<fieldset class="health-preset-group"><legend>${escapeHTML(role)}</legend><div class="health-preset-grid">${Object.keys(stages).map(stage=>`<label><span>${escapeHTML(stage==="default"?"No stage":stageLabel(stage))}</span><span class="cadence-input"><input name="${healthPresetFieldName(role,stage)}" type="number" min="1" max="365" inputmode="numeric" value="${presets[role][stage]}"><small>days</small></span></label>`).join("")}</div></fieldset>`).join("");
-  return `<p class="settings-note">Scores use counted conversations and scheduled actions to show which relationships need attention.</p><div class="settings-row settings-row-explained"><span><strong>Show relationship health</strong><small>Display scores, bands, confidence, and trends throughout Bridge.</small></span><input type="checkbox" name="healthScoresVisible" ${settings.healthScoresVisible!==false?"checked":""}></div><div class="settings-capability settings-capability--neutral"><span class="status-dot default" aria-hidden="true"></span><div><strong>Health notifications are not delivered</strong><small>Bridge stores the existing preference for compatibility, but no production scheduler currently sends relationship-health reminders.</small></div></div>${settingsRow("Fallback cadence",`<span class="cadence-input"><input name="healthFallbackCadenceDays" type="number" min="1" max="365" inputmode="numeric" value="${settings.healthFallbackCadenceDays||14}"><small>days</small></span>`)}<details class="health-preset-editor"><summary><span>Edit role and stage cadences</span>${icons.chevronDown}</summary><div class="health-preset-groups">${roles}</div></details>`;
+  return `<p class="settings-note">Scores use counted conversations and scheduled actions to show which relationships need attention.</p>${ToggleRow("Show relationship health",{detail:"Display scores, bands, confidence, and trends throughout Bridge.",name:"healthScoresVisible",checked:settings.healthScoresVisible!==false})}<div class="settings-capability settings-capability--neutral"><span class="status-dot default" aria-hidden="true"></span><div><strong>Health notifications are not delivered</strong><small>Bridge stores the existing preference for compatibility, but no production scheduler currently sends relationship-health reminders.</small></div></div>${settingsRow("Fallback cadence",`<span class="cadence-input"><input name="healthFallbackCadenceDays" type="number" min="1" max="365" inputmode="numeric" value="${settings.healthFallbackCadenceDays||14}"><small>days</small></span>`)}<details class="health-preset-editor"><summary><span>Edit role and stage cadences</span>${icons.chevronDown}</summary><div class="health-preset-groups">${roles}</div></details>`;
 }
 function readHealthCadencePresets(formData){
   const draft={};
@@ -2879,11 +2990,11 @@ function restRuleRows(rules) {
   if(!rules.length)return "";
   return rules.map((rule,index)=>{
     const summary=rule.frequency==="weekly"?`Every week · ${rule.weekdays.map(day=>WEEKDAY_NAMES[day].slice(0,3)).join(", ")}`:rule.frequency==="monthly"?`Every month · Day ${rule.day}`:`Every year · ${fmtDate(`2000-${rule.date}`,{month:"long",day:"numeric"})}`;
-    return `<div class="rest-day-row"><div><strong>${escapeHTML(summary)}</strong><small>Streak protected</small></div><button class="icon-button remove-rest-rule" type="button" data-rest-rule-index="${index}" aria-label="Remove ${escapeHTML(summary)}">${icons.trash}</button></div>`;
+    return `<div class="rest-day-row"><div><strong>${escapeHTML(summary)}</strong><small>Streak protected</small></div><button class="ui-icon-button remove-rest-rule" type="button" data-rest-rule-index="${index}" aria-label="Remove ${escapeHTML(summary)}">${icons.trash}</button></div>`;
   }).join("");
 }
 function restDayRows(dates) {
-  return dates.map(date=>`<div class="rest-day-row"><div><strong>${escapeHTML(fmtDate(date,{weekday:"short",month:"short",day:"numeric",year:"numeric"}))}</strong><small>${escapeHTML(date)}${date===todayInput()?" · Today":""}</small></div><button class="icon-button remove-rest-day" type="button" data-rest-date="${escapeHTML(date)}" aria-label="Remove rest day ${escapeHTML(date)}">${icons.trash}</button></div>`).join("");
+  return dates.map(date=>`<div class="rest-day-row"><div><strong>${escapeHTML(fmtDate(date,{weekday:"short",month:"short",day:"numeric",year:"numeric"}))}</strong><small>${escapeHTML(date)}${date===todayInput()?" · Today":""}</small></div><button class="ui-icon-button remove-rest-day" type="button" data-rest-date="${escapeHTML(date)}" aria-label="Remove rest day ${escapeHTML(date)}">${icons.trash}</button></div>`).join("");
 }
 function refreshRestDayEditor() {
   const dates=normalizeExcludedDates(ui.settingsExcludedDatesDraft);
@@ -2905,8 +3016,9 @@ function notificationSettings(s){
   const active=pushSubscriptionState==="active";
   const title=active?"Background reminders active":permission==="denied"?"Notifications blocked":pushSubscriptionState==="unsupported"?"Background reminders unavailable":permission==="granted"?"Finish background setup":"Permission not requested";
   const detail=active?"Bridge is registered for hosted reminders. Delivery depends on browser and device notification support.":permission==="denied"?"Re-enable Bridge in iPhone Settings > Notifications.":pushSubscriptionState==="unsupported"?"Use the hosted Bridge app. On iPhone, add it to your Home Screen first.":"Bridge asks only after you choose to enable reminders.";
-  const actions=active?'<div class="notification-actions"><button type="button" class="button subtle" id="testPushNotification">Send test</button><button type="button" class="button subtle" id="disablePushNotifications">Disable on this device</button></div>':permission==="denied"||pushSubscriptionState==="unsupported"?"":'<button type="button" class="button subtle" id="requestNotifications">Enable background reminders</button>';
-  return `<section class="notification-status settings-notification-status"><span class="status-dot ${active?"granted":permission}"></span><div><strong>${title}</strong><small>${detail}</small></div>${actions}</section><section class="settings-reference-section settings-notification-section"><h2>Conversation reminders</h2><div class="settings-reference-toggle-rows"><label><span><strong>Daily nudge</strong><small>One reminder at ${escapeHTML(new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(`2000-01-01T${s.dailyReminderTime||"09:00"}:00`)))} if you haven't reached today's goal.</small></span><input type="checkbox" name="dailyReminderEnabled" ${s.dailyReminderEnabled?"checked":""}></label><label class="settings-reminder-time"><span><strong>Reminder time</strong><small>Uses this device's local time.</small></span><input class="compact-time-control" type="time" name="dailyReminderTime" value="${escapeHTML(s.dailyReminderTime||"09:00")}"></label></div></section><section class="settings-reference-section settings-notification-section"><h2>Follow-up reminders</h2><div class="settings-reference-toggle-rows"><label><span><strong>At the scheduled time</strong><small>Includes the reason you wrote down.</small></span><input type="checkbox" name="followUpNotifications" ${s.followUpNotifications?"checked":""}></label></div></section><p class="settings-reference-note">Stalled-relationship and weekly-recap notifications are not shown because Bridge has no production delivery path for them.</p>`;
+  const actions=active?`<div class="notification-actions">${Button("Send test",{tone:"secondary",size:"small",attributes:'id="testPushNotification"'})}${Button("Disable on this device",{tone:"quiet",size:"small",attributes:'id="disablePushNotifications"'})}</div>`:permission==="denied"||pushSubscriptionState==="unsupported"?"":Button("Enable background reminders",{tone:"secondary",attributes:'id="requestNotifications"'});
+  const reminderLabel=`One reminder at ${new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(`2000-01-01T${s.dailyReminderTime||"09:00"}:00`))} if you haven't reached today's goal.`;
+  return `<section class="notification-status settings-notification-status"><span class="status-dot ${active?"granted":permission}"></span><div><strong>${title}</strong><small>${detail}</small></div>${actions}</section><section class="settings-reference-section settings-notification-section"><h2>Conversation reminders</h2><div class="settings-reference-toggle-rows">${ToggleRow("Daily nudge",{detail:reminderLabel,name:"dailyReminderEnabled",checked:s.dailyReminderEnabled})}${SettingsRow("Reminder time",{detail:"Uses this device's local time.",end:`<input class="compact-time-control" type="time" name="dailyReminderTime" value="${escapeHTML(s.dailyReminderTime||"09:00")}">`,tag:"div",className:"settings-reminder-time"})}</div></section><section class="settings-reference-section settings-notification-section"><h2>Follow-up reminders</h2><div class="settings-reference-toggle-rows">${ToggleRow("At the scheduled time",{detail:"Includes the reason you wrote down.",name:"followUpNotifications",checked:s.followUpNotifications})}</div></section><p class="settings-reference-note">Stalled-relationship and weekly-recap notifications are not shown because Bridge has no production delivery path for them.</p>`;
 }
 function detailItem(label,value,cls=""){return `<div class="contact-info-item ${cls}"><span>${label}</span><strong class="${value?"":"muted"}">${value?escapeHTML(value):"Not provided"}</strong></div>`;}
 
@@ -2924,8 +3036,9 @@ function contactHealthCard(c){
   const score=scoreContact(c,{settings:state.settings,analytics:state.analytics,now:new Date()});
   if(!state.settings.healthScoresVisible)return "";
   const componentLabels={recency:"Recency",consistency:"Consistency",actionHealth:"Action health",momentum:"Momentum"};
-  const components=Object.entries(score.components).map(([key,component])=>`<div class="health-component ${component?"":"unavailable"}"><span>${componentLabels[key]}</span><strong>${component?component.value:"—"}</strong><small>${component?escapeHTML(component.explanation):"Not enough applicable history"}</small></div>`).join("");
-  return `<details class="card glass contact-health-card"><summary class="contact-health-summary"><div><span class="eyebrow">Relationship health</span><h2>${escapeHTML(score.band)}</h2></div><div class="contact-health-summary-meta"><strong class="health-score-value">${score.score===null?"—":score.score}</strong><span class="contact-health-summary-chevron" aria-hidden="true">${icons.chevronDown}</span></div></summary><div class="contact-health-details"><div class="health-context"><span>${score.cadence.days}-day cadence</span><span>${escapeHTML(score.confidence)} confidence</span><span>${escapeHTML(score.trend.direction)}${score.trend.delta?` ${score.trend.delta>0?"+":""}${score.trend.delta}`:""}</span></div><p>${escapeHTML(score.explanation)}</p><div class="health-component-grid">${components}</div><form id="contactCadenceForm" class="contact-cadence-form"><label><span>Contact cadence override</span><span class="cadence-input"><input name="healthCadenceDays" type="number" min="1" max="365" inputmode="numeric" value="${c.healthCadenceDays||""}" placeholder="Automatic"><small>days</small></span></label><button class="button subtle" type="submit">Save cadence</button></form><small class="formula-note">Formula ${escapeHTML(score.formulaVersion)} · calculated ${escapeHTML(fmtDateTime(score.calculatedAt))}</small></div></details>`;
+  const components=Object.entries(score.components).map(([key,component])=>`<div class="ui-metric-card health-component${component?"":" is-unavailable"}"><span class="ui-metric-card__label">${componentLabels[key]}</span><strong class="ui-metric-card__value">${component?component.value:"—"}</strong><small class="ui-metric-card__detail">${component?escapeHTML(component.explanation):"Not enough applicable history"}</small></div>`).join("");
+  const trend=`${escapeHTML(score.trend.direction)}${score.trend.delta?` ${score.trend.delta>0?"+":""}${score.trend.delta}`:""}`;
+  return `<details class="ui-surface-card contact-health-card"><summary class="contact-health-summary"><div><span class="ui-eyebrow ui-eyebrow--brand">Relationship health</span><h2 class="ui-editorial-heading">${escapeHTML(score.band)}</h2></div><div class="contact-health-summary-meta"><strong class="health-score-value">${score.score===null?"—":score.score}</strong><span class="contact-health-summary-chevron" aria-hidden="true">${icons.chevronDown}</span></div></summary><div class="contact-health-details"><div class="health-context"><span class="ui-status-badge ui-status-badge--brand">${score.cadence.days}-day cadence</span><span class="ui-status-badge">${escapeHTML(score.confidence)} confidence</span><span class="ui-status-badge">${trend}</span></div><p>${escapeHTML(score.explanation)}</p><div class="ui-metric-grid health-component-grid">${components}</div><form id="contactCadenceForm" class="contact-cadence-form"><label><span>Contact cadence override</span><span class="cadence-input"><input name="healthCadenceDays" type="number" min="1" max="365" inputmode="numeric" value="${c.healthCadenceDays||""}" placeholder="Automatic"><small>days</small></span></label><button class="ui-button ui-button--secondary" type="submit">Save cadence</button></form><small class="formula-note">Formula ${escapeHTML(score.formulaVersion)} · calculated ${escapeHTML(fmtDateTime(score.calculatedAt))}</small></div></details>`;
 }
 
 function contactPersonalInfo(c){return `<section class="card glass personal-info-card"><div class="card-section-head"><div><span class="eyebrow">Relationship context</span><h2>Personal Info</h2></div></div><p class="muted">Keep useful details about the person separate from conversation notes.</p><form id="personalInfoForm"><label class="field"><span>What I know</span><textarea name="personalInfo" placeholder="Goals, family, work, interests, or helpful context">${escapeHTML(c.personalInfo||"")}</textarea></label><div class="form-actions"><button class="button primary" type="submit">Save personal info</button></div></form></section>`;}
@@ -2983,7 +3096,7 @@ function relationshipTimelineEvents(c) {
 }
 function profileTimelineEvent(event) {
   const iconName=event.kind==="conversation"?event.raw?.communicationType==="Call"?"phone":event.raw?.communicationType==="Text"?"chat":"pencilLine":event.kind==="followup"?"flag":event.kind==="pipeline"?"arrowUpRight":"handshake";
-  const actions=event.kind==="conversation"?`<span class="profile-timeline-event__actions">${event.raw?.communicationType?`<button class="icon-button edit-communication-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Edit ${escapeHTML(event.title)}">${icons.pencil}</button>`:""}<button class="icon-button delete-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Delete ${escapeHTML(event.title)}">${icons.trash}</button></span>`:"";
+  const actions=event.kind==="conversation"?`<span class="profile-timeline-event__actions">${event.raw?.communicationType?`<button class="ui-icon-button edit-communication-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Edit ${escapeHTML(event.title)}">${icons.pencil}</button>`:""}<button class="ui-icon-button delete-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Delete ${escapeHTML(event.title)}">${icons.trash}</button></span>`:"";
   return `<article class="profile-timeline-event profile-timeline-event--${event.kind}"><span class="profile-timeline-event__icon" aria-hidden="true">${icons[iconName]}</span><div><header><strong>${escapeHTML(event.title)}</strong><time datetime="${escapeHTML(new Date(event.at).toISOString())}">${escapeHTML(fmtDate(event.at))}</time></header>${event.place?`<small>${escapeHTML(event.place)}</small>`:""}${event.meta?`<small>${escapeHTML(event.meta)}</small>`:""}${event.body?`<p>${escapeHTML(event.body)}</p>`:""}</div>${actions}</article>`;
 }
 function profileTimeline(c,limit=4) {
@@ -3024,32 +3137,36 @@ function profileDetails(c) {
 }
 function profileHeader(c, { routed=false }={}) {
   if(routed&&ui.routedScreen==="person-edit")return ScreenHeader("Edit person",{eyebrow:c.fullName});
-  if(routed)return ScreenHeader(c.fullName,{eyebrow:`${c.role} · Met ${fmtDate(c.dateFirstMet,{month:"short",day:"numeric"})||"date unknown"}`,action:`<button class="contact-head-edit" data-edit-contact-info type="button" aria-label="Edit ${escapeHTML(c.fullName)}">${icons.pencil}</button>`});
+  if(routed){
+    const eyebrow=`${c.role} · Met ${fmtDate(c.dateFirstMet,{month:"short",day:"numeric"})||"date unknown"}`;
+    return `<header class="ui-screen-header profile-collapse-header" data-profile-collapse-header><button type="button" class="ui-screen-header__back" data-presentation-back aria-label="Back">${icons.chevronLeft}</button><div class="ui-screen-header__title profile-collapse-header__identity"><span>${escapeHTML(eyebrow)}</span><strong data-profile-compact-title aria-hidden="true">${escapeHTML(c.fullName)}</strong></div><div class="ui-screen-header__action"><button class="contact-head-edit" data-edit-contact-info type="button" aria-label="Edit ${escapeHTML(c.fullName)}">${icons.pencil}</button></div></header>`;
+  }
   return `<header class="modal-head contact-hero-head profile-sticky-header"><button class="contact-back close-modal" type="button" aria-label="Back to People"><span aria-hidden="true">${icons.chevronRight}</span></button><div><span>${escapeHTML(c.role)} · Met ${escapeHTML(fmtDate(c.dateFirstMet,{month:"short",day:"numeric"})||"date unknown")}</span><strong id="contactTitle">${escapeHTML(c.fullName)}</strong></div><button class="contact-head-edit" data-edit-contact-info type="button" aria-label="Edit ${escapeHTML(c.fullName)}">${icons.pencil}</button></header>`;
 }
-function relationshipProfileOverview(c,active) {
+function relationshipProfileOverview(c,active,{routed=false}={}) {
   const callable=isCallablePhone(c.phoneNumber);
   const latest=latestConversationTime(c);
   const current=currentPipelineStage(c);
   const actions=`${callable?`<a href="${phoneHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Call" aria-label="Call ${escapeHTML(c.fullName)}">${icons.phone}<span>Call</span></a>`:`<button type="button" disabled aria-label="Call unavailable; no phone number">${icons.phone}<span>Call</span></button>`}${callable?`<a href="${messageHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Text" aria-label="Text ${escapeHTML(c.fullName)}">${icons.chat}<span>Text</span></a>`:`<button type="button" disabled aria-label="Text unavailable; no phone number">${icons.chat}<span>Text</span></button>`}<button type="button" data-contact-detail-tab="notes">${icons.penLine}<span>Log</span></button><button type="button" data-profile-followup>${icons.calendarPlus}<span>Follow up</span></button>`;
   const context=[c.conversationType,c.placeName?`met at ${c.placeName}`:""].filter(Boolean).join(" · ");
-  return `<div class="relationship-profile"><section class="profile-identity"><h2>${escapeHTML(c.fullName)}</h2><div class="profile-identity__status">${c.role==="Team"?`<span class="profile-role-chip">Team</span>`:`<span class="profile-role-chip"><i aria-hidden="true"></i>${escapeHTML(`${c.role} · ${current||"No stage"}`)}</span>`}<span>Last interaction ${latest?escapeHTML(peopleRelativeDate(latest)):"not recorded"}</span></div>${context?`<p>${escapeHTML(context)}</p>`:""}</section><div class="profile-quick-actions" aria-label="Quick contact actions">${actions}</div>${profileNextAction(c,active)}${profileBridgeBrief(c)}${profileTimeline(c)}${profilePipelineSection(c)}${profileDetails(c)}</div>`;
+  const identityTitle=routed?`<h1 id="presentationTitle" tabindex="-1" data-profile-large-title>${escapeHTML(c.fullName)}</h1>`:`<h2>${escapeHTML(c.fullName)}</h2>`;
+  return `<div class="relationship-profile"><section class="profile-identity">${identityTitle}<div class="profile-identity__status">${c.role==="Team"?`<span class="profile-role-chip">Team</span>`:`<span class="profile-role-chip"><i aria-hidden="true"></i>${escapeHTML(`${c.role} · ${current||"No stage"}`)}</span>`}<span>Last interaction ${latest?escapeHTML(peopleRelativeDate(latest)):"not recorded"}</span></div>${context?`<p>${escapeHTML(context)}</p>`:""}</section><div class="profile-quick-actions" aria-label="Quick contact actions">${actions}</div>${profileNextAction(c,active)}${profileBridgeBrief(c)}${profileTimeline(c)}${profilePipelineSection(c)}${profileDetails(c)}</div>`;
 }
 function contactModal(id, { routed=false }={}) {
   const c=state.contacts.find(x=>x.id===id); if(!c){ui.detailId=null;return "";}
   const active=c.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];
-  let content=relationshipProfileOverview(c,active);
+  let content=relationshipProfileOverview(c,active,{routed});
   if(ui.contactEditing)content=`<div class="relationship-profile relationship-profile--editor"><p class="profile-editor-intro">Update the relationship details Bridge already stores. Pipeline stage and relationship context remain available from the profile.</p>${contactInformation(c)}</div>`;
   else if(ui.contactDetailTab==="personal")content=`<div class="relationship-profile relationship-profile--editor">${contactPersonalInfo(c)}<button class="button subtle" type="button" data-contact-detail-tab="overview">Back to profile</button></div>`;
   else if(ui.contactDetailTab==="notes")content=`<div class="relationship-profile relationship-profile--editor">${contactNotesPanel(c)}<button class="button subtle" type="button" data-contact-detail-tab="overview">Back to profile</button></div>`;
-  if(routed)return `<section class="presentation-screen presentation-screen--${escapeHTML(ui.routeDirection)} relationship-profile-screen" data-presentation-screen="${escapeHTML(ui.routedScreen||"")}">${profileHeader(c,{routed:true})}<div class="presentation-screen__body contact-detail-body" role="region" aria-label="Relationship profile">${content}</div></section>`;
+  if(routed)return `<section class="presentation-screen ${presentationMotionClass()} relationship-profile-screen" data-presentation-screen="${escapeHTML(ui.routedScreen||"")}">${profileHeader(c,{routed:true})}<div class="presentation-screen__body contact-detail-body" role="region" aria-label="Relationship profile">${content}</div></section>`;
   return `<div class="modal-backdrop contact-profile-backdrop" id="contactBackdrop"><section class="modal wide contact-detail-modal relationship-profile-modal" role="dialog" aria-modal="true" aria-labelledby="contactTitle">${profileHeader(c)}<div class="modal-body contact-detail-body" role="region" aria-label="Relationship profile">${content}</div></section></div>`;
 }
 function editStageCheck(c,stage,title){return stageCheck(stage,title,{checked:Boolean(c.stages?.[stage])});}
 function sortedLogs(c){return [...c.conversations].sort((a,b)=>new Date(b.conversationDate||b.createdAt)-new Date(a.conversationDate||a.createdAt));}
 function logFilterMatches(log,filter){if(filter==="Calls")return log.communicationType==="Call";if(filter==="Texts")return log.communicationType==="Text";if(filter==="Notes")return !log.communicationType;return true;}
 function activityDateGroup(log){const date=new Date(log.conversationDate||log.createdAt);const today=new Date();const start=new Date(today.getFullYear(),today.getMonth(),today.getDate());const day=new Date(date.getFullYear(),date.getMonth(),date.getDate());const difference=Math.round((start-day)/86400000);return difference===0?"Today":difference===1?"Yesterday":"Earlier";}
-function renderLogEntry(log){const communication=log.communicationType;const label=communication?(communication==="Text"?"Text Message":"Phone Call"):(log.type||"Activity");const title=communication?`${label}${log.direction?` · ${log.direction}`:""}`:label;const meta=[fmtDateTime(log.conversationDate||log.createdAt),communication&&log.outcome,log.durationMinutes?`${Number(log.durationMinutes)} min`:null,log.isCountedConversation?"Counted conversation":!communication?"Note":null].filter(Boolean).join(" · ");const notes=String(log.notes||"");const canExpand=notes.length>110||notes.includes("\n");const expanded=ui.expandedLogIds.has(log.id);return `<article class="log-row ${communication?"communication-log":""}"><div class="log-row-head"><div class="log-title">${communication?`<span class="log-icon">${communication==="Text"?icons.chat:icons.phoneCall}</span>`:""}<div><strong>${escapeHTML(title)}</strong><div class="muted">${meta}</div></div></div><div class="log-actions">${communication?`<button class="icon-button edit-communication-log" data-log-id="${log.id}" aria-label="Edit ${escapeHTML(label)}">${icons.pencil}</button>`:""}<button class="icon-button delete-log" data-log-id="${log.id}" aria-label="Delete log">${icons.trash}</button></div></div>${notes?`<div class="log-note-wrap"><p class="log-note ${expanded?"expanded":""}">${escapeHTML(notes)}</p>${canExpand?`<button class="log-note-toggle" data-expand-log-id="${log.id}" type="button" aria-expanded="${expanded}">${expanded?"Less":"More"}</button>`:""}</div>`:""}</article>`;}
+function renderLogEntry(log){const communication=log.communicationType;const label=communication?(communication==="Text"?"Text Message":"Phone Call"):(log.type||"Activity");const title=communication?`${label}${log.direction?` · ${log.direction}`:""}`:label;const meta=[fmtDateTime(log.conversationDate||log.createdAt),communication&&log.outcome,log.durationMinutes?`${Number(log.durationMinutes)} min`:null,log.isCountedConversation?"Counted conversation":!communication?"Note":null].filter(Boolean).join(" · ");const notes=String(log.notes||"");const canExpand=notes.length>110||notes.includes("\n");const expanded=ui.expandedLogIds.has(log.id);return `<article class="log-row ${communication?"communication-log":""}"><div class="log-row-head"><div class="log-title">${communication?`<span class="log-icon">${communication==="Text"?icons.chat:icons.phoneCall}</span>`:""}<div><strong>${escapeHTML(title)}</strong><div class="muted">${meta}</div></div></div><div class="log-actions">${communication?`<button class="ui-icon-button edit-communication-log" data-log-id="${log.id}" aria-label="Edit ${escapeHTML(label)}">${icons.pencil}</button>`:""}<button class="ui-icon-button delete-log" data-log-id="${log.id}" aria-label="Delete log">${icons.trash}</button></div></div>${notes?`<div class="log-note-wrap"><p class="log-note ${expanded?"expanded":""}">${escapeHTML(notes)}</p>${canExpand?`<button class="log-note-toggle" data-expand-log-id="${log.id}" type="button" aria-expanded="${expanded}">${expanded?"Less":"More"}</button>`:""}</div>`:""}</article>`;}
 function renderLogs(c,{limit=null,filter="All",grouped=false}={}){let logs=sortedLogs(c).filter(log=>logFilterMatches(log,filter));if(limit)logs=logs.slice(0,limit);if(!logs.length)return emptyInline(filter==="All"?"No conversation history":`No ${filter.toLowerCase()} found`,filter==="All"?"Add a note, call, or text to start the timeline.":"Try another activity filter.");if(!grouped)return logs.map(renderLogEntry).join("");const groups=["Today","Yesterday","Earlier"];return groups.map(group=>{const entries=logs.filter(log=>activityDateGroup(log)===group);return entries.length?`<section class="activity-date-group"><h3>${group}</h3><div class="timeline">${entries.map(renderLogEntry).join("")}</div></section>`:"";}).join("");}
 
 function profileTimelineMonth(value){const date=new Date(value);return Number.isNaN(date.getTime())?"Date unavailable":new Intl.DateTimeFormat(undefined,{month:"long",year:"numeric"}).format(date);}
@@ -3061,7 +3178,7 @@ function activityHistoryModal(id,{routed=false}={}){
   const groups=profileTimelineGroups(events);
   const content=`<div class="activity-filters" role="group" aria-label="Filter relationship history">${filters.map(filter=>`<button class="activity-filter ${ui.activityFilter===filter.value?"active":""}" data-activity-filter="${filter.value}" type="button" aria-pressed="${ui.activityFilter===filter.value}">${filter.label}</button>`).join("")}</div><div class="activity-history-groups">${groups.length?groups.map(group=>`<section class="profile-history-group"><h2>${escapeHTML(group.label)}</h2><div class="activity-history-list profile-timeline__list">${group.events.map(profileTimelineEvent).join("")}</div></section>`).join(""):emptyInline("No matching history","Only stored relationship activity appears here.")}</div><button class="button subtle show-less-activity" type="button">Back to profile</button>`;
   if(routed)return PresentationScreen(content,{title:"Relationship history",eyebrow:c.fullName,className:"profile-history-screen"});
-  return `<div class="modal-backdrop activity-history-backdrop" id="activityHistoryBackdrop"><section class="modal activity-history-modal profile-history-modal" role="dialog" aria-modal="true" aria-labelledby="activityHistoryTitle"><header class="modal-head"><div><span class="eyebrow">${escapeHTML(c.fullName)}</span><h2 id="activityHistoryTitle">Relationship history</h2></div><button class="icon-button close-activity-history" aria-label="Close relationship history">${icons.close}</button></header><div class="modal-body">${content}</div></section></div>`;
+  return `<div class="modal-backdrop activity-history-backdrop" id="activityHistoryBackdrop"><section class="modal activity-history-modal profile-history-modal" role="dialog" aria-modal="true" aria-labelledby="activityHistoryTitle"><header class="modal-head"><div><span class="eyebrow">${escapeHTML(c.fullName)}</span><h2 id="activityHistoryTitle">Relationship history</h2></div><button class="ui-icon-button close-activity-history" aria-label="Close relationship history">${icons.close}</button></header><div class="modal-body">${content}</div></section></div>`;
 }
 
 function communicationLogModal(id) {
@@ -3075,34 +3192,39 @@ function communicationLogModal(id) {
   const relationship=`<section class="capture-detail-person">${Avatar(c.fullName)}<span><strong>${escapeHTML(c.fullName)}</strong><small>${escapeHTML(current?`${c.role} · ${current}`:`${c.role} · No stage`)}</small></span></section>`;
   const activity=`<section class="capture-detail-section"><h3>What happened?</h3><div class="capture-detail-fields">${field("Date and time",`<input name="conversationDate" type="datetime-local" value="${dateTimeLocalValue(existing?.conversationDate||ui.communicationStartedAt||new Date())}" required>`)}${field("Direction",`<select name="direction">${COMMUNICATION_DIRECTIONS.map(direction=>`<option ${existing?.direction===direction?"selected":""}>${direction}</option>`).join("")}</select>`)}${type==="Call"?field("Duration (minutes)",`<input name="durationMinutes" type="number" min="0" step="1" inputmode="numeric" placeholder="Optional" value="${existing?.durationMinutes||""}">`):""}${field("Outcome",`<select name="outcome">${outcomes.map(outcome=>`<option ${selectedOutcome===outcome?"selected":""}>${outcome}</option>`).join("")}</select>`)}${field(type==="Text"?"What did you discuss?":"What did you talk about?",`<textarea name="notes" placeholder="Add ${type.toLowerCase()} notes">${escapeHTML(existing?.notes||"")}</textarea>`)}</div></section>`;
   const next=`<section class="capture-detail-section"><h3>What's next?</h3><div class="capture-detail-fields">${field("Follow-up date and time",'<input name="followUpDate" type="datetime-local">')}</div><details class="quick-capture-advanced"><summary><span>Pipeline and activity details</span>${icons.chevronDown}</summary><div>${field("Standalone activity",'<select name="standaloneActivity"><option value="">No change</option><option>MSA</option><option>DTM</option></select>')}${field("Current pipeline stage",`<div class="read-only-control">${escapeHTML(current||"No stage")}</div>`)}${field("Move to stage",`<select name="pipelineStage"><option value="">No change</option><option value="__clear">Clear pipeline stage</option>${PIPELINES[c.role].map(stage=>`<option value="${escapeHTML(stage)}">${escapeHTML(stage)}</option>`).join("")}</select>`)}</div></details></section>`;
-  return `<div class="modal-backdrop call-log-backdrop" id="communicationLogBackdrop"><section class="modal call-log-modal capture-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="communicationLogTitle"><header class="modal-head"><div><span class="eyebrow">Capture</span><h2 id="communicationLogTitle">${escapeHTML(heading)}</h2></div><button class="icon-button close-communication-log" aria-label="Close">${icons.close}</button></header><div class="modal-body"><form id="communicationLogForm" class="call-log-form capture-detail-form"><input type="hidden" name="communicationType" value="${type}">${relationship}${activity}${next}<p class="capture-detail-note">Opening Messages does not confirm that a text was sent. Record the actual outcome here after you return. Communication logs never increase the Conversations metric.</p><div class="form-actions capture-detail-actions"><button class="button close-communication-log" type="button">Cancel</button><button class="button primary" type="submit">${icons.check}${existing?"Save changes":`Save ${type.toLowerCase()}`}</button></div></form></div></section></div>`;
+  return `<div class="modal-backdrop call-log-backdrop" id="communicationLogBackdrop"><section class="modal call-log-modal capture-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="communicationLogTitle"><header class="modal-head"><div><span class="eyebrow">Capture</span><h2 id="communicationLogTitle">${escapeHTML(heading)}</h2></div><button class="ui-icon-button close-communication-log" aria-label="Close">${icons.close}</button></header><div class="modal-body"><form id="communicationLogForm" class="call-log-form capture-detail-form"><input type="hidden" name="communicationType" value="${type}">${relationship}${activity}${next}<p class="capture-detail-note">Opening Messages does not confirm that a text was sent. Record the actual outcome here after you return. Communication logs never increase the Conversations metric.</p><div class="form-actions capture-detail-actions"><button class="button close-communication-log" type="button">Cancel</button><button class="button primary" type="submit">${icons.check}${existing?"Save changes":`Save ${type.toLowerCase()}`}</button></div></form></div></section></div>`;
 }
 
-function discardContactEdit() {
-  if (ui.contactEditing && ui.contactEditDirty && !confirm("Discard your unsaved contact changes?")) return false;
-  ui.contactEditing=false;
-  ui.contactEditDirty=false;
+function clearContactEdit() { ui.contactEditing=false;ui.contactEditDirty=false; }
+function discardContactEdit(onDiscard=null) {
+  if(ui.contactEditing&&ui.contactEditDirty){requestConfirmation({title:"Discard unsaved changes?",message:"Your edits to this relationship will not be saved.",confirmLabel:"Discard changes",danger:true,onConfirm:()=>{clearContactEdit();onDiscard?.();}});return false;}
+  clearContactEdit();
   return true;
 }
-function closeContactDetail() { if (!discardContactEdit()) return false; ui.detailId=null;ui.contactDetailTab="overview";ui.activityHistoryContactId=null;ui.activityFilter="All";ui.expandedLogIds.clear();return true; }
+function closeContactDetail(onClose=null) {
+  const close=()=>{clearContactEdit();ui.detailId=null;ui.contactDetailTab="overview";ui.activityHistoryContactId=null;ui.activityFilter="All";ui.expandedLogIds.clear();onClose?.();};
+  if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(close);return false;}
+  close();
+  return true;
+}
 
 function bindCommonEvents(){
   $$('[data-presentation-back]').forEach(button=>button.addEventListener('click',presentationBack));
-  $$('[data-page]').forEach(button=>button.addEventListener('click',()=>{const nextPage=button.dataset.page;if(nextPage==='add'){if(ui.contactEditing&&!discardContactEdit())return;quickCreateFocusReturn=document.activeElement;ui.quickCreateOpen=true;ui.quickCreateMode=null;ui.quickCreateContactId="";render();return;}navigateMain(nextPage,{mode:nextPage==="contacts"?"list":ui.contactMode,opener:button});}));
+  $$('[data-page]').forEach(button=>button.addEventListener('click',()=>{const nextPage=button.dataset.page;if(nextPage==='add'){const open=()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode=null;ui.quickCreateContactId="";render();};if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(open);return;}open();return;}navigateMain(nextPage,{mode:nextPage==="contacts"?"list":ui.contactMode,opener:button});}));
   $$('[data-open-people]').forEach(button=>button.addEventListener('click',()=>navigateMain("contacts",{mode:"list",opener:button})));
   $$('[data-open-pipeline]').forEach(button=>button.addEventListener('click',()=>{if(["No-Go","Archived"].includes(ui.visibilityFilter))ui.visibilityFilter="Active";navigateMain("contacts",{mode:"pipeline",role:ui.pipelineRole,opener:button});}));
-  $('#quickCreateButton')?.addEventListener('click',()=>{if(ui.detailId&&!closeContactDetail())return;quickCreateFocusReturn=document.activeElement;ui.quickCreateOpen=true;render();});
+  $('#quickCreateButton')?.addEventListener('click',()=>{const opener=document.activeElement;const open=()=>{quickCreateFocusReturn=opener;ui.quickCreateOpen=true;render();};if(ui.detailId){closeContactDetail(open);return;}open();});
   $$('[data-contact-id]').forEach(button=>button.addEventListener('click',()=>navigatePresentation("person",{person:button.dataset.contactId},{opener:button})));
   $$('[data-communication-contact-id]').forEach(link=>link.addEventListener('click',event=>{const contact=state.contacts.find(item=>item.id===link.dataset.communicationContactId);const type=link.dataset.communicationType||"Call";if(!contact||!canonicalPhone(contact.phoneNumber)){event.preventDefault();showToast('Add a valid phone number before using this action');return;}if(!startCommunication(contact.id,type))event.preventDefault();}));
   $$('[data-log-communication-contact-id]').forEach(button=>button.addEventListener('click',()=>openCommunicationLog(button.dataset.logCommunicationContactId,button.dataset.communicationType||"Call")));
-  $('.close-modal')?.addEventListener('click',()=>{if(ui.detailId&&!closeContactDetail())return;closeSettings();});
+  $('.close-modal')?.addEventListener('click',()=>{if(ui.detailId){closeContactDetail(closeSettings);return;}closeSettings();});
   $$('[data-open-achievements], #viewAchievements').forEach(button=>button.addEventListener('click',()=>navigatePresentation("achievements",{}, {opener:button})));
   $$('[data-open-goals]').forEach(button=>button.addEventListener('click',()=>navigatePresentation("goals",{}, {opener:button})));
   $('[data-open-analytics-detail], .insights-details > summary')?.addEventListener('click',event=>{if(ui.routedScreen==="analytics-detail")return;event.preventDefault();navigatePresentation("analytics-detail",{}, {opener:event.currentTarget});});
   $$('[data-settings-section-open]').forEach(button=>button.addEventListener('click',event=>{const section=button.dataset.settingsSectionOpen||"root";event.preventDefault();navigatePresentation("settings",{section},{opener:button});}));
   $('[data-open-scorecard-settings]')?.addEventListener('click',event=>{scorecardFocusReturn=event.currentTarget;ui.scorecardConfirmed=false;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:event.currentTarget});});
   $('#settingsBackdrop')?.addEventListener('click',event=>{if(event.target.id==='settingsBackdrop')closeSettings();});
-  $('#contactBackdrop')?.addEventListener('click',event=>{if(event.target.id==='contactBackdrop'&&closeContactDetail())render();});
+  $('#contactBackdrop')?.addEventListener('click',event=>{if(event.target.id==='contactBackdrop')closeContactDetail(render);});
   $('#scorecardShareBackdrop')?.addEventListener('click',event=>{if(event.target.id==='scorecardShareBackdrop')closeScorecardShare();});
   document.onkeydown=event=>{
     if(ui.accountAction){
@@ -3163,7 +3285,7 @@ function bindCommonEvents(){
     if(ui.activityHistoryContactId){ui.activityHistoryContactId=null;ui.activityFilter="All";ui.expandedLogIds.clear();render();return;}
     if(ui.scorecardShareOpen){closeScorecardShare();return;}
     if(ui.placeDetailId){ui.placeDetailId=null;render();return;}
-    if(ui.detailId&&!closeContactDetail())return;
+    if(ui.detailId){closeContactDetail(()=>{ui.settingsOpen=false;ui.settingsExcludedDatesDraft=null;ui.settingsRestRulesDraft=null;ui.achievementsOpen=false;render();});return;}
     ui.settingsOpen=false;ui.settingsExcludedDatesDraft=null;ui.settingsRestRulesDraft=null;ui.achievementsOpen=false;render();
   };
 }
@@ -3191,6 +3313,123 @@ function togglePipelineDisclosure(button, expandedStages, stage, sectionAttribut
   });
 }
 
+const TODAY_SWIPE_INTENT_PX=8;
+
+function completeTodayAction(contactId,followUpId) {
+  const key=`${contactId}:${followUpId}`;
+  if(todayActionLocks.has(key))return false;
+  const record=findFollowUpRecord(contactId,followUpId);
+  if(!record||!isScheduledFollowUp(record.followUp))return false;
+  todayActionLocks.add(key);
+  if(!transitionFollowUp(record.followUp,"completed")){todayActionLocks.delete(key);return false;}
+  record.contact.updatedAt=nowISO();
+  queueSave("Action completed");
+  render();
+  if(!matchMedia("(prefers-reduced-motion: reduce)").matches)requestAnimationFrame(()=>{
+    const next=$(".today-home__next > :last-child");
+    next?.animate([{opacity:.6,transform:"translateY(10px) scale(.99)"},{opacity:1,transform:"translateY(0) scale(1)"}],{duration:220,easing:"cubic-bezier(.16,1,.3,1)"});
+  });
+  setTimeout(()=>todayActionLocks.delete(key),600);
+  return true;
+}
+
+function openTodayReschedule(actionId) {
+  if(!actionId)return false;
+  const [contactId,followUpId]=String(actionId).split(":");
+  const record=findFollowUpRecord(contactId,followUpId);
+  if(!record||!isScheduledFollowUp(record.followUp)||todayActionLocks.has(actionId))return false;
+  todayActionLocks.add(actionId);
+  ui.actionEditId=actionId;
+  render();
+  setTimeout(()=>todayActionLocks.delete(actionId),400);
+  return true;
+}
+
+function bindTodaySwipeCard() {
+  const shell=$("[data-today-swipe-card]");
+  if(!shell)return;
+  const surface=$(".today-next-card",shell);
+  if(!surface)return;
+  let gesture=null;
+  let locked=false;
+  let snapTimer=0;
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const clearVisuals=()=>{
+    shell.classList.remove("is-dragging","is-committing");
+    shell.removeAttribute("data-swipe-direction");
+    shell.style.removeProperty("--swipe-progress");
+    surface.style.removeProperty("transform");
+    surface.style.removeProperty("opacity");
+    surface.style.removeProperty("transition");
+  };
+  const snapBack=()=>{
+    if(locked)return;
+    surface.style.transition=reduced?"none":"transform 320ms cubic-bezier(.16,1,.3,1), opacity 180ms ease-out";
+    surface.style.transform="translate3d(0,0,0) rotate(0deg) scale(1)";
+    surface.style.opacity="1";
+    shell.style.setProperty("--swipe-progress","0");
+    shell.classList.remove("is-dragging");
+    clearTimeout(snapTimer);
+    snapTimer=setTimeout(clearVisuals,reduced?0:330);
+  };
+  const finish=direction=>{
+    if(locked)return;
+    locked=true;
+    shell.classList.remove("is-dragging");
+    shell.classList.add("is-committing");
+    shell.setAttribute("aria-busy","true");
+    $$("button",surface).forEach(button=>{button.disabled=true;});
+    shell.dataset.swipeDirection=direction;
+    shell.style.setProperty("--swipe-progress","1");
+    const sign=direction==="done"?-1:1;
+    const distance=window.innerWidth+surface.getBoundingClientRect().width;
+    surface.style.transition=reduced?"none":"transform 260ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease-out";
+    surface.style.transform=`translate3d(${sign*distance}px,0,0) rotate(${sign*7}deg) scale(.98)`;
+    surface.style.opacity="0";
+    setTimeout(()=>{
+      if(direction==="done")completeTodayAction(shell.dataset.todayContactId,shell.dataset.followUpId);
+      else openTodayReschedule(shell.dataset.actionId);
+    },reduced?0:245);
+  };
+  surface.addEventListener("pointerdown",event=>{
+    if(locked||event.button!==0||event.target.closest("button,a,input,select,textarea,summary,label"))return;
+    clearTimeout(snapTimer);
+    gesture={pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,dx:0,dy:0,velocityX:0,width:Math.max(1,surface.getBoundingClientRect().width),axis:"",samples:[{x:event.clientX,t:event.timeStamp}]};
+    try{surface.setPointerCapture(event.pointerId);}catch{}
+  });
+  surface.addEventListener("pointermove",event=>{
+    if(!gesture||event.pointerId!==gesture.pointerId||locked)return;
+    const dx=event.clientX-gesture.startX,dy=event.clientY-gesture.startY;
+    if(!gesture.axis&&Math.max(Math.abs(dx),Math.abs(dy))>=TODAY_SWIPE_INTENT_PX)gesture.axis=Math.abs(dx)>Math.abs(dy)*1.15?"horizontal":"vertical";
+    if(gesture.axis!=="horizontal")return;
+    event.preventDefault();
+    gesture.samples.push({x:event.clientX,t:event.timeStamp});
+    gesture.samples=gesture.samples.filter(sample=>sample.t>=event.timeStamp-80);
+    const oldest=gesture.samples[0],elapsed=Math.max(1,event.timeStamp-oldest.t);
+    gesture.velocityX=(event.clientX-oldest.x)/elapsed;
+    gesture.dx=dx;gesture.dy=dy;
+    const width=gesture.width;
+    const threshold=Math.min(120,Math.max(84,width*.28));
+    const progress=Math.min(1,Math.abs(dx)/threshold);
+    const rotation=Math.max(-5,Math.min(5,dx/width*7));
+    surface.style.transition="none";
+    surface.style.transform=`translate3d(${dx}px,0,0) rotate(${rotation}deg) scale(${1-progress*.015})`;
+    shell.dataset.swipeDirection=dx<0?"done":"reschedule";
+    shell.style.setProperty("--swipe-progress",String(progress));
+    shell.classList.add("is-dragging");
+  });
+  const endGesture=event=>{
+    if(!gesture||event.pointerId!==gesture.pointerId||locked)return;
+    const current=gesture;gesture=null;
+    try{surface.releasePointerCapture(event.pointerId);}catch{}
+    const direction=todaySwipeDecision({dx:current.dx,dy:current.dy,velocityX:current.velocityX,width:current.width});
+    if(direction)finish(direction);else snapBack();
+  };
+  surface.addEventListener("pointerup",endGesture);
+  surface.addEventListener("pointercancel",event=>{if(!gesture||event.pointerId!==gesture.pointerId)return;gesture=null;snapBack();});
+  surface.addEventListener("lostpointercapture",event=>{if(!gesture||event.pointerId!==gesture.pointerId||locked)return;gesture=null;snapBack();});
+}
+
 function bindPageEvents(){
   $('#settingsButton')?.addEventListener('click',()=>{settingsFocusReturn=document.activeElement;ui.settingsExcludedDatesDraft=[...normalizeExcludedDates(state.settings.streakExcludedDates)];ui.settingsRestRulesDraft=normalizeRestRules(state.settings.streakRestRules);ui.settingsRestFrequencyDraft="once";ui.accountPanelLoaded=false;ui.accountPanelError="";navigatePresentation("settings",{section:"root"},{opener:settingsFocusReturn});refreshAccountPanelData().catch(()=>{});});
   $('#shareScorecard')?.addEventListener('click',()=>{scorecardFocusReturn=document.activeElement;ui.scorecardConfirmed=false;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:scorecardFocusReturn});});
@@ -3207,7 +3446,6 @@ function bindPageEvents(){
   $('#peopleVisibility')?.addEventListener('change',event=>{ui.visibilityFilter=event.target.value;if(["No-Go","Archived"].includes(ui.visibilityFilter))ui.peopleQuick="All";render();});
   $$('[data-people-reset]').forEach(button=>button.addEventListener('click',()=>{ui.peopleQuick="All";ui.roleFilter="All Roles";ui.visibilityFilter="Active";ui.healthBandFilter="All";ui.healthTrendFilter="All";ui.actionCoverageFilter="All";ui.recencyFilter="All";ui.pipelineStageFilter="All";ui.interestFilter="All";ui.judgementFilter="All";ui.placeFilter="All";ui.followUpFilter="All";ui.conversationFrom="";ui.conversationTo="";ui.sort="recentContact";render();}));
   $$('[data-people-filter-close]').forEach(button=>button.addEventListener('click',()=>{ui.peopleFiltersOpen=false;render();}));
-  $('#peopleFilterSheet')?.addEventListener('click',event=>{if(event.target.id==="peopleFilterSheet"){ui.peopleFiltersOpen=false;render();}});
   $('#peopleFilterSheet [data-ui-dialog]')?.addEventListener('bridge:dialogclose',()=>{ui.peopleFiltersOpen=false;});
   $$('[data-pipeline-role]').forEach(button=>button.addEventListener('click',()=>{const role=button.dataset.pipelineRole;if(!["Prospect","Customer"].includes(role)||ui.pipelineRole===role)return;navigateMain("contacts",{mode:"pipeline",role,replace:true,opener:button});}));
   $$('[data-prospect-stage-toggle]').forEach(button=>button.addEventListener('click',()=>{const stage=button.dataset.prospectStageToggle;if(!PIPELINES.Prospect.includes(stage))return;togglePipelineDisclosure(button,ui.pipelineExpandedStages,stage,'data-prospect-stage');}));
@@ -3239,8 +3477,8 @@ function bindPageEvents(){
     if(suppressPeopleSearchRouteOnce){suppressPeopleSearchRouteOnce=false;return;}
     if(ui.routedScreen!=="people-search")navigatePresentation("people-search",{}, {opener:event.currentTarget});
   });
-  $('#contactSearch')?.addEventListener('input',event=>{ui.search=event.target.value;const cursor=event.target.selectionStart;clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(()=>{render();const input=$('#contactSearch');input?.focus();input?.setSelectionRange(cursor,cursor);},100);});
-  $$('[data-clear-people-search]').forEach(button=>button.addEventListener('click',()=>{ui.search="";clearTimeout(searchRenderTimer);render();requestAnimationFrame(()=>$('#contactSearch')?.focus());}));
+  $('#contactSearch')?.addEventListener('input',event=>{ui.search=event.target.value;const cursor=event.target.selectionStart;clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(()=>{if(ui.routedScreen==="people-search"&&refreshPeopleSearchResults(cursor))return;render();const input=$('#contactSearch');input?.focus();input?.setSelectionRange(cursor,cursor);},100);});
+  $$('[data-clear-people-search]').forEach(button=>button.addEventListener('click',()=>{ui.search="";clearTimeout(searchRenderTimer);const input=$('#contactSearch');if(input)input.value="";if(!refreshPeopleSearchResults(0)){render();requestAnimationFrame(()=>$('#contactSearch')?.focus());}}));
   $('#roleFilter')?.addEventListener('change',event=>{ui.roleFilter=event.target.value;render();});
   $('#visibilityFilter')?.addEventListener('change',event=>{ui.visibilityFilter=event.target.value;if(["No-Go","Archived"].includes(ui.visibilityFilter))ui.contactMode="list";render();});
   $('#healthBandFilter')?.addEventListener('change',event=>{ui.healthBandFilter=event.target.value;render();});
@@ -3259,13 +3497,14 @@ function bindPageEvents(){
   $('#followUpView')?.addEventListener('change',event=>{ui.actionView=event.target.value==="completed"?"completed":"open";ui.actionEditId=null;render();});
   $$('[data-action-view]').forEach(button=>button.addEventListener('click',()=>{ui.actionView=button.dataset.actionView;ui.actionEditId=null;render();}));
   $('#followUpRescheduleSheet [data-ui-dialog]')?.addEventListener('bridge:dialogclose',()=>{ui.actionEditId=null;});
-  $$('.today-reschedule-action').forEach(button=>button.addEventListener('click',()=>{ui.page="followups";ui.actionView="open";ui.actionEditId=button.dataset.actionId||null;window.scrollTo({top:0,left:0,behavior:"auto"});render();}));
-  $$('.today-complete-action').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.todayContactId,button.dataset.followUpId);if(!record||!transitionFollowUp(record.followUp,'completed'))return;record.contact.updatedAt=nowISO();queueSave('Action completed');render();}));
+  bindTodaySwipeCard();
+  $$('.today-reschedule-action').forEach(button=>button.addEventListener('click',()=>openTodayReschedule(button.dataset.actionId)));
+  $$('.today-complete-action').forEach(button=>button.addEventListener('click',()=>completeTodayAction(button.dataset.todayContactId,button.dataset.followUpId)));
   $$('.edit-action').forEach(button=>button.addEventListener('click',()=>{ui.actionEditId=ui.actionEditId===button.dataset.actionId?null:button.dataset.actionId;render();}));
   $$('.cancel-action-edit').forEach(button=>button.addEventListener('click',()=>{ui.actionEditId=null;render();}));
   $$('.action-edit-form').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();const record=findFollowUpRecord(form.dataset.followupContactId||form.dataset.contactId,form.dataset.followUpId);if(!record)return;const data=new FormData(form);const dueDate=String(data.get('dueDate')||'');const note=String(data.get('note')||'').trim()||'Follow up';if(!dueDate)return;const changed=rescheduleFollowUp(record.followUp,dueDate);if(record.followUp.note!==note){record.followUp.note=note;record.followUp.updatedAt=nowISO();}record.contact.updatedAt=nowISO();ui.actionEditId=null;queueSave(changed?'Action rescheduled':'Action updated');render();}));
   $$('.complete-action').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.followupContactId||button.dataset.contactId,button.dataset.followUpId);if(!record||!transitionFollowUp(record.followUp,'completed'))return;record.contact.updatedAt=nowISO();queueSave('Action completed');render();}));
-  $$('[data-followup-delete]').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.followupContactId||button.dataset.contactId,button.dataset.followUpId);if(!record||!confirm('Delete this action? Its history will remain available for analytics.'))return;transitionFollowUp(record.followUp,'deleted');record.contact.updatedAt=nowISO();if(ui.actionEditId===`${record.contact.id}:${record.followUp.id}`)ui.actionEditId=null;queueSave('Action deleted');render();}));
+  $$('[data-followup-delete]').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.followupContactId||button.dataset.contactId,button.dataset.followUpId);if(!record)return;requestConfirmation({title:'Delete this action?',message:'Its history will remain available for analytics.',confirmLabel:'Delete action',danger:true,onConfirm:()=>{transitionFollowUp(record.followUp,'deleted');record.contact.updatedAt=nowISO();if(ui.actionEditId===`${record.contact.id}:${record.followUp.id}`)ui.actionEditId=null;queueSave('Action deleted');render();}});}));
   const conversationForm=$('#addContactForm');
   restoreConversationDraft(conversationForm);
   $('#newRole')?.addEventListener('change',event=>{updateNewRoleFields(event.target.value);captureConversationDraft(conversationForm);updateConversationReview(conversationForm);});
@@ -3528,11 +3767,14 @@ function bindScorecardShareEvents() {
   });
   $("#messageScorecardLink")?.addEventListener("click",()=>{if(ui.scorecardCreated?.url)messageScorecard(ui.scorecardCreated.url);});
   $("#createAnotherScorecard")?.addEventListener("click",()=>{ui.scorecardCreated=null;ui.scorecardConfirmed=false;render();requestAnimationFrame(()=>$("#scorecardShareForm input")?.focus());});
-  $("#revokeScorecardLink")?.addEventListener("click",async()=>{
-    if(ui.scorecardShareBusy||!ui.scorecardCreated||!confirm("Revoke this scorecard link? Anyone with it will lose access."))return;
-    ui.scorecardShareBusy=true;render();
-    try{await revokeScorecardLink(ui.scorecardCreated);ui.scorecardCreated={...ui.scorecardCreated,revoked:true};ui.scorecardShareBusy=false;render();showToast("Scorecard link revoked");}
-    catch(error){ui.scorecardShareBusy=false;render();showToast(error?.message||"Bridge could not revoke this scorecard link");}
+  $("#revokeScorecardLink")?.addEventListener("click",()=>{
+    if(ui.scorecardShareBusy||!ui.scorecardCreated)return;
+    const scorecard=ui.scorecardCreated;
+    requestConfirmation({title:"Revoke this scorecard link?",message:"Anyone with the link will lose access.",confirmLabel:"Revoke link",danger:true,onConfirm:async()=>{
+      ui.scorecardShareBusy=true;render();
+      try{await revokeScorecardLink(scorecard);ui.scorecardCreated={...scorecard,revoked:true};ui.scorecardShareBusy=false;render();showToast("Scorecard link revoked");}
+      catch(error){ui.scorecardShareBusy=false;render();showToast(error?.message||"Bridge could not revoke this scorecard link");}
+    }});
   });
 }
 
@@ -3633,9 +3875,8 @@ function clearConversationDraft() {
   conversationDraftDirty = false;
 }
 
-function discardConversationDraft() {
-  if (!conversationDraftDirty) return true;
-  if (!confirm("Discard your unsaved conversation draft?")) return false;
+function discardConversationDraft(onDiscard=null) {
+  if(conversationDraftDirty){requestConfirmation({title:"Discard this conversation draft?",message:"The information entered in this capture flow will not be saved.",confirmLabel:"Discard draft",danger:true,onConfirm:()=>{clearConversationDraft();onDiscard?.();}});return false;}
   clearConversationDraft();
   return true;
 }
@@ -3650,7 +3891,7 @@ function handleAddContact(event){
   if((PIPELINES[role] || []).includes(selectedPipelineStage)){stages[selectedPipelineStage]=true;stageDates[selectedPipelineStage]=conversationDate;}
   const notes=String(form.get('notes')||'').trim(); const personalInfo=String(form.get('personalInfo')||'').trim(); const phoneNumber=String(form.get('phoneNumber')||'').trim();
   const duplicate=isCallablePhone(phoneNumber)&&state.contacts.find(existing=>normalizedPhone(existing.phoneNumber)===normalizedPhone(phoneNumber));
-  if(duplicate){if(!confirm(`${duplicate.fullName} already uses this phone number. Add this as a new conversation on their existing record instead?`))return;duplicate.conversations.push({id:uid(),type:String(form.get('conversationType')),interestLevel:duplicate.interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true});if(personalInfo&&!duplicate.personalInfo)duplicate.personalInfo=personalInfo;duplicate.updatedAt=nowISO();clearConversationDraft();ui.conversationStep=0;queueSave('Conversation added to existing contact');ui.page='contacts';ui.detailId=duplicate.id;render();return;}
+  if(duplicate){requestConfirmation({title:"Use the existing relationship?",message:`${duplicate.fullName} already uses this phone number. Add this as a new conversation on their existing record instead?`,confirmLabel:"Add conversation",onConfirm:()=>{duplicate.conversations.push({id:uid(),type:String(form.get('conversationType')),interestLevel:duplicate.interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true});if(personalInfo&&!duplicate.personalInfo)duplicate.personalInfo=personalInfo;duplicate.updatedAt=nowISO();clearConversationDraft();ui.conversationStep=0;queueSave('Conversation added to existing contact');ui.page='contacts';ui.detailId=duplicate.id;render();}});return;}
   const interestLevel=isTeam?"Unsure":String(form.get('interestLevel')||"Unsure"); const judgement=isTeam?"Good Fit":String(form.get('judgement')||"Good Fit");
   const contact={id:uid(),fullName,phoneNumber,capturedPhoneNumber:phoneNumber,phoneCapturedAt:phoneNumber?conversationDate:null,role,judgement,interestLevel,conversationType:String(form.get('conversationType')),placeId,placeName,dateFirstMet:conversationDate,personalInfo,isFilteredOut:false,filteredOutAt:null,checkBackDate:form.get('checkBackDate')?new Date(String(form.get('checkBackDate'))).toISOString():null,archivedAt:null,archiveReason:null,stages,stageDates,stageEvents:Object.entries(stageDates).map(([stage,occurredAt])=>({id:uid(),stage,fromStage:null,toStage:stage,occurredAt,source:"add-new"})),followUps:[],notes:[],conversations:[{id:uid(),type:String(form.get('conversationType')),interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true}],createdAt:nowISO(),updatedAt:nowISO()};
   if(form.get('followUpDate'))createFollowUp(contact,new Date(String(form.get('followUpDate'))).toISOString(),'Follow up');
@@ -3705,14 +3946,15 @@ function bindSettingsEvents(){
       ui.accountBusy=false;render();showToast(error?.message||'Bridge could not sync this account');
     }
   });
-  $('#signOutAccount')?.addEventListener('click',async()=>{
+  $('#signOutAccount')?.addEventListener('click',()=>{
     if(ui.accountBusy)return;
     const pending=Number(accountContext.status?.pending||0);
-    if(!confirm(pending?`Sign out with ${pending} pending change${pending===1?'':'s'}? They will remain on this device and resume after you sign in again.`:'Sign out of Bridge on this device?'))return;
-    ui.accountBusy=true;render();
-    await disableBackgroundPush().catch(()=>{});
-    await accountClient.logout();
-    showSignedOutAccount(pending?'Signed out. Pending changes are preserved on this device.':'Signed out of Bridge.');
+    requestConfirmation({title:'Sign out of Bridge?',message:pending?`${pending} pending change${pending===1?'':'s'} will remain on this device and resume after you sign in again.`:'This device will be signed out of your Bridge account.',confirmLabel:'Sign out',danger:true,onConfirm:async()=>{
+      ui.accountBusy=true;render();
+      await disableBackgroundPush().catch(()=>{});
+      await accountClient.logout();
+      showSignedOutAccount(pending?'Signed out. Pending changes are preserved on this device.':'Signed out of Bridge.');
+    }});
   });
   $('#changeAccountPassword')?.addEventListener('click',async()=>{
     if(ui.accountBusy)return;
@@ -3721,14 +3963,17 @@ function bindSettingsEvents(){
     ui.accountAction={type:'change-password'};
     render();
   });
-  $$('.revoke-account-session').forEach(button=>button.addEventListener('click',async()=>{
-    if(ui.accountBusy||!confirm('Sign this device out of Bridge?'))return;
-    ui.accountBusy=true;render();
-    try{
-      await accountClient.revokeSession(button.dataset.sessionId);
-      ui.accountSessions=ui.accountSessions.filter(session=>session.id!==button.dataset.sessionId);
-      ui.accountBusy=false;render();showToast('Session signed out');
-    }catch(error){ui.accountBusy=false;render();showToast(error?.message||'Bridge could not revoke that session');}
+  $$('.revoke-account-session').forEach(button=>button.addEventListener('click',()=>{
+    if(ui.accountBusy)return;
+    const sessionId=button.dataset.sessionId;
+    requestConfirmation({title:'Sign this device out?',message:'That device will need to sign in again to access this Bridge account.',confirmLabel:'Sign out device',danger:true,onConfirm:async()=>{
+      ui.accountBusy=true;render();
+      try{
+        await accountClient.revokeSession(sessionId);
+        ui.accountSessions=ui.accountSessions.filter(session=>session.id!==sessionId);
+        ui.accountBusy=false;render();showToast('Session signed out');
+      }catch(error){ui.accountBusy=false;render();showToast(error?.message||'Bridge could not revoke that session');}
+    }});
   }));
   $('#createCloudBackup')?.addEventListener('click',async()=>{
     if(ui.accountBusy)return;
@@ -3862,13 +4107,45 @@ function bindSettingsEvents(){
   });
   $('#exportBackup')?.addEventListener('click',()=>downloadFile(`bridge-backup-${todayInput()}.json`,JSON.stringify(state,null,2),'application/json'));
   $('#exportCSV')?.addEventListener('click',()=>{const rows=[['Name','Phone','Role','Interest','Judgement','Conversation Type','Place','Date First Met','Pipeline'],...state.contacts.map(c=>[c.fullName,c.phoneNumber,c.role,c.interestLevel,c.judgement,c.conversationType,c.placeName,c.dateFirstMet,stageFor(c)])];downloadFile(`bridge-contacts-${todayInput()}.csv`,rows.map(r=>r.map(csvCell).join(',')).join('\n'),'text/csv');});
-  $('#importBackup')?.addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;try{const imported=normalizeState(JSON.parse(await file.text()));if(!confirm(`Restore ${imported.contacts.length} contacts and replace current Bridge data?`))return;state=imported;applyFixedAppearance();queueSave('Backup restored');ui.settingsOpen=false;render();}catch{showToast('That backup file could not be read');}});
+  $('#importBackup')?.addEventListener('change',async event=>{const input=event.target;const file=input.files?.[0];if(!file)return;try{const imported=normalizeState(JSON.parse(await file.text()));requestConfirmation({title:'Replace current Bridge data?',message:`Restore ${imported.contacts.length} contact${imported.contacts.length===1?'':'s'} from this backup. This replaces the data currently open in Bridge.`,confirmLabel:'Restore backup',danger:true,onConfirm:()=>{state=imported;applyFixedAppearance();queueSave('Backup restored');ui.settingsOpen=false;render();},onCancel:()=>{input.value='';}});}catch{input.value='';showToast('That backup file could not be read');}});
 }
 function csvCell(value){return `"${String(value||'').replaceAll('"','""')}"`;}
 function downloadFile(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
+function bindProfileCollapsingHeader() {
+  const screen=$(".relationship-profile-screen");
+  if(!screen)return;
+  const header=$("[data-profile-collapse-header]",screen);
+  const largeTitle=$("[data-profile-large-title]",screen);
+  if(!header||!largeTitle)return;
+  const compactTitle=$("[data-profile-compact-title]",header);
+  if(!compactTitle)return;
+  let frame=0;
+  let collapsed=null;
+  const update=()=>{
+    frame=0;
+    if(!header.isConnected||!largeTitle.isConnected)return;
+    const next=largeTitle.getBoundingClientRect().bottom<=header.getBoundingClientRect().bottom+.5;
+    if(next===collapsed)return;
+    collapsed=next;
+    screen.classList.toggle("is-profile-collapsed",next);
+  };
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
+  window.addEventListener("scroll",schedule,{passive:true});
+  window.addEventListener("resize",schedule,{passive:true});
+  update();
+  profileHeaderScrollSync=update;
+  profileHeaderScrollCleanup=()=>{
+    window.removeEventListener("scroll",schedule);
+    window.removeEventListener("resize",schedule);
+    if(frame)cancelAnimationFrame(frame);
+    profileHeaderScrollSync=null;
+  };
+}
+
 function bindContactModalEvents(){
   const c=state.contacts.find(x=>x.id===ui.detailId);if(!c)return;
+  if(ui.routedScreen==="person")bindProfileCollapsingHeader();
   $('.profile-stage-update > summary')?.addEventListener('click',event=>{
     if(ui.routedScreen!=="person"||!["Prospect","Customer"].includes(c.role))return;
     event.preventDefault();
@@ -3877,12 +4154,9 @@ function bindContactModalEvents(){
   $$('[data-contact-detail-tab]').forEach(button=>button.addEventListener('click',()=>{
     const nextTab=String(button.dataset.contactDetailTab||'overview');
     if(nextTab===ui.contactDetailTab)return;
-    if(!discardContactEdit())return;
-    ui.contactDetailTab=nextTab;
-    ui.activityHistoryContactId=null;
-    ui.activityFilter=nextTab==='notes'?'Notes':'All';
-    ui.expandedLogIds.clear();
-    render();
+    const activate=()=>{ui.contactDetailTab=nextTab;ui.activityHistoryContactId=null;ui.activityFilter=nextTab==='notes'?'Notes':'All';ui.expandedLogIds.clear();render();};
+    if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(activate);return;}
+    clearContactEdit();activate();
   }));
   $$('[data-edit-contact-info], #editContactInfo').forEach(button=>button.addEventListener('click',()=>{if(ui.routedScreen==="person")navigatePresentation("person-edit",{person:c.id},{opener:button});else{ui.contactDetailTab='overview';ui.contactEditing=true;ui.contactEditDirty=false;render();requestAnimationFrame(()=>$('#contactInfoForm input[name="fullName"]')?.focus());}}));
   $$('[data-profile-followup]').forEach(button=>button.addEventListener('click',()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode="action";ui.quickCreateContactId=c.id;render();}));
@@ -3893,21 +4167,21 @@ function bindContactModalEvents(){
     const team = event.target.value === "Team";
     $$('[data-edit-role-fit-field]').forEach(field => { field.hidden = team; });
   });
-  $('#cancelContactInfoEdit')?.addEventListener('click',()=>{if(!discardContactEdit())return;if(ui.routedScreen==="person-edit")presentationBack();else render();});
+  $('#cancelContactInfoEdit')?.addEventListener('click',()=>{const close=()=>{if(ui.routedScreen==="person-edit")presentationBack();else render();};if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(close);return;}clearContactEdit();close();});
   $('#contactInfoForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const nextRole=["Prospect","Customer","Team"].includes(String(f.get('role'))) ? String(f.get('role')) : "Prospect";const nextPhone=String(f.get('phoneNumber')||'').trim();const duplicate=isCallablePhone(nextPhone)&&state.contacts.find(other=>other.id!==c.id&&normalizedPhone(other.phoneNumber)===normalizedPhone(nextPhone));if(duplicate){showToast(`That phone number already belongs to ${duplicate.fullName}`);return;}c.fullName=String(f.get('fullName')).trim()||c.fullName;c.phoneNumber=nextPhone;c.role=nextRole;if(nextRole!=="Team"){c.interestLevel=String(f.get('interestLevel')||c.interestLevel);c.judgement=String(f.get('judgement')||c.judgement);}else{setFilteredOut(c,false,nowISO());}c.conversationType=String(f.get('conversationType'));const place=quickCapturePlace(f);c.placeId=place.placeId;c.placeName=place.placeName;const metDate=String(f.get('dateFirstMet')||'');if(metDate)c.dateFirstMet=`${metDate}T12:00:00`;for(const stage of PIPELINE_STAGES){if(!(PIPELINES[nextRole] || []).includes(stage))c.stages[stage]=false;}normalizePipelineStages(c,PIPELINES[nextRole] || []);c.updatedAt=nowISO();ui.contactEditing=false;ui.contactEditDirty=false;queueSave('Relationship updated');if(ui.routedScreen==="person-edit")presentationBack();else render();});
   $('#personalInfoForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);c.personalInfo=String(f.get('personalInfo')||'').trim();c.updatedAt=nowISO();queueSave('Personal info saved');render();});
   $('#contactCadenceForm')?.addEventListener('submit',event=>{event.preventDefault();const raw=String(new FormData(event.currentTarget).get('healthCadenceDays')||'').trim();if(raw){const cadence=Number(raw);if(!Number.isInteger(cadence)||cadence<1||cadence>365){showToast('Choose a cadence from 1 to 365 days');return;}c.healthCadenceDays=cadence;}else{c.healthCadenceDays=null;}c.updatedAt=nowISO();queueSave(raw?'Contact cadence saved':'Contact cadence set to automatic');render();});
-  $('#editTrackingForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const team=c.role==="Team";const nextFiltered=team?false:f.has('isFilteredOut');if(nextFiltered&&!c.isFilteredOut&&!confirm(`Mark ${c.fullName} as No-Go? They will leave the active pipeline, but their history will be preserved.`))return;setFilteredOut(c,nextFiltered,nowISO());c.stageEvents=Array.isArray(c.stageEvents)?c.stageEvents:[];for(const stage of ['MSA','DTM']){const checked=f.has(stageInputName(stage));if(checked&&!c.stages[stage]){const occurredAt=nowISO();c.stageDates[stage]=occurredAt;c.stageEvents.push({id:uid(),stage,occurredAt});}c.stages[stage]=checked;}const selected=String(f.get('pipelineStage')||'');setPipelineStage(c,(PIPELINES[c.role] || []).includes(selected)?selected:'');c.updatedAt=nowISO();queueSave(nextFiltered?'Contact moved to No-Go':'Tracking updated');render();});
-  $('#clearPipelineStage')?.addEventListener('click',()=>{if(!confirm('Clear the current pipeline stage? Historical stage activity will remain.'))return;setPipelineStage(c,'');c.updatedAt=nowISO();queueSave('Pipeline stage cleared');render();});
+  $('#editTrackingForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const team=c.role==="Team";const nextFiltered=team?false:f.has('isFilteredOut');const saveTracking=()=>{setFilteredOut(c,nextFiltered,nowISO());c.stageEvents=Array.isArray(c.stageEvents)?c.stageEvents:[];for(const stage of ['MSA','DTM']){const checked=f.has(stageInputName(stage));if(checked&&!c.stages[stage]){const occurredAt=nowISO();c.stageDates[stage]=occurredAt;c.stageEvents.push({id:uid(),stage,occurredAt});}c.stages[stage]=checked;}const selected=String(f.get('pipelineStage')||'');setPipelineStage(c,(PIPELINES[c.role] || []).includes(selected)?selected:'');c.updatedAt=nowISO();queueSave(nextFiltered?'Contact moved to No-Go':'Tracking updated');render();};if(nextFiltered&&!c.isFilteredOut){requestConfirmation({title:`Mark ${c.fullName} as No-Go?`,message:'They will leave the active pipeline, but their history will be preserved.',confirmLabel:'Mark No-Go',danger:true,onConfirm:saveTracking});return;}saveTracking();});
+  $('#clearPipelineStage')?.addEventListener('click',()=>{requestConfirmation({title:'Clear the current pipeline stage?',message:'Historical stage activity will remain.',confirmLabel:'Clear stage',danger:true,onConfirm:()=>{setPipelineStage(c,'');c.updatedAt=nowISO();queueSave('Pipeline stage cleared');render();}});});
   $('#addLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);c.conversations.push({id:uid(),type:String(f.get('type')),interestLevel:c.interestLevel,notes:String(f.get('notes')).trim(),createdAt:nowISO(),conversationDate:`${f.get('conversationDate')}T12:00:00`,isCountedConversation:false});c.updatedAt=nowISO();queueSave('Note added');render();});
   $('#viewAllActivity')?.addEventListener('click',event=>{if(ui.routedScreen==="person")navigatePresentation("person-timeline",{person:c.id},{opener:event.currentTarget});else{ui.activityHistoryContactId=c.id;ui.activityFilter=ui.contactDetailTab==='notes'?"Notes":"All";ui.expandedLogIds.clear();render();}});
   $$('.log-note-toggle').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.expandLogId;if(ui.expandedLogIds.has(id))ui.expandedLogIds.delete(id);else ui.expandedLogIds.add(id);render();}));
   $$('.edit-communication-log').forEach(button=>button.addEventListener('click',()=>{const log=c.conversations.find(item=>item.id===button.dataset.logId);if(log){ui.activityHistoryContactId=null;openCommunicationLog(c.id,log.communicationType||"Call",log.conversationDate||log.createdAt,log.id);}}));
-  $$('.delete-log').forEach(button=>button.addEventListener('click',()=>{if(!confirm('Delete this conversation log? The contact will remain.'))return;c.conversations=c.conversations.filter(log=>log.id!==button.dataset.logId);c.updatedAt=nowISO();queueSave('Log deleted');render();}));
+  $$('.delete-log').forEach(button=>button.addEventListener('click',()=>{const logId=button.dataset.logId;requestConfirmation({title:'Delete this conversation log?',message:'The contact and other relationship history will remain.',confirmLabel:'Delete log',danger:true,onConfirm:()=>{c.conversations=c.conversations.filter(log=>log.id!==logId);c.updatedAt=nowISO();queueSave('Log deleted');render();}});}));
   $('#completeFollowUp')?.addEventListener('click',()=>{const active=c.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];if(!active)return;transitionFollowUp(active,'completed');c.updatedAt=nowISO();queueSave('Follow-up completed');render();});
   $('#restoreNoGo')?.addEventListener('click',()=>{setFilteredOut(c,false,nowISO());c.updatedAt=nowISO();ui.visibilityFilter='Active';queueSave('Contact restored to Active');render();});
   $('#restoreContact')?.addEventListener('click',()=>{restoreContact(c,nowISO());ui.visibilityFilter='Active';queueSave('Contact restored');render();});
-  $('#deleteContact')?.addEventListener('click',()=>{if(!confirm(`Delete ${c.fullName}? This cannot be undone.`))return;state.contacts=state.contacts.filter(x=>x.id!==c.id);ui.detailId=null;queueSave('Contact deleted');if(["person","person-edit"].includes(ui.routedScreen))presentationBack();else render();});
+  $('#deleteContact')?.addEventListener('click',()=>{requestConfirmation({title:`Delete ${c.fullName}?`,message:'This cannot be undone.',confirmLabel:'Delete contact',danger:true,onConfirm:()=>{state.contacts=state.contacts.filter(x=>x.id!==c.id);ui.detailId=null;queueSave('Contact deleted');if(["person","person-edit"].includes(ui.routedScreen))presentationBack();else render();}});});
 }
 
 function bindActivityHistoryEvents(){

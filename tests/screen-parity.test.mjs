@@ -59,9 +59,18 @@ test("Shared mobile parity keeps search focus, Capture sheets, and Profile scale
   assert.match(styles,/\.quick-capture-picker__search:focus-within \{ border-color: var\(--color-text-primary\); box-shadow: none; \}/);
   assert.match(styles,/\.quick-create-modal \{ position: relative; height: auto; max-height: 92dvh; display: flex; flex-direction: column; overflow: hidden; \}/);
   assert.match(styles,/\.quick-create-modal\.has-step \{\s*height: auto;\s*min-height: 0;\s*max-height: 92dvh;/);
-  assert.match(styles,/\.profile-identity h2 \{[^}]*font-size: 28px;/);
+  assert.match(styles,/\.profile-identity :is\(h1,h2\) \{[^}]*font-size: 28px;/);
   assert.match(styles,/\.profile-quick-actions > a, \.profile-quick-actions > button \{[^}]*min-height: 62px;/);
   assert.match(styles,/\.profile-next-action__content p \{[^}]*font-size: 15\.5px;/);
+});
+
+test("Main navigation motion stays restrained and uses one underline animation path",()=>{
+  assert.match(styles,/\.page\.page-enter, \.page\.mode-enter \{ animation: none; \}/);
+  assert.match(styles,/\.nav-selection-indicator \{[\s\S]*transition: opacity var\(--motion-fast\);[\s\S]*will-change: transform, opacity;/);
+  assert.doesNotMatch(styles,/\.nav-selection-indicator \{[^}]*transition: transform/);
+  assert.match(app,/navIndicator\.animate\(frames,\{duration:320,easing:'cubic-bezier\(\.16,1,\.3,1\)'\}\)/);
+  assert.match(app,/from>=0&&to<0/);
+  assert.doesNotMatch(app,/Math\.max\(0,previousNavSelection\)/);
 });
 
 test("Person Profile keeps next-action rescheduling compact and routes new actions through Capture",()=>{

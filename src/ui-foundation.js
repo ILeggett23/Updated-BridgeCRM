@@ -13,7 +13,12 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
 
   function navSelectionIndex() {
     const ui = routeState();
-    if (ui.quickCreateOpen || ui.page === "add") return -1;
+    const routed = String(ui.routedScreen || "");
+    if (["people-search", "person", "person-edit", "person-timeline", "stage-transition"].includes(routed)) return 1;
+    if (routed === "pipeline-stage") return 3;
+    if (routed === "analytics-detail") return 4;
+    if (routed) return -1;
+    if (ui.page === "add") return -1;
     if (ui.page === "dashboard") return 0;
     if (ui.page === "contacts") return ui.contactMode === "pipeline" ? 3 : 1;
     if (ui.page === "analytics") return 4;
@@ -26,7 +31,7 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
     const destinations = [
       { label: "Today", icon: "home", active: ui.page === "dashboard", attributes: 'data-page="dashboard"' },
       { label: "People", icon: "people", active: ui.page === "contacts" && ui.contactMode !== "pipeline", attributes: "data-open-people" },
-      { label: "Capture", icon: "plus", active: Boolean(ui.quickCreateOpen || ui.page === "add"), capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}"` },
+      { label: "Capture", icon: "plus", active: false, capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}"` },
       { label: "Pipeline", icon: "network", active: ui.page === "contacts" && ui.contactMode === "pipeline", attributes: "data-open-pipeline" },
       { label: "Insights", icon: "chart", active: ui.page === "analytics", attributes: 'data-page="analytics"' }
     ];
@@ -49,7 +54,9 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
 
   function PresentationScreen(content, { className = "", title = "", eyebrow = "", action = "", back = true, large = false } = {}) {
     const ui = routeState();
-    return `<section class="presentation-screen presentation-screen--${escapeHTML(ui.routeDirection || "forward")}${className ? ` ${className}` : ""}" data-presentation-screen="${escapeHTML(ui.routedScreen || "")}">${ScreenHeader(title, { eyebrow, action, back, large })}<div class="presentation-screen__body">${content}</div></section>`;
+    const direction = escapeHTML(ui.routeDirection || "forward");
+    const entry = ui.routeEntryMotion ? ` presentation-screen--enter presentation-screen--enter-${direction}` : "";
+    return `<section class="presentation-screen presentation-screen--${direction}${entry}${className ? ` ${className}` : ""}" data-presentation-screen="${escapeHTML(ui.routedScreen || "")}">${ScreenHeader(title, { eyebrow, action, back, large })}<div class="presentation-screen__body">${content}</div></section>`;
   }
 
   function Button(content, { tone = "secondary", size = "medium", className = "", attributes = "", type = "button" } = {}) {
@@ -64,6 +71,14 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
   function SegmentedControl(items, { label = "Options", className = "" } = {}) { const activeIndex = Math.max(0, items.findIndex(item => item.active)); return `<div class="ui-segmented${className ? ` ${className}` : ""}" role="group" aria-label="${escapeHTML(label)}" style="--segment-count:${Math.max(1, items.length)};--segment-index:${activeIndex}"><span class="ui-segmented__indicator" aria-hidden="true"></span>${items.map(({ label: itemLabel, value, active = false, attributes = "" }) => `<button type="button" data-value="${escapeHTML(value)}" aria-pressed="${active}" ${attributes}>${escapeHTML(itemLabel)}</button>`).join("")}</div>`; }
   function Avatar(name, { size = "", className = "" } = {}) { const supported = ["small", "large"]; return `<span class="ui-avatar${supported.includes(size) ? ` ui-avatar--${size}` : ""}${className ? ` ${className}` : ""}" aria-hidden="true">${escapeHTML(initials(name))}</span>`; }
   function ListRow(content, { end = "", className = "", tag = "div" } = {}) { return `<${tag} class="ui-list-row${className ? ` ${className}` : ""}"><div class="ui-list-row__content">${content}</div>${end ? `<div class="ui-list-row__end">${end}</div>` : ""}</${tag}>`; }
+  function SettingsRow(label, { detail = "", end = "", className = "", attributes = "", danger = false, tag = "button" } = {}) {
+    const supportedTag = ["button", "a", "div"].includes(tag) ? tag : "button";
+    const type = supportedTag === "button" ? ' type="button"' : "";
+    return `<${supportedTag}${type} class="ui-settings-row${danger ? " is-danger" : ""}${className ? ` ${className}` : ""}" ${attributes}><span><strong>${escapeHTML(label)}</strong>${detail ? `<small>${escapeHTML(detail)}</small>` : ""}</span>${end ? `<span class="ui-settings-row__end">${end}</span>` : ""}</${supportedTag}>`;
+  }
+  function ToggleRow(label, { detail = "", checked = false, disabled = false, name = "", className = "", attributes = "" } = {}) {
+    return `<label class="ui-toggle-row${className ? ` ${className}` : ""}" ${attributes}><span><strong>${escapeHTML(label)}</strong>${detail ? `<small>${escapeHTML(detail)}</small>` : ""}</span><input class="ui-toggle-input" type="checkbox" ${name ? `name="${escapeHTML(name)}"` : ""} ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}><i aria-hidden="true"><b></b></i></label>`;
+  }
   function Chip(label, { active = false, count = "", iconName = "", className = "", attributes = "" } = {}) { return `<button type="button" class="ui-chip${active ? " is-active" : ""}${className ? ` ${className}` : ""}" aria-pressed="${active}" ${attributes}>${iconName && icons[iconName] ? icons[iconName] : ""}<span>${escapeHTML(label)}</span>${count !== "" ? `<strong>${escapeHTML(count)}</strong>` : ""}</button>`; }
   function Menu(items, { label = "Menu", className = "" } = {}) { return `<div class="ui-menu${className ? ` ${className}` : ""}" role="menu" aria-label="${escapeHTML(label)}">${items.map(item => `<button type="button" role="menuitem" ${item.disabled ? 'disabled aria-disabled="true"' : ""} ${item.attributes || ""}>${item.iconName && icons[item.iconName] ? `<span aria-hidden="true">${icons[item.iconName]}</span>` : ""}<span><strong>${escapeHTML(item.label)}</strong>${item.description ? `<small>${escapeHTML(item.description)}</small>` : ""}</span></button>`).join("")}</div>`; }
   function MetricCard(value, label, { detail = "", iconName = "", className = "" } = {}) { return `<section class="ui-metric-card${className ? ` ${className}` : ""}">${iconName && icons[iconName] ? `<span class="ui-metric-card__icon" aria-hidden="true">${icons[iconName]}</span>` : ""}<strong class="ui-metric-card__value">${escapeHTML(value)}</strong><span class="ui-metric-card__label">${escapeHTML(label)}</span>${detail ? `<small class="ui-metric-card__detail">${escapeHTML(detail)}</small>` : ""}</section>`; }
@@ -84,7 +99,7 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
   return Object.freeze({
     AppShell, BottomNavigation, ScreenHeader, PresentationScreen, navSelectionIndex,
     Button, SurfaceCard, IconButton, StatusBadge, ProgressBar, SegmentedControl,
-    Avatar, ListRow, Chip, Menu, MetricCard, MetricGrid, SectionHeader, Tabs,
+    Avatar, ListRow, SettingsRow, ToggleRow, Chip, Menu, MetricCard, MetricGrid, SectionHeader, Tabs,
     InformationRow, SearchField, FilterControl, DateNavigator, EmptyState,
     FeedbackState, LoadingSkeleton, MobileSheet, ConfirmDialog, ChartCard
   });

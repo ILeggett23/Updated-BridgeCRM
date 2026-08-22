@@ -54,8 +54,8 @@ test("Every capture mode uses a reference-style atomic progressive form",()=>{
 });
 
 test("Real person and place pickers never rely on demo records",()=>{
-  const people=sourceBetween("function quickCaptureRecentContacts","function quickCapturePlaceActivityAt");
-  const places=sourceBetween("function quickCapturePlaceActivityAt","function quickCaptureWizardFooter");
+  const people=sourceBetween("function quickCaptureRecentContacts","function quickCapturePlaceActivityMap");
+  const places=sourceBetween("function quickCapturePlaceActivityMap","function quickCaptureWizardFooter");
   assert.match(people,/peopleActivityAt/);
   assert.match(people,/contacts/);
   assert.match(people,/contacts\.filter\(contact=>!recentIds\.has/);

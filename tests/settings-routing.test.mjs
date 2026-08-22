@@ -11,11 +11,11 @@ const index = fs.readFileSync(path.join(root, "src", "index.html"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "src", "manifest.webmanifest"), "utf8"));
 
 test("Phase 15E Settings root and focused subpages are addressable", () => {
-  for (const section of ["profile","goals","notifications","preferences","data","account","sessions","backup","privacy","about"]) {
+  for (const section of ["profile","goals","notifications","preferences","health","archive","data","account","sessions","backup","privacy","about"]) {
     assert.match(app, new RegExp(`SETTINGS_SECTIONS[^\\n]+["\\']${section}["\\']`));
     assert.match(app, new RegExp(`data-settings-section-open="\\$\\{escapeHTML\\(section\\)\\}"`));
   }
-  for (const label of ["Profile","Conversation goals","Streak & achievements","Conversation reminders","Follow-up reminders","Relationship settings","Storage","Backup & export","Scorecards and sharing","About and support"]) assert.ok(app.includes(label), `missing Settings destination ${label}`);
+  for (const label of ["Profile","Goals & progress","Notifications","Workflow","Relationship health","Archive","Data & sync","Backup & export","Scorecards and sharing","About & support"]) assert.ok(app.includes(label), `missing Settings destination ${label}`);
   assert.ok(app.includes("presentationParentURL(screen = ui.routedScreen)"));
   assert.ok(app.includes('screen === "settings" && ui.routedSection && ui.routedSection !== "root"'));
   assert.equal(app.includes("function settingsDisclosure("), false);

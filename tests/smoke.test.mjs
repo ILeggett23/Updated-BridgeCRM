@@ -74,7 +74,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.5"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.6"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -242,7 +242,7 @@ test("Follow-Ups presents real queue records with exact stages and existing acti
 });
 
 test("Person Profile composes the relationship headquarters from existing records", () => {
-  assert.ok(source.includes("function relationshipProfileOverview(c,active)"));
+  assert.ok(source.includes("function relationshipProfileOverview(c,active,{routed=false}={})"));
   assert.ok(source.includes("function relationshipTimelineEvents(c)"));
   assert.ok(source.includes("function profileNextAction(c,active)"));
   assert.ok(source.includes("function profileBridgeBrief(c)"));
@@ -252,14 +252,14 @@ test("Person Profile composes the relationship headquarters from existing record
   assert.ok(source.includes("data-edit-contact-info"));
   assert.ok(source.includes("contactInformation(c)"));
   assert.ok(styles.includes(".relationship-profile-modal"));
-  assert.ok(styles.includes(".profile-sticky-header"));
+  assert.ok(styles.includes(".profile-collapse-header"));
 });
 
 test("Add Conversation preserves an in-progress draft and guards accidental navigation", () => {
   assert.ok(source.includes("function captureConversationDraft(form)"));
   assert.ok(source.includes("function restoreConversationDraft(form)"));
-  assert.ok(source.includes('confirm("Discard your unsaved conversation draft?")'));
-  assert.ok(source.includes("!discardConversationDraft()"));
+  assert.ok(source.includes('title:"Discard this conversation draft?"'));
+  assert.ok(source.includes("discardConversationDraft(()=>navigatePresentation"));
   assert.ok(source.includes('window.addEventListener("beforeunload"'));
   assert.ok(source.includes("clearConversationDraft(); ui.conversationStep=0; queueSave('Conversation saved')"));
 });
@@ -353,7 +353,7 @@ test("recurring streak rest schedules migrate through settings, backups, and a s
   assert.ok(source.includes("ui.settingsExcludedDatesDraft=next"));
   assert.ok(source.includes('data-rest-panel="weekly"'));
   assert.ok(source.includes('id="addStreakRestRule"'));
-  assert.ok(source.includes('class="icon-button remove-rest-rule"'));
+  assert.ok(source.includes('class="ui-icon-button remove-rest-rule"'));
   assert.ok(source.includes("next.streakExcludedDates=normalizeExcludedDates(ui.settingsExcludedDatesDraft)"));
   assert.ok(source.includes("next.streakRestRules=normalizeRestRules(ui.settingsRestRulesDraft)"));
   assert.ok(source.includes("JSON.stringify(state,null,2)"));
@@ -361,7 +361,7 @@ test("recurring streak rest schedules migrate through settings, backups, and a s
   assert.ok(styles.includes(".rest-rule-builder"));
   assert.ok(styles.includes(".weekday-picker"));
   assert.ok(styles.includes(".rest-day-list"));
-  assert.ok(styles.includes(".rest-day-row .icon-button"));
+  assert.ok(styles.includes(".rest-day-row .ui-icon-button"));
 });
 
 test("Settings uses a progressive preference hierarchy without changing its persisted controls", () => {
@@ -372,8 +372,11 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(source.includes('function settingsNavigationGroup(title,content)'));
   assert.ok(source.includes('settingsNavigationGroup("Profile"'));
   assert.ok(source.includes('settingsNavigationGroup("Notifications"'));
-  assert.ok(source.includes('settingsNavigationRow("Conversation reminders"'));
-  assert.ok(source.includes('settingsNavigationRow("Follow-up reminders"'));
+  assert.ok(source.includes('settingsNavigationRow("Notifications"'));
+  assert.ok(source.includes('settingsNavigationGroup("Relationships"'));
+  assert.ok(source.includes('settingsNavigationRow("Workflow"'));
+  assert.ok(source.includes('settingsNavigationRow("Relationship health"'));
+  assert.ok(source.includes('settingsNavigationRow("Archive"'));
   assert.equal(source.includes('settingsNavigationRow("Appearance"'), false);
   assert.ok(source.includes('function settingsSection(title,content){return SurfaceCard('));
   for (const id of ["settingsForm", "syncAccountNow", "exportBackup", "exportCSV", "importBackup", "createCloudBackup", "exportAccountData", "deleteBridgeAccount", "openReleaseNotes", "streakRestFrequency", "requestNotifications"]) {
@@ -392,20 +395,22 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.settings-route-stack'));
   assert.ok(source.includes('class="hn-account-workspace"'));
   assert.ok(source.includes('Backup & export'));
-  assert.ok(source.includes('profile:"Account"'));
+  assert.ok(source.includes('profile:"Profile"'));
+  assert.ok(source.includes('health:"Relationship health"'));
+  assert.ok(source.includes('archive:"Archive"'));
   assert.ok(source.includes('data:"Data & sync"'));
   assert.ok(source.includes('Changing your password signs out other devices'));
   assert.ok(source.includes('const hasControl=name=>Boolean(form.elements.namedItem(name))'));
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.5 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.5"));
-  assert.ok(page.includes("./styles.css?v=1.3.5"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.5"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.5"));
-  assert.ok(page.includes("./app.js?v=1.3.5"));
-  assert.ok(worker.includes("bridge-app-v1.3.5"));
+test("v1.3.6 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.6"));
+  assert.ok(page.includes("./styles.css?v=1.3.6"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.6"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.6"));
+  assert.ok(page.includes("./app.js?v=1.3.6"));
+  assert.ok(worker.includes("bridge-app-v1.3.6"));
 });
 
 test("the GitHub Pages client opens locally without loading the Cloudflare account gate", async () => {
@@ -417,7 +422,7 @@ test("the GitHub Pages client opens locally without loading the Cloudflare accou
   assert.ok(source.includes('mode: "local"'));
   assert.equal(page.includes("account-client.js"), false);
   assert.equal(serviceWorker.includes("account-client.js"), false);
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.5", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.6", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));
@@ -487,7 +492,7 @@ test("Today uses real goal, follow-up, health, contact, and momentum data", () =
   assert.ok(source.includes('PIPELINE_STAGES.includes(event.stage) && new Date(event.occurredAt) >= weekStart'));
   assert.ok(source.includes('data-action-id="${escapeHTML(contact.id)}:${escapeHTML(followUp.id)}"'));
   assert.ok(source.includes('class="button subtle today-complete-action"'));
-  assert.ok(source.includes("findFollowUpRecord(button.dataset.todayContactId,button.dataset.followUpId)"));
+  assert.ok(source.includes("completeTodayAction(button.dataset.todayContactId,button.dataset.followUpId)"));
   assert.ok(source.includes('class="today-momentum__summary"'));
   assert.ok(source.includes('data-page="analytics">Insights'));
   assert.ok(styles.includes('.today-home'));
@@ -514,11 +519,12 @@ test("approved appearance is fixed and customization state is retired", () => {
 });
 
 test("SwiftUI-inspired motion is scoped and search avoids per-keystroke rebuilds", () => {
-  assert.ok(source.includes("lastRenderedPage"));
-  assert.ok(source.includes('shouldAnimatePage ? "page-enter"'));
+  assert.ok(source.includes("lastRenderedPresentationKey"));
+  assert.ok(source.includes("routeEntryMotion"));
   assert.ok(source.includes("searchRenderTimer=setTimeout"));
   assert.ok(foundation.includes('aria-current="page"'));
-  assert.ok(styles.includes(".page.page-enter"));
+  assert.ok(styles.includes(".page.page-enter, .page.mode-enter { animation: none; }"));
+  assert.ok(styles.includes(".presentation-screen--enter"));
   assert.ok(styles.includes("--motion-standard"));
   assert.equal(styles.includes(".page { width: 100%; max-width: 1280px; margin: 0 auto; animation:"), false);
 });
@@ -585,7 +591,8 @@ test("restrained native motion remains responsive and accessible", () => {
   assert.ok(styles.includes("@media (prefers-contrast: more)"));
   assert.ok(styles.includes("@media (prefers-reduced-motion: reduce)"));
   assert.equal(source.includes("function installGlassInteractions()"), false);
-  assert.equal(source.includes("pointermove"), false);
+  assert.ok(source.includes("function bindTodaySwipeCard()"));
+  assert.ok(styles.includes(".today-swipe-shell .today-next-card"));
   assert.equal(styles.includes(".is-glass-pressing"), false);
 });
 
@@ -657,7 +664,7 @@ test("existing contact information is read-only until Edit is selected", () => {
   assert.ok(contactInformationSource.includes('name="newPlaceName"'));
   assert.ok(contactInformationSource.includes('name="dateFirstMet"'));
   assert.ok(source.includes("const place=quickCapturePlace(f);c.placeId=place.placeId;c.placeName=place.placeName"));
-  assert.ok(source.includes('Discard your unsaved contact changes?'));
+  assert.ok(source.includes('title:"Discard unsaved changes?"'));
   assert.equal(source.includes('id="editContactForm"'), false);
 });
 
@@ -717,16 +724,19 @@ test("Bridge design tokens and shared primitives form one compact semantic syste
     "--color-positive: #3c6b3f",
     "--color-uncertain: #966a15",
     "--color-overdue: #ae3e2a",
+    "--color-brand-soft: #e1eeea",
+    "--color-overdue-soft: #f8e7e2",
     "--font-editorial:",
-    "--shadow-card:",
+    "--shadow-card: none",
     "--focus-ring-color:",
+    "--control-height: 48px",
     "--motion-duration-standard:",
   ]) assert.ok(styles.includes(token), `missing ${token}`);
-  for (const primitive of ["Button", "SurfaceCard", "MetricCard", "MetricGrid", "Avatar", "StatusBadge", "IconButton", "ProgressBar", "ListRow", "Chip", "Menu", "SectionHeader", "SegmentedControl", "Tabs", "InformationRow", "SearchField", "FilterControl", "DateNavigator", "EmptyState", "FeedbackState", "LoadingSkeleton", "MobileSheet", "ConfirmDialog", "ChartCard"]) {
+  for (const primitive of ["Button", "SurfaceCard", "MetricCard", "MetricGrid", "Avatar", "StatusBadge", "IconButton", "ProgressBar", "ListRow", "SettingsRow", "ToggleRow", "Chip", "Menu", "SectionHeader", "SegmentedControl", "Tabs", "InformationRow", "SearchField", "FilterControl", "DateNavigator", "EmptyState", "FeedbackState", "LoadingSkeleton", "MobileSheet", "ConfirmDialog", "ChartCard"]) {
     assert.ok(foundation.includes(`function ${primitive}`), `missing ${primitive}`);
   }
   assert.ok(styles.includes(".ui-editorial-heading"));
-  for (const selector of [".ui-metric-grid", ".ui-tabs", ".ui-information-row", ".ui-search-field", ".ui-filter-control", ".ui-date-navigator", ".ui-mobile-sheet", ".ui-confirm-dialog", ".ui-chart-card"]) {
+  for (const selector of [".ui-metric-grid", ".ui-tabs", ".ui-information-row", ".ui-settings-row", ".ui-toggle-row", ".ui-search-field", ".ui-filter-control", ".ui-date-navigator", ".ui-mobile-sheet", ".ui-confirm-dialog", ".ui-chart-card"]) {
     assert.ok(styles.includes(selector), `missing ${selector}`);
   }
   assert.ok(styles.includes(".ui-segmented > button[aria-pressed=\"true\"]"));
@@ -832,7 +842,7 @@ test("global Capture exposes every approved progressive composer", () => {
   assert.ok(styles.includes(".followup-status-control { display: none; }"));
   assert.ok(styles.includes(".analytics-range-edit:not([open]) { display: none; }"));
   assert.ok(styles.includes(".contacts-route .page-head .button.primary { background: var(--color-primary-action); }"));
-  assert.ok(styles.includes(".quick-create-modal .icon-button { color: var(--color-text-primary); }"));
+  assert.ok(styles.includes(".quick-create-modal .ui-icon-button { color: var(--color-text-primary); }"));
   assert.ok(styles.includes("@media (max-width: 350px)"));
   assert.ok(styles.includes(".nav-button { gap: 1px; font-size: 8px; letter-spacing: -.025em; }"));
 });

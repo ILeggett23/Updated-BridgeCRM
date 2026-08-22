@@ -30,18 +30,30 @@ test("navigation state follows the production page and contact mode", () => {
   assert.equal(foundation.navSelectionIndex(), 3);
   assert.match(foundation.BottomNavigation(), /data-open-pipeline[^>]+aria-label="Pipeline" aria-current="page"/);
   ui.quickCreateOpen = true;
+  assert.equal(foundation.navSelectionIndex(), 3);
+  assert.match(foundation.BottomNavigation(), /aria-expanded="true" aria-label="Capture what happened"/);
+  assert.doesNotMatch(foundation.BottomNavigation(), /aria-label="Capture what happened" aria-current="page"/);
+  ui.routedScreen = "person";
+  assert.equal(foundation.navSelectionIndex(), 1);
+  ui.routedScreen = "pipeline-stage";
+  assert.equal(foundation.navSelectionIndex(), 3);
+  ui.routedScreen = "analytics-detail";
+  assert.equal(foundation.navSelectionIndex(), 4);
+  ui.routedScreen = "settings";
   assert.equal(foundation.navSelectionIndex(), -1);
-  assert.match(foundation.BottomNavigation(), /aria-expanded="true" aria-label="Capture what happened" aria-current="page"/);
   ui.page = "dashboard";
   ui.contactMode = "list";
   ui.quickCreateOpen = false;
+  ui.routedScreen = "";
 });
 
 test("shared headers, screens, controls, and overlays retain reference semantics", () => {
   ui.routeDirection = "back";
   ui.routedScreen = "person";
+  ui.routeEntryMotion = "back";
   const screen = foundation.PresentationScreen("<p>Profile</p>", { title: "A & B", eyebrow: "Prospect" });
   assert.match(screen, /presentation-screen--back/);
+  assert.match(screen, /presentation-screen--enter presentation-screen--enter-back/);
   assert.match(screen, /data-presentation-screen="person"/);
   assert.match(screen, /data-presentation-back aria-label="Back"/);
   assert.match(screen, /<h1 id="presentationTitle" tabindex="-1">A &amp; B<\/h1>/);
@@ -52,4 +64,17 @@ test("shared headers, screens, controls, and overlays retain reference semantics
   assert.match(foundation.Tabs([{ label: "One", value: "one", active: true }]), /role="tablist"[\s\S]+aria-selected="true"/);
   assert.match(foundation.MobileSheet("Body", { title: "Filters" }), /role="dialog" aria-modal="true"[\s\S]+ui-mobile-sheet__handle/);
   assert.match(foundation.ConfirmDialog("Delete", "Are you sure?"), /role="alertdialog" aria-modal="true"/);
+  ui.routeEntryMotion = "";
+  assert.doesNotMatch(foundation.PresentationScreen("Body", { title:"Profile" }), /presentation-screen--enter/);
+  ui.routedScreen = "";
+});
+
+test("settings rows and toggles share the reference static grammar", () => {
+  const row = foundation.SettingsRow("Backup & export", { detail:"Download or restore data", end:"›" });
+  assert.match(row, /class="ui-settings-row"/);
+  assert.match(row, /<strong>Backup &amp; export<\/strong>/);
+  assert.match(row, /Download or restore data/);
+  const toggle = foundation.ToggleRow("Show relationship health", { detail:"Display scores", checked:true, name:"health" });
+  assert.match(toggle, /class="ui-toggle-row"/);
+  assert.match(toggle, /class="ui-toggle-input" type="checkbox" name="health" checked/);
 });

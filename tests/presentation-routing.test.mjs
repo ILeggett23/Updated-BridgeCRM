@@ -31,8 +31,12 @@ test("presentation navigation supports browser history, focus return, and scroll
   assert.match(app, /window\.scrollTo\(\{ top:Number\(event\.state\?\.bridgeScrollY\) \|\| 0/);
   assert.match(app, /bridgeFocusSelector/);
   assert.match(app, /focusPresentationEntry\(\)/);
-  assert.match(foundation, /presentation-screen--\$\{escapeHTML\(ui\.routeDirection \|\| "forward"\)\}/);
-  assert.match(styles, /\.presentation-screen--back \{ animation-name: ui-step-back-in; \}/);
+  assert.match(foundation, /ui\.routeEntryMotion \? ` presentation-screen--enter/);
+  assert.match(app, /lastRenderedPresentationKey/);
+  assert.match(app, /ui\.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey\?ui\.routeDirection:""/);
+  assert.match(styles, /\.presentation-screen--enter \{ animation: ui-step-forward-in 180ms/);
+  assert.match(styles, /\.presentation-screen--enter-back \{ animation-name: ui-step-back-in; \}/);
+  assert.match(styles, /\.page\.page-enter, \.page\.mode-enter \{ animation: none; \}/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]+\.presentation-screen \{ animation: none !important; \}/);
 });
 
@@ -58,7 +62,7 @@ test("invalid deep links fail safely and Settings subpages reuse existing contro
   assert.match(app, /ui\.routedError = personId \? "This person no longer exists\."/);
   assert.match(app, /ui\.routedError = placeId \? "This place no longer exists\."/);
   assert.match(app, /ui\.routedError = "That Settings section is not available\."/);
-  assert.match(app, /const SETTINGS_SECTIONS = \["root", "profile", "goals", "notifications", "preferences", "data", "account", "sessions", "backup", "privacy", "about"\]/);
+  assert.match(app, /const SETTINGS_SECTIONS = \["root", "profile", "goals", "notifications", "preferences", "health", "archive", "data", "account", "sessions", "backup", "privacy", "about"\]/);
   assert.match(app, /settingsNavigationGroup\("Profile"/);
   assert.match(app, /No account required/);
   assert.match(styles, /\.settings-nav-row \{/);

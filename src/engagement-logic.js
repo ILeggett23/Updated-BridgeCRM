@@ -2,6 +2,15 @@
   const PIPELINE_STAGES = new Set(["PQI", "QI/P", "FUP", "LA", "CNA", "Proposal", "Follow-Up", "Order Placed", "Active Customer"]);
   const pipelineEventStage = event => String(event?.toStage || event?.stage || "");
 
+  function todaySwipeDecision({ dx = 0, dy = 0, velocityX = 0, width = 0 } = {}) {
+    const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15;
+    if (!horizontal) return "";
+    const threshold = Math.min(120, Math.max(84, Math.max(0, Number(width) || 0) * .28));
+    const sameDirection = dx !== 0 && velocityX !== 0 && Math.sign(dx) === Math.sign(velocityX);
+    const flick = Math.abs(dx) >= 32 && Math.abs(velocityX) >= .55 && sameDirection;
+    return Math.abs(dx) >= threshold || flick ? (dx < 0 ? "done" : "reschedule") : "";
+  }
+
   const dayKey = value => {
     const date = value ? new Date(value) : new Date();
     if (Number.isNaN(date.getTime())) return "";
@@ -194,5 +203,5 @@
     return events;
   }
 
-  global.BridgeEngagement = Object.freeze({ achievementMetrics, dailyGoalMetrics, dayKey, definitions, dueReminderEvents, evaluateAchievements, normalizeExcludedDates, normalizeRestRules });
+  global.BridgeEngagement = Object.freeze({ achievementMetrics, dailyGoalMetrics, dayKey, definitions, dueReminderEvents, evaluateAchievements, normalizeExcludedDates, normalizeRestRules, todaySwipeDecision });
 })(globalThis);
