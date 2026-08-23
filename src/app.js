@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.7";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.9";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -336,6 +336,13 @@ let accountUnsubscribe = null;
 let presentationHistoryIndex = Number.isInteger(history.state?.bridgeIndex) ? history.state.bridgeIndex : 0;
 let scrollStateTimer = 0;
 let suppressPeopleSearchRouteOnce = false;
+let lockedDocumentScrollY = null;
+const tabIndicatorMetrics = new Map();
+
+const REFERENCE_MOTION = Object.freeze({
+  sheet: Object.freeze({ stiffness:420, damping:40, settleMs:460 }),
+  tab: Object.freeze({ stiffness:500, damping:40, settleMs:420 })
+});
 
 const PRESENTATION_QUERY_KEYS = ["screen", "person", "place", "stage", "section"];
 const SETTINGS_SECTIONS = ["root", "profile", "goals", "notifications", "preferences", "health", "archive", "data", "account", "sessions", "backup", "privacy", "about"];
@@ -370,8 +377,9 @@ function routeFocusSelector(element) {
   return "";
 }
 
+function currentDocumentScrollY() { return lockedDocumentScrollY ?? window.scrollY; }
 function writeCurrentHistoryState(extra = {}) {
-  history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:window.scrollY, ...extra }, "", presentationPath());
+  history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:currentDocumentScrollY(), ...extra }, "", presentationPath());
 }
 function cancelPendingScrollState() { if(scrollStateTimer){clearTimeout(scrollStateTimer);scrollStateTimer=0;} }
 function flushScrollHistoryState() { cancelPendingScrollState();writeCurrentHistoryState(); }
@@ -545,6 +553,7 @@ function initializePresentationHistory() {
     });
   });
   window.addEventListener("scroll", () => {
+    if(lockedDocumentScrollY!==null)return;
     if(scrollStateTimer)clearTimeout(scrollStateTimer);
     scrollStateTimer=setTimeout(()=>{scrollStateTimer=0;writeCurrentHistoryState();},120);
   }, { passive:true });
@@ -1651,7 +1660,7 @@ function render() {
   profileHeaderScrollCleanup=null;
   profileHeaderScrollSync=null;
   if (ui.sharedScorecard || ui.sharedScorecardLoading || ui.sharedScorecardError) {
-    document.body.classList.remove("modal-open");
+    syncDocumentScrollLock(false);
     app.innerHTML = renderSharedScorecard();
     bindSharedScorecardEvents();
     return;
@@ -1661,7 +1670,7 @@ function render() {
   const nextPresentationKey=ui.routedScreen?presentationPath():"";
   ui.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey?ui.routeDirection:"";
   const transientModalOpen=Boolean(ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
-  document.body.classList.toggle("modal-open",transientModalOpen);
+  syncDocumentScrollLock(transientModalOpen);
   app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}`;
   lastRenderedPresentationKey=nextPresentationKey;
   ui.routeEntryMotion="";
@@ -1847,6 +1856,191 @@ function shellProfile() {
   return `<div class="shell-profile"><span class="shell-profile__avatar" aria-hidden="true">${escapeHTML(initials(name))}</span><span class="shell-profile__copy"><strong>${escapeHTML(name)}</strong><small>${escapeHTML(accountSyncLabel())}</small></span></div>`;
 }
 function pageHead(title, subtitle, actions = "") { return `<header class="page-head"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="head-actions">${actions}</div></header>`; }
+
+function syncDocumentScrollLock(shouldLock) {
+  if (shouldLock) {
+    if (lockedDocumentScrollY !== null) return;
+    cancelPendingScrollState();
+    lockedDocumentScrollY = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.inset = `${-lockedDocumentScrollY}px 0 auto`;
+    document.body.style.width = "100%";
+    document.body.classList.add("modal-open");
+    document.documentElement.classList.add("modal-open");
+    return;
+  }
+  document.body.classList.remove("modal-open");
+  document.documentElement.classList.remove("modal-open");
+  if (lockedDocumentScrollY === null) return;
+  const restoreY = lockedDocumentScrollY;
+  const previousBehavior = document.documentElement.style.scrollBehavior;
+  lockedDocumentScrollY = null;
+  document.body.style.removeProperty("position");
+  document.body.style.removeProperty("inset");
+  document.body.style.removeProperty("width");
+  document.documentElement.style.scrollBehavior = "auto";
+  window.scrollTo(0, restoreY);
+  document.documentElement.style.scrollBehavior = previousBehavior;
+}
+
+function springProgress(seconds, { stiffness, damping }) {
+  const naturalFrequency=Math.sqrt(stiffness);
+  const dampingRatio=damping/(2*naturalFrequency);
+  if(dampingRatio<1){
+    const dampedFrequency=naturalFrequency*Math.sqrt(1-dampingRatio*dampingRatio);
+    const envelope=Math.exp(-dampingRatio*naturalFrequency*seconds);
+    return 1-envelope*(Math.cos(dampedFrequency*seconds)+(dampingRatio*naturalFrequency/dampedFrequency)*Math.sin(dampedFrequency*seconds));
+  }
+  return 1-Math.exp(-naturalFrequency*seconds)*(1+naturalFrequency*seconds);
+}
+
+function springKeyframes(from, to, motion=REFERENCE_MOTION.tab, steps=24) {
+  const durationSeconds=motion.settleMs/1000;
+  const values=[];
+  for(let index=0;index<=steps;index+=1){
+    const offset=index/steps;
+    const progress=index===steps?1:springProgress(durationSeconds*offset,motion);
+    values.push({value:from+(to-from)*progress,offset});
+  }
+  return values;
+}
+
+function bindTravelingTabIndicator(tablist) {
+  const indicator=$('.ui-tabs__indicator',tablist);
+  const active=$('[role="tab"][aria-selected="true"]',tablist);
+  if(!indicator||!active)return;
+  const computed=getComputedStyle(active);
+  const insetLeft=Number.parseFloat(computed.paddingLeft)||0;
+  const insetRight=Number.parseFloat(computed.paddingRight)||0;
+  const current={x:active.offsetLeft+insetLeft-tablist.scrollLeft,width:Math.max(2,active.offsetWidth-insetLeft-insetRight)};
+  const key=String(tablist.dataset.uiTabKey||tablist.getAttribute('aria-label')||'tabs');
+  const previous=tabIndicatorMetrics.get(key);
+  tabIndicatorMetrics.set(key,current);
+  indicator.style.width=`${current.width}px`;
+  indicator.style.transform=`translate3d(${current.x}px,0,0)`;
+  if(!previous||matchMedia('(prefers-reduced-motion: reduce)').matches||(Math.abs(previous.x-current.x)<.5&&Math.abs(previous.width-current.width)<.5))return;
+  if(typeof indicator.animate!=="function"){
+    indicator.style.transition='none';
+    indicator.style.width=`${previous.width}px`;
+    indicator.style.transform=`translate3d(${previous.x}px,0,0)`;
+    void indicator.offsetWidth;
+    indicator.style.transition='transform 420ms cubic-bezier(.16,1,.3,1), width 420ms cubic-bezier(.16,1,.3,1)';
+    requestAnimationFrame(()=>{indicator.style.width=`${current.width}px`;indicator.style.transform=`translate3d(${current.x}px,0,0)`;});
+    setTimeout(()=>indicator.style.removeProperty('transition'),REFERENCE_MOTION.tab.settleMs);
+    return;
+  }
+  indicator._bridgeAnimation?.cancel?.();
+  const xFrames=springKeyframes(previous.x,current.x);
+  const widthFrames=springKeyframes(previous.width,current.width);
+  indicator._bridgeAnimation=indicator.animate(xFrames.map((frame,index)=>({offset:frame.offset,transform:`translate3d(${frame.value}px,0,0)`,width:`${widthFrames[index].value}px`})),{duration:REFERENCE_MOTION.tab.settleMs,easing:'linear'});
+}
+
+function bindBottomSheetGesture(sheet, dismiss) {
+  if(!sheet||sheet.dataset.uiSheetBound==='true'||typeof dismiss!=="function")return;
+  sheet.dataset.uiSheetBound='true';
+  const backdrop=sheet.closest('[data-ui-sheet-backdrop]');
+  const scrollRoot=$('[data-ui-sheet-scroll]',sheet);
+  const dragRegion=$('[data-ui-sheet-drag-region]',sheet);
+  let gesture=null;
+  let snapAnimation=null;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clearDragStyles=()=>{
+    sheet.classList.remove('is-dragging','is-snapping','is-drag-dismissing');
+    backdrop?.classList.remove('is-dragging');
+    sheet.style.removeProperty('transform');
+    backdrop?.style.removeProperty('--sheet-drag-progress');
+  };
+  const snapBack=distance=>{
+    if(reduced){clearDragStyles();return;}
+    sheet.classList.remove('is-dragging');
+    sheet.classList.add('is-snapping');
+    backdrop?.classList.remove('is-dragging');
+    snapAnimation?.cancel?.();
+    if(typeof sheet.animate!=="function"){
+      sheet.style.transition='transform 460ms cubic-bezier(.16,1,.3,1)';
+      requestAnimationFrame(()=>{sheet.style.transform='translate3d(0,0,0)';});
+      setTimeout(()=>{sheet.style.removeProperty('transition');clearDragStyles();},REFERENCE_MOTION.sheet.settleMs);
+      return;
+    }
+    const frames=springKeyframes(Math.max(0,distance),0,REFERENCE_MOTION.sheet,28);
+    snapAnimation=sheet.animate(frames.map(frame=>({offset:frame.offset,transform:`translate3d(0,${frame.value}px,0)`})),{duration:REFERENCE_MOTION.sheet.settleMs,easing:'linear'});
+    snapAnimation.finished.catch(()=>{}).finally(clearDragStyles);
+  };
+  const dismissFrom=distance=>{
+    sheet.classList.remove('is-dragging');
+    sheet.classList.add('is-drag-dismissing');
+    backdrop?.classList.remove('is-dragging');
+    if(backdrop)backdrop.dataset.uiDraggedDismiss='true';
+    if(reduced){dismiss();return;}
+    const end=Math.max(innerHeight,sheet.getBoundingClientRect().height+40);
+    if(typeof sheet.animate!=="function"){
+      sheet.style.transition='transform 180ms cubic-bezier(.4,0,1,1)';
+      backdrop?.style.setProperty('transition','background-color 180ms ease-in, backdrop-filter 180ms ease-in');
+      requestAnimationFrame(()=>{sheet.style.transform=`translate3d(0,${end}px,0)`;if(backdrop){backdrop.style.backgroundColor='rgba(27,25,19,0)';backdrop.style.backdropFilter='blur(0px)';}});
+      setTimeout(dismiss,180);
+      return;
+    }
+    const sheetAnimation=sheet.animate([{transform:`translate3d(0,${Math.max(0,distance)}px,0)`},{transform:`translate3d(0,${end}px,0)`}],{duration:180,easing:'cubic-bezier(.4,0,1,1)',fill:'forwards'});
+    backdrop?.animate([{backgroundColor:'rgba(27,25,19,.35)',backdropFilter:'blur(2px)'},{backgroundColor:'rgba(27,25,19,0)',backdropFilter:'blur(0px)'}],{duration:180,easing:'ease-in',fill:'forwards'});
+    sheetAnimation.finished.catch(()=>{}).finally(dismiss);
+  };
+  const beginGesture=(id,x,y,target)=>{
+    const inDragRegion=Boolean(dragRegion?.contains(target));
+    const inScroll=Boolean(scrollRoot?.contains(target));
+    if(!inDragRegion&&!inScroll)return;
+    if(inScroll&&(scrollRoot?.scrollTop||0)>0)return;
+    if(!inDragRegion&&target.closest('button,a,input,select,textarea,[contenteditable="true"],summary,label'))return;
+    gesture={id,startX:x,startY:y,lastY:y,lastAt:performance.now(),distance:0,velocity:0,dragging:false};
+  };
+  const moveGesture=(id,x,y,at,preventDefault)=>{
+    if(!gesture||id!==gesture.id)return;
+    const dx=x-gesture.startX;
+    const dy=Math.max(0,y-gesture.startY);
+    if(!gesture.dragging){
+      if(Math.abs(dx)>Math.abs(dy)+8){gesture=null;return;}
+      if(dy<7)return;
+      if(scrollRoot&&(scrollRoot.scrollTop||0)>0){gesture=null;return;}
+      gesture.dragging=true;
+      sheet.classList.add('is-dragging');
+      backdrop?.classList.add('is-dragging');
+    }
+    preventDefault?.();
+    const elapsed=Math.max(1,at-gesture.lastAt);
+    gesture.velocity=(y-gesture.lastY)/elapsed;
+    gesture.lastY=y;
+    gesture.lastAt=at;
+    gesture.distance=dy;
+    const resisted=dy>innerHeight*.55?innerHeight*.55+(dy-innerHeight*.55)*.25:dy;
+    const progress=Math.min(1,resisted/Math.max(1,sheet.getBoundingClientRect().height));
+    sheet.style.transform=`translate3d(0,${resisted}px,0)`;
+    backdrop?.style.setProperty('--sheet-drag-progress',String(progress));
+  };
+  const finishGesture=id=>{
+    if(!gesture||id!==gesture.id)return;
+    const current=gesture;
+    gesture=null;
+    if(!current.dragging)return;
+    const threshold=Math.min(180,Math.max(96,sheet.getBoundingClientRect().height*.24));
+    if(current.distance>=threshold||(current.distance>=64&&current.velocity>.65))dismissFrom(current.distance);
+    else snapBack(current.distance);
+  };
+  const cancelGesture=id=>{if(!gesture||id!==gesture.id)return;const distance=gesture.distance;gesture=null;snapBack(distance);};
+  if('PointerEvent' in globalThis){
+    sheet.addEventListener('pointerdown',event=>{if(event.button!==0)return;beginGesture(event.pointerId,event.clientX,event.clientY,event.target);});
+    sheet.addEventListener('pointermove',event=>{moveGesture(event.pointerId,event.clientX,event.clientY,event.timeStamp,()=>{if(event.cancelable)event.preventDefault();try{sheet.setPointerCapture(event.pointerId);}catch{}});},{passive:false});
+    sheet.addEventListener('pointerup',event=>finishGesture(event.pointerId));
+    sheet.addEventListener('pointercancel',event=>cancelGesture(event.pointerId));
+  } else {
+    const mouseMove=event=>moveGesture('mouse',event.clientX,event.clientY,event.timeStamp,()=>event.preventDefault());
+    const mouseUp=()=>{window.removeEventListener('mousemove',mouseMove);window.removeEventListener('mouseup',mouseUp);finishGesture('mouse');};
+    sheet.addEventListener('mousedown',event=>{if(event.button!==0)return;beginGesture('mouse',event.clientX,event.clientY,event.target);if(gesture?.id==='mouse'){window.addEventListener('mousemove',mouseMove,{passive:false});window.addEventListener('mouseup',mouseUp);}});
+    sheet.addEventListener('touchstart',event=>{const touch=event.changedTouches[0];if(touch)beginGesture(touch.identifier,touch.clientX,touch.clientY,event.target);},{passive:true});
+    sheet.addEventListener('touchmove',event=>{const touch=Array.from(event.changedTouches).find(item=>item.identifier===gesture?.id);if(touch)moveGesture(touch.identifier,touch.clientX,touch.clientY,event.timeStamp,()=>{if(event.cancelable)event.preventDefault();});},{passive:false});
+    sheet.addEventListener('touchend',event=>{const touch=Array.from(event.changedTouches).find(item=>item.identifier===gesture?.id);if(touch)finishGesture(touch.identifier);});
+    sheet.addEventListener('touchcancel',event=>{const touch=Array.from(event.changedTouches).find(item=>item.identifier===gesture?.id);if(touch)cancelGesture(touch.identifier);});
+  }
+}
+
 function bindSharedPrimitiveEvents() {
   const focusable = root => $$('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', root).filter(element => !element.hidden);
   const closeDialog = dialog => {
@@ -1862,12 +2056,12 @@ function bindSharedPrimitiveEvents() {
         const shell=$('.bridge-pattern-shell');
         if(shell){shell.inert=false;shell.removeAttribute('aria-hidden');}
       }
-      if(!blockingModalOpen())document.body.classList.remove("modal-open");
+      if(!blockingModalOpen())syncDocumentScrollLock(false);
       if (returnFocus?.isConnected) returnFocus.focus();
       if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
       else if (ui.releaseNotesPending && !blockingModalOpen()) setTimeout(maybePresentReleaseNotes, 0);
     };
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
+    if (backdrop?.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
     else setTimeout(finish, 180);
   };
   const activateTab = (tab, moveFocus=false) => {
@@ -1877,12 +2071,14 @@ function bindSharedPrimitiveEvents() {
       const selected = candidate === tab;
       candidate.setAttribute("aria-selected", String(selected));
       candidate.tabIndex = selected ? 0 : -1;
-      const panel = document.getElementById(candidate.getAttribute("aria-controls"));
+      const panelId=candidate.getAttribute("aria-controls");
+      const panel = panelId ? document.getElementById(panelId) : null;
       if (panel) panel.hidden = !selected;
     });
     if (moveFocus) tab.focus();
   };
   $$('.ui-tabs').forEach(tablist => {
+    bindTravelingTabIndicator(tablist);
     tablist.addEventListener('click', event => { const tab=event.target.closest('[role="tab"]'); if(tab) activateTab(tab); });
     tablist.addEventListener('keydown', event => {
       const tabs=$$('[role="tab"]',tablist); const current=event.target.closest('[role="tab"]'); if(!current||!tabs.length)return;
@@ -1909,6 +2105,7 @@ function bindSharedPrimitiveEvents() {
     $$('[data-ui-dialog-close]',dialog).forEach(button=>button.addEventListener('click',event=>{event.preventDefault();event.stopImmediatePropagation();closeDialog(dialog);}));
     const backdrop=dialog.closest('[data-ui-dialog-backdrop]');
     backdrop?.addEventListener('click',event=>{if(event.target!==backdrop)return;event.preventDefault();event.stopImmediatePropagation();closeDialog(dialog);});
+    if(dialog.matches('[data-ui-sheet]'))bindBottomSheetGesture(dialog,()=>closeDialog(dialog));
   });
 }
 
@@ -2027,14 +2224,14 @@ function quickCreateModal() {
   if(ui.quickCreateMode==="action")content=quickCaptureActionForm(activeContacts);
   if(ui.quickCreateMode==="note")content=quickCaptureNoteForm(activeContacts);
   const titles={conversation:"Conversation",call:"Call",text:"Text",meeting:"Meeting",action:"Follow-up",contact:"Add person",note:"Other activity"};
-  return `<div class="modal-backdrop quick-create-backdrop capture-sheet-backdrop${continuing?" is-continuing":""}" id="quickCreateBackdrop"><section class="modal quick-create-modal capture-sheet${ui.quickCreateMode?" has-step":""}" role="dialog" aria-modal="true" aria-labelledby="quickCreateTitle"><header class="modal-head capture-sheet-head"><div><span class="eyebrow">Capture</span><h2 id="quickCreateTitle">${ui.quickCreateMode?titles[ui.quickCreateMode]:"What happened?"}</h2></div><button class="ui-icon-button" id="closeQuickCreate" type="button" aria-label="Close">${icons.close}</button></header><div class="modal-body capture-sheet-body${ui.quickCreateMode?" motion-step":""}">${content}</div></section></div>`;
+  return `<div class="modal-backdrop quick-create-backdrop capture-sheet-backdrop${continuing?" is-continuing":""}" id="quickCreateBackdrop" data-ui-sheet-backdrop><section class="modal quick-create-modal capture-sheet${ui.quickCreateMode?" has-step":""}" role="dialog" aria-modal="true" aria-labelledby="quickCreateTitle" data-ui-sheet><header class="modal-head capture-sheet-head" data-ui-sheet-drag-region><div><span class="eyebrow">Capture</span><h2 id="quickCreateTitle">${ui.quickCreateMode?titles[ui.quickCreateMode]:"What happened?"}</h2></div><button class="ui-icon-button" id="closeQuickCreate" type="button" aria-label="Close">${icons.close}</button></header><div class="modal-body capture-sheet-body${ui.quickCreateMode?" motion-step":""}" data-ui-sheet-scroll>${content}</div></section></div>`;
 }
 
 function closeQuickCreate() {
   ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";
   const backdrop=$('#quickCreateBackdrop');
   const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus();quickCreateFocusReturn=null;});};
-  if(!backdrop||matchMedia('(prefers-reduced-motion: reduce)').matches){finish();return;}
+  if(!backdrop||backdrop.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches){finish();return;}
   if(backdrop.classList.contains('is-closing'))return;
   backdrop.classList.add('is-closing');
   setTimeout(finish,180);
@@ -2092,6 +2289,7 @@ function setQuickCaptureStep(form,nextIndex,{direction='forward'}={}) {
 }
 function bindQuickCreateEvents() {
   const backgroundShell=$('.bridge-pattern-shell');if(backgroundShell){backgroundShell.inert=true;backgroundShell.setAttribute('aria-hidden','true');}
+  bindBottomSheetGesture($('.quick-create-modal'),closeQuickCreate);
   $('#closeQuickCreate')?.addEventListener('click',closeQuickCreate);$('#quickCreateBackdrop')?.addEventListener('click',event=>{if(event.target.id==='quickCreateBackdrop')closeQuickCreate();});
   $$('.quick-create-back').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=null;ui.quickCreateContactId="";render();}));
   $$('[data-quick-mode]').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=button.dataset.quickMode;ui.quickCreateContactId="";render();}));
@@ -2395,8 +2593,8 @@ function peopleSuggestionLabel(contact) { const conversation=latestConversationT
 function renderPeopleSearchSuggestions(contacts) { const recent=[...contacts].sort((left,right)=>new Date(peopleActivityAt(right)||0)-new Date(peopleActivityAt(left)||0)).slice(0,4); const places=state.places.map(place=>{const related=contacts.filter(contact=>placeMatchesContact(place,contact));const latest=related.map(peopleActivityAt).filter(Boolean).sort((left,right)=>new Date(right)-new Date(left))[0]||null;return {...place,related,latest};}).filter(place=>place.related.length).sort((left,right)=>new Date(right.latest||0)-new Date(left.latest||0)).slice(0,3); if(!recent.length)return EmptyState("No recent relationships", "People you add or interact with will appear here.",{className:"people-home__empty"}); return `<section class="people-suggestions" aria-label="Search suggestions"><div class="people-suggestions__section"><h2>Most recent</h2><div class="people-suggestions__list">${recent.map(contact=>`<button type="button" class="people-suggestion-row" data-contact-id="${escapeHTML(contact.id)}">${Avatar(contact.fullName,{size:"small"})}<span><strong>${escapeHTML(contact.fullName||"Unnamed contact")}</strong><small>${escapeHTML(peopleSuggestionLabel(contact))}</small></span>${icons.chevronRight}</button>`).join("")}</div></div>${places.length?`<div class="people-suggestions__section"><h2>Places</h2><div class="people-suggestions__list">${places.map(place=>`<button type="button" class="people-suggestion-row people-suggestion-row--place" data-place-detail-id="${escapeHTML(place.id)}"><span class="people-suggestion-row__icon" aria-hidden="true">${icons.location}</span><span><strong>${escapeHTML(place.name)}</strong><small>${place.related.length} ${place.related.length===1?"person":"people"}${place.latest?` · ${escapeHTML(peopleRelativeDate(place.latest))}`:""}</small></span>${icons.chevronRight}</button>`).join("")}</div></div>`:""}</section>`; }
 function peopleFilterStageOptions() { return [{value:"All",label:"All stages"},...Object.entries(PIPELINES).flatMap(([role,stages])=>stages.map(stage=>({value:`${role}:${stage}`,label:`${role} · ${stage}`})))]; }
 function peopleFilterPlaceOptions() { const saved=state.places.slice().sort((left,right)=>String(left.name).localeCompare(String(right.name))); const knownNames=new Set(saved.map(place=>String(place.name||"").trim().toLowerCase())); const legacyNames=[...new Set(state.contacts.map(contact=>String(contact.placeName||"").trim()).filter(Boolean).filter(name=>!knownNames.has(name.toLowerCase())))].sort((left,right)=>left.localeCompare(right)); return [{value:"All",label:"All places"},...saved.map(place=>({value:`id:${place.id}`,label:place.name})),...legacyNames.map(name=>({value:`name:${name.toLowerCase()}`,label:name}))]; }
-function peopleFilterSheet(resultCount) { const modes=["list","pipeline","places","network"]; return MobileSheet(`<div class="people-filter-sheet__content"><section><p class="people-filter-sheet__label">View</p>${SegmentedControl(modes.map(mode=>({label:mode[0].toUpperCase()+mode.slice(1),value:mode,active:ui.contactMode===mode,attributes:`data-people-contact-mode="${mode}"`})),{label:"People workspace",className:"people-filter-sheet__modes"})}</section><section><p class="people-filter-sheet__label">Sort</p>${FilterControl({id:"peopleSort",label:"Sort people",iconName:"sort",value:ui.sort,options:[{value:"recentContact",label:"Most recently added"},{value:"recentConversation",label:"Most recent conversation"},{value:"oldestConversation",label:"Oldest conversation"},{value:"followup",label:"Next follow-up"},{value:"interest",label:"Interest"}]})}</section><section><p class="people-filter-sheet__label">Relationship</p><div class="people-filter-sheet__chips">${["All Roles","Prospect","Customer","Team"].map(role=>Chip(role === "All Roles" ? "All" : role,{active:ui.roleFilter===role,attributes:`data-people-role="${role}"`})).join("")}</div>${FilterControl({id:"peoplePipelineStage",label:"Exact pipeline stage",value:ui.pipelineStageFilter,options:peopleFilterStageOptions()})}${relationshipFilterSelect("peopleInterest","Interest",["All",...INTERESTS],ui.interestFilter)}${relationshipFilterSelect("peopleJudgement","Judgment",["All","Good Fit","Not Good Fit"],ui.judgementFilter)}${FilterControl({id:"peoplePlace",label:"Place",value:ui.placeFilter,options:peopleFilterPlaceOptions()})}</section><section><p class="people-filter-sheet__label">Relationship signals</p>${relationshipFilterSelect("healthBandFilter","Health",["All","Strong","Steady","Needs Attention","At Risk","Building Baseline"],ui.healthBandFilter)}${relationshipFilterSelect("healthTrendFilter","Trend",["All","Improving","Steady","Declining"],ui.healthTrendFilter)}${relationshipFilterSelect("actionCoverageFilter","Next action",["All","Overdue","Missing next action","Covered"],ui.actionCoverageFilter)}${relationshipFilterSelect("peopleFollowUp","Follow-up status",["All","Overdue","Due today","Scheduled","No follow-up"],ui.followUpFilter)}${relationshipFilterSelect("recencyFilter","Last interaction",["All","Within 7 days","Within 14 days","Within 30 days","60+ days"],ui.recencyFilter)}</section><section><p class="people-filter-sheet__label">Visibility</p>${FilterControl({id:"peopleVisibility",label:"Contact visibility",iconName:"archive",value:ui.visibilityFilter,options:["Active","No-Go","Archived","All"]})}</section><section><p class="people-filter-sheet__label">Conversation date</p><div class="people-filter-sheet__dates">${field("From",`<input id="conversationFrom" type="date" value="${ui.conversationFrom}">`)}${field("To",`<input id="conversationTo" type="date" value="${ui.conversationTo}">`)}</div></section><footer><button type="button" class="button subtle" data-people-reset>Clear all</button><button type="button" class="button primary" data-people-filter-close>Show ${resultCount} ${resultCount===1?"person":"people"}</button></footer></div>`,{title:"Filter people",id:"peopleFilterSheet",className:"people-filter-sheet",closeAttributes:"data-people-filter-close"}); }
-function relationshipFilterSelect(id,label,options,value){return `<label class="field"><span>${label}</span><span class="select-wrap"><select id="${id}">${options.map(option=>`<option ${option===value?"selected":""}>${option}</option>`).join("")}</select><span class="select-chevron">${icons.chevronDown}</span></span></label>`;}
+function peopleFilterSheet(resultCount) { const modes=["list","pipeline","places","network"]; const footer=`<div class="people-filter-sheet__actions"><button type="button" class="button subtle" data-people-reset>Clear all</button><button type="button" class="button primary" data-people-filter-close data-ui-dialog-close>Show ${resultCount} ${resultCount===1?"person":"people"}</button></div>`; return MobileSheet(`<div class="people-filter-sheet__content"><section><p class="people-filter-sheet__label">View</p>${SegmentedControl(modes.map(mode=>({label:mode[0].toUpperCase()+mode.slice(1),value:mode,active:ui.contactMode===mode,attributes:`data-people-contact-mode="${mode}"`})),{label:"People workspace",className:"people-filter-sheet__modes"})}</section><section><p class="people-filter-sheet__label">Sort</p>${FilterControl({id:"peopleSort",label:"Sort people",iconName:"sort",value:ui.sort,options:[{value:"recentContact",label:"Most recently added"},{value:"recentConversation",label:"Most recent conversation"},{value:"oldestConversation",label:"Oldest conversation"},{value:"followup",label:"Next follow-up"},{value:"interest",label:"Interest"}]})}</section><section><p class="people-filter-sheet__label">Relationship</p><div class="people-filter-sheet__chips">${["All Roles","Prospect","Customer","Team"].map(role=>Chip(role === "All Roles" ? "All" : role,{active:ui.roleFilter===role,attributes:`data-people-role="${role}"`})).join("")}</div>${FilterControl({id:"peoplePipelineStage",label:"Exact pipeline stage",value:ui.pipelineStageFilter,options:peopleFilterStageOptions()})}${relationshipFilterSelect("peopleInterest","Interest",["All",...INTERESTS],ui.interestFilter)}${relationshipFilterSelect("peopleJudgement","Judgment",["All","Good Fit","Not Good Fit"],ui.judgementFilter)}${FilterControl({id:"peoplePlace",label:"Place",value:ui.placeFilter,options:peopleFilterPlaceOptions()})}</section><section><p class="people-filter-sheet__label">Relationship signals</p>${relationshipFilterSelect("healthBandFilter","Health",["All","Strong","Steady","Needs Attention","At Risk","Building Baseline"],ui.healthBandFilter)}${relationshipFilterSelect("healthTrendFilter","Trend",["All","Improving","Steady","Declining"],ui.healthTrendFilter)}${relationshipFilterSelect("actionCoverageFilter","Next action",["All","Overdue","Missing next action","Covered"],ui.actionCoverageFilter)}${relationshipFilterSelect("peopleFollowUp","Follow-up status",["All","Overdue","Due today","Scheduled","No follow-up"],ui.followUpFilter)}${relationshipFilterSelect("recencyFilter","Last interaction",["All","Within 7 days","Within 14 days","Within 30 days","60+ days"],ui.recencyFilter)}</section><section><p class="people-filter-sheet__label">Visibility</p>${FilterControl({id:"peopleVisibility",label:"Contact visibility",iconName:"archive",value:ui.visibilityFilter,options:["Active","No-Go","Archived","All"]})}</section><section><p class="people-filter-sheet__label">Conversation date</p><div class="people-filter-sheet__dates">${field("From",`<input id="conversationFrom" type="date" value="${ui.conversationFrom}">`)}${field("To",`<input id="conversationTo" type="date" value="${ui.conversationTo}">`)}</div></section></div>`,{title:"Filter people",id:"peopleFilterSheet",className:"people-filter-sheet",closeAttributes:"data-people-filter-close",footer}); }
+function relationshipFilterSelect(id,label,options,value){return `<div class="people-filter-sheet__field"><span>${escapeHTML(label)}</span>${FilterControl({id,label,value,options})}</div>`;}
 function relationshipActionState(contact, now = new Date()) { const scheduled=(contact.followUps||[]).filter(isScheduledFollowUp); if(scheduled.some(item=>new Date(item.dueDate)<now))return "Overdue"; return scheduled.length?"Covered":"Missing next action"; }
 function contactRecencyDays(contact, now = new Date()) { const latest=latestConversationTime(contact); if(!latest)return Number.POSITIVE_INFINITY; return Math.max(0,calendarDaysBetween(now,latest)); }
 function relationshipTrendDirection(score) { return String(score?.trend?.direction || score?.trend || "steady").toLowerCase(); }
@@ -2669,7 +2867,8 @@ function followUpRescheduleSheet(){
   if(!record){ui.actionEditId=null;return "";}
   const {contact,followUp}=record;
   const name=String(contact.fullName||"this relationship");
-  return MobileSheet(`<form class="action-edit-form followup-reschedule-sheet__form" data-followup-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}"><p>Update the next step for ${escapeHTML(name)}. The original follow-up stays connected to this relationship and its history.</p>${field("Due date and time",`<input name="dueDate" type="datetime-local" value="${dateTimeLocalValue(followUp.dueDate)}" required>`)}${field("Reason or note",`<input name="note" value="${escapeHTML(followUp.note||"Follow up")}" required>`)}<div class="form-actions"><button class="button subtle cancel-action-edit" type="button">Cancel</button><button class="button primary" type="submit">Save changes</button></div><button class="followup-reschedule-sheet__delete" type="button" data-followup-delete data-followup-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}">${icons.trash}<span>Delete follow-up</span></button></form>`,{title:"Reschedule follow-up",id:"followUpRescheduleSheet",className:"followup-reschedule-sheet"});
+  const footer=`<div class="followup-reschedule-sheet__actions"><button class="button subtle cancel-action-edit" type="button" data-ui-dialog-close>Cancel</button><button class="button primary" type="submit" form="followUpRescheduleForm">Save changes</button></div>`;
+  return MobileSheet(`<form id="followUpRescheduleForm" class="action-edit-form followup-reschedule-sheet__form" data-followup-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}"><p>Update the next step for ${escapeHTML(name)}. This change remains part of the relationship's history.</p>${field("Due date and time",`<input name="dueDate" type="datetime-local" value="${dateTimeLocalValue(followUp.dueDate)}" required>`)}${field("Reason or note",`<input name="note" value="${escapeHTML(followUp.note||"Follow up")}" required>`)}<button class="followup-reschedule-sheet__delete" type="button" data-followup-delete data-followup-contact-id="${escapeHTML(contact.id)}" data-follow-up-id="${escapeHTML(followUp.id)}">${icons.trash}<span>Delete follow-up</span></button></form>`,{title:"Reschedule follow-up",id:"followUpRescheduleSheet",className:"followup-reschedule-sheet",footer});
 }
 
 function analyticsDateControls() {
@@ -2723,13 +2922,13 @@ function scorecardShareModal({ routed=false }={}) {
 function analyticsPeriodEyebrow() { return ({ day:"This day", week:"This week", month:"This month", custom:"Selected period" })[ui.analyticsRange] || "Selected period"; }
 function analyticsCountLabel(value, singular, plural = `${singular}s`) { return `${value} ${value === 1 ? singular : plural}`; }
 function analyticsPeriodControls(range) {
-  const periodControl=`<div class="ui-segmented analytics-segmented" role="radiogroup" aria-label="Analytics period">${["day","week","month","custom"].map(mode=>`<button type="button" role="radio" data-range="${mode}" class="${ui.analyticsRange===mode?"active":""}" aria-checked="${ui.analyticsRange===mode}" aria-pressed="${ui.analyticsRange===mode}" tabindex="${ui.analyticsRange===mode?"0":"-1"}">${mode[0].toUpperCase()+mode.slice(1)}</button>`).join("")}</div>`;
+  const periodControl=Tabs(["day","week","month","custom"].map(mode=>({label:mode[0].toUpperCase()+mode.slice(1),value:mode,active:ui.analyticsRange===mode,attributes:`data-range="${mode}"`})),{label:"Analytics period",className:"analytics-segmented",idPrefix:"analytics-range"});
   const dateNavigator=DateNavigator(range.label,{className:"analytics-date-navigator",previousClassName:"analytics-period-previous",nextClassName:"analytics-period-next",previousAttributes:`aria-label="Previous ${ui.analyticsRange} period"`,nextAttributes:`aria-label="Next ${ui.analyticsRange} period"`});
   return `<details class="insights-period" ${ui.analyticsRange==="custom"?"open":""}><summary><span>Period</span><strong>${escapeHTML(range.label)}</strong>${icons.chevronDown}</summary><div class="insights-period__body">${periodControl}${dateNavigator}<div class="analytics-period-detail">${analyticsDateControls()}</div></div></details>`;
 }
 function analyticsDetailPeriodControls(range) {
   const labels={day:"Day",week:"Week",month:"Month",custom:"Custom"};
-  const tabs=`<div class="analytics-detail-tabs" role="radiogroup" aria-label="Analytics period">${Object.entries(labels).map(([mode,label])=>`<button type="button" role="radio" data-range="${mode}" class="${ui.analyticsRange===mode?"active":""}" aria-checked="${ui.analyticsRange===mode}" aria-pressed="${ui.analyticsRange===mode}" tabindex="${ui.analyticsRange===mode?"0":"-1"}">${label}</button>`).join("")}</div>`;
+  const tabs=Tabs(Object.entries(labels).map(([mode,label])=>({label,value:mode,active:ui.analyticsRange===mode,attributes:`data-range="${mode}"`})),{label:"Analytics period",className:"analytics-detail-tabs",idPrefix:"analytics-detail-range"});
   const navigator=DateNavigator(range.label,{className:"analytics-date-navigator",previousClassName:"analytics-period-previous",nextClassName:"analytics-period-next",previousAttributes:`aria-label="Previous ${ui.analyticsRange} period"`,nextAttributes:`aria-label="Next ${ui.analyticsRange} period"`});
   return `<div class="analytics-detail-period">${tabs}<details class="analytics-detail-range" ${ui.analyticsRange==="custom"?"open":""}><summary><span>${escapeHTML(range.label)}</span>${icons.chevronDown}</summary><div>${navigator}<div class="analytics-period-detail">${analyticsDateControls()}</div></div></details></div>`;
 }
@@ -2944,7 +3143,7 @@ function settingsProfileContent(s){
 function settingsGoalsContent(s,metrics,excludedDates,restRules,restFrequency){
   const goals=`<section class="settings-reference-section settings-goal-targets"><p class="settings-goals-intro">Goals exist to keep you talking to people. They stay quiet in the app — a single line on Today — so relationships stay the main event.</p><h2>Targets</h2><div class="settings-reference-fields">${field("Daily conversations",`<input name="dailyGoal" type="number" min="1" max="100" inputmode="numeric" value="${s.dailyGoal}">`)}${field("Weekly conversations",`<input name="weeklyGoal" type="number" min="1" max="500" inputmode="numeric" value="${s.weeklyGoal}">`)}${field("Monthly conversations",`<input name="monthlyGoal" type="number" min="1" max="2000" inputmode="numeric" value="${s.monthlyGoal}">`)}</div></section>`;
   const streak=`<section class="settings-reference-section settings-goal-streak"><h2>Streak</h2><div class="settings-reference-rule"><strong>A day counts when the goal is met</strong><small>Rest days preserve continuity without adding a completed day.</small></div><details class="settings-rest-disclosure"><summary><span><strong>Rest days</strong><small>${excludedDates.length+restRules.length?`${excludedDates.length+restRules.length} protected schedule${excludedDates.length+restRules.length===1?"":"s"}`:"Add one-time or repeating rest days"}</small></span>${icons.chevronDown}</summary><div>${settingsRestControls(excludedDates,restRules,restFrequency,metrics.todayExcluded)}</div></details></section>`;
-  return `${goals}${streak}<button class="settings-linked-action" type="button" data-open-achievements><span><strong>Achievements</strong><small>View unlocked milestones and progress.</small></span><span class="settings-linked-action__end">View${icons.chevronRight}</span></button>`;
+  return `${goals}${streak}`;
 }
 function settingsPreferencesContent(s){
   const workflow=`${settingsRow("Default follow-up",`<select name="defaultFollowUpDays"><option value="1" ${s.defaultFollowUpDays==1?"selected":""}>1 day</option><option value="2" ${s.defaultFollowUpDays==2?"selected":""}>2 days</option><option value="7" ${s.defaultFollowUpDays==7?"selected":""}>1 week</option></select>`)}${settingsRow("Week starts",`<select name="weekStart"><option value="0" ${s.weekStart==0?"selected":""}>Sunday</option><option value="1" ${s.weekStart==1?"selected":""}>Monday</option></select>`)}`;
@@ -3230,7 +3429,7 @@ function communicationLogModal(id) {
   const relationship=`<section class="capture-detail-person">${Avatar(c.fullName)}<span><strong>${escapeHTML(c.fullName)}</strong><small>${escapeHTML(current?`${c.role} · ${current}`:`${c.role} · No stage`)}</small></span></section>`;
   const activity=`<section class="capture-detail-section"><h3>What happened?</h3><div class="capture-detail-fields">${field("Date and time",`<input name="conversationDate" type="datetime-local" value="${dateTimeLocalValue(existing?.conversationDate||ui.communicationStartedAt||new Date())}" required>`)}${field("Direction",`<select name="direction">${COMMUNICATION_DIRECTIONS.map(direction=>`<option ${existing?.direction===direction?"selected":""}>${direction}</option>`).join("")}</select>`)}${type==="Call"?field("Duration (minutes)",`<input name="durationMinutes" type="number" min="0" step="1" inputmode="numeric" placeholder="Optional" value="${existing?.durationMinutes||""}">`):""}${field("Outcome",`<select name="outcome">${outcomes.map(outcome=>`<option ${selectedOutcome===outcome?"selected":""}>${outcome}</option>`).join("")}</select>`)}${field(type==="Text"?"What did you discuss?":"What did you talk about?",`<textarea name="notes" placeholder="Add ${type.toLowerCase()} notes">${escapeHTML(existing?.notes||"")}</textarea>`)}</div></section>`;
   const next=`<section class="capture-detail-section"><h3>What's next?</h3><div class="capture-detail-fields">${field("Follow-up date and time",'<input name="followUpDate" type="datetime-local">')}</div><details class="quick-capture-advanced"><summary><span>Pipeline and activity details</span>${icons.chevronDown}</summary><div>${field("Standalone activity",'<select name="standaloneActivity"><option value="">No change</option><option>MSA</option><option>DTM</option></select>')}${field("Current pipeline stage",`<div class="read-only-control">${escapeHTML(current||"No stage")}</div>`)}${field("Move to stage",`<select name="pipelineStage"><option value="">No change</option><option value="__clear">Clear pipeline stage</option>${PIPELINES[c.role].map(stage=>`<option value="${escapeHTML(stage)}">${escapeHTML(stage)}</option>`).join("")}</select>`)}</div></details></section>`;
-  return `<div class="modal-backdrop call-log-backdrop capture-sheet-backdrop" id="communicationLogBackdrop"><section class="modal call-log-modal capture-detail-sheet capture-sheet" role="dialog" aria-modal="true" aria-labelledby="communicationLogTitle"><header class="modal-head capture-detail-head capture-sheet-head"><div><span class="eyebrow">Capture</span><h2 id="communicationLogTitle">${escapeHTML(heading)}</h2></div><button class="ui-icon-button close-communication-log" aria-label="Close">${icons.close}</button></header><div class="modal-body capture-sheet-body"><form id="communicationLogForm" class="call-log-form capture-detail-form"><input type="hidden" name="communicationType" value="${type}">${relationship}${activity}${next}<p class="capture-detail-note">${escapeHTML(captureNote)}</p><div class="form-actions capture-detail-actions"><button class="button close-communication-log" type="button">Cancel</button><button class="button primary" type="submit">${icons.check}${existing?"Save changes":`Save ${type.toLowerCase()}`}</button></div></form></div></section></div>`;
+  return `<div class="modal-backdrop call-log-backdrop capture-sheet-backdrop" id="communicationLogBackdrop" data-ui-sheet-backdrop><section class="modal call-log-modal capture-detail-sheet capture-sheet" role="dialog" aria-modal="true" aria-labelledby="communicationLogTitle" data-ui-sheet><header class="modal-head capture-detail-head capture-sheet-head" data-ui-sheet-drag-region><div><span class="eyebrow">Capture</span><h2 id="communicationLogTitle">${escapeHTML(heading)}</h2></div><button class="ui-icon-button close-communication-log" aria-label="Close">${icons.close}</button></header><div class="modal-body capture-sheet-body" data-ui-sheet-scroll><form id="communicationLogForm" class="call-log-form capture-detail-form"><input type="hidden" name="communicationType" value="${type}">${relationship}${activity}${next}<p class="capture-detail-note">${escapeHTML(captureNote)}</p><div class="form-actions capture-detail-actions"><button class="button close-communication-log" type="button">Cancel</button><button class="button primary" type="submit">${icons.check}${existing?"Save changes":`Save ${type.toLowerCase()}`}</button></div></form></div></section></div>`;
 }
 
 function clearContactEdit() { ui.contactEditing=false;ui.contactEditDirty=false; }
@@ -4255,6 +4454,7 @@ function bindActivityHistoryEvents(){
 function bindCommunicationLogEvents(){
   const c=state.contacts.find(contact=>contact.id===ui.communicationContactId);if(!c)return;
   const close=()=>{ui.communicationContactId=null;ui.communicationStartedAt=null;ui.communicationLogId=null;clearPendingCommunication();render();};
+  bindBottomSheetGesture($('.call-log-modal'),close);
   $$('.close-communication-log').forEach(button=>button.addEventListener('click',close));
   $('#communicationLogBackdrop')?.addEventListener('click',event=>{if(event.target.id==='communicationLogBackdrop')close();});
   $('#communicationLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const occurredAt=new Date(String(f.get('conversationDate'))).toISOString();const communicationType=String(f.get('communicationType'))==='Text'?'Text':'Call';const duration=communicationType==='Call'?(Number(f.get('durationMinutes'))||null):null;const followUp=String(f.get('followUpDate')||'');let log=c.conversations.find(item=>item.id===ui.communicationLogId);const isNew=!log;if(!log){log={id:uid(),createdAt:nowISO(),isCountedConversation:false};c.conversations.push(log);}Object.assign(log,{type:communicationType==='Text'?'Text Message':'Call',communicationType,direction:String(f.get('direction')||'Outgoing'),outcome:String(f.get('outcome')),durationMinutes:duration,interestLevel:c.interestLevel,notes:String(f.get('notes')||'').trim(),conversationDate:occurredAt,isCountedConversation:false,followUpCreated:Boolean(log.followUpCreated||followUp)});if(followUp){replaceScheduledFollowUp(c,new Date(followUp).toISOString(),`${communicationType} follow-up`,{sourceCommunicationId:log.id});}const activity=String(f.get('standaloneActivity')||'');if(['MSA','DTM'].includes(activity)&&!c.stages[activity]){c.stages[activity]=true;c.stageDates[activity]=occurredAt;c.stageEvents.push({id:uid(),stage:activity,fromStage:"",toStage:activity,occurredAt,source:"communication"});}const nextStage=String(f.get('pipelineStage')||'');if(nextStage==='__clear')setPipelineStage(c,'',occurredAt,'communication');else if(PIPELINES[c.role].includes(nextStage))setPipelineStage(c,nextStage,occurredAt,'communication');c.updatedAt=nowISO();ui.communicationContactId=null;ui.communicationStartedAt=null;ui.communicationLogId=null;clearPendingCommunication();queueSave(isNew?`${communicationType} logged`:'Communication log updated');render();});

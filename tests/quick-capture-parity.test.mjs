@@ -109,7 +109,7 @@ test("Wizard presentation supports safe areas, reduced motion, and touch-sized c
   for(const contract of [
     ".quick-capture-wizard__progress",
     ".quick-capture-wizard__footer",
-    "calc(var(--space-5) + var(--safe-bottom))",
+    "calc(12px + var(--safe-bottom))",
     "min-height: 50px",
     "@media (prefers-reduced-motion: reduce)",
     ".quick-capture-picker__row",

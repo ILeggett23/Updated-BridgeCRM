@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.7",
-    assetVersion: "v1.3.7",
+    version: "1.3.9",
+    assetVersion: "v1.3.9",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "messages",
-        title: "Clearer capture and follow-up",
-        description: "Person selection, timeline events, cadence controls, and Capture sheets now stay clear and consistent on mobile."
+        title: "Sheets that stay in your hand",
+        description: "Capture, filters, and follow-up sheets now lock the page behind them, scroll independently, and dismiss with a downward swipe."
       }),
       Object.freeze({
         icon: "chart",
-        title: "Reliable activity charts",
-        description: "Day and Month analytics now handle empty, single-value, and dense activity ranges without oversized bars or overlapping labels."
+        title: "Motion that connects the app",
+        description: "Pipeline, follow-up, analytics, and navigation indicators now travel between selections with the same restrained spring motion."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Mobile forms that fit",
-        description: "Notifications, Goals, Personal Info, Edit Person, and Log Text now share accessible controls, safe-area spacing, and product-facing copy."
+        title: "Cleaner mobile actions",
+        description: "Filter and reschedule actions stay above the safe area, while the redundant Settings achievements entry has been removed."
       })
     ])
   });

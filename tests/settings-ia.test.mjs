@@ -18,6 +18,14 @@ test("Settings root has one canonical destination per concern",()=>{
   assert.doesNotMatch(rootContent,/Streak & achievements|Conversation reminders|Follow-up reminders/);
 });
 
+test("Settings does not duplicate the Achievements entry",()=>{
+  const goals=between("function settingsGoalsContent","function settingsPreferencesContent");
+  assert.doesNotMatch(goals,/data-open-achievements|View unlocked milestones|settings-linked-action/);
+  const progress=between("function renderGoalsScreen","function renderPresentationScreen");
+  assert.match(progress,/goals-achievement-list/);
+  assert.match(app,/data-open-goals/);
+});
+
 test("Settings ownership separates workflow, health, archive, data, and backup",()=>{
   const workflow=between("function settingsPreferencesContent","function settingsHealthContent");
   const health=between("function settingsHealthContent","function settingsArchiveContent");

@@ -19,11 +19,12 @@ test("Log Text follows the intended mobile field order and one-column breakpoint
 });
 
 test("capture detail sheet owns scrolling, safe areas, and visible actions",()=>{
-  assert.match(styles,/\.capture-detail-sheet \{[^}]*height: min\(92dvh, 780px\);[^}]*overflow-y: auto;[^}]*scroll-padding-bottom:/);
+  assert.match(styles,/\.capture-detail-sheet \{[^}]*height: min\(92dvh, 780px\);[^}]*display: flex;[^}]*overflow: hidden/);
+  assert.match(styles,/\.capture-detail-sheet \.capture-sheet-body \{[^}]*flex: 1 1 auto;[^}]*scroll-padding-bottom:/);
   assert.match(styles,/\.capture-detail-actions \{[^}]*position: sticky; bottom: 0;/);
   assert.match(styles,/\.capture-detail-sheet \.modal-head \.ui-icon-button \{[^}]*border: 0;[^}]*border-radius: 50%/);
   assert.match(app,/transientModalOpen=Boolean\([^\n]*ui\.communicationContactId/);
-  assert.match(styles,/body\.modal-open \{ overflow: hidden; \}/);
+  assert.match(styles,/html\.modal-open, body\.modal-open \{ overflow: hidden; overscroll-behavior: none; \}/);
 });
 
 test("Cancel and Close discard while Save retains production timeline and analytics writes",()=>{

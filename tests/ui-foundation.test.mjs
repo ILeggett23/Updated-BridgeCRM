@@ -61,8 +61,8 @@ test("shared headers, screens, controls, and overlays retain reference semantics
   assert.match(foundation.Button("Save", { tone: "primary", size: "large" }), /ui-button--primary ui-button--large/);
   assert.match(foundation.Avatar("Jasmine Dean"), />JD<\/span>/);
   assert.match(foundation.ProgressBar(3, { max: 5 }), /aria-valuenow="3"[\s\S]+--progress-value:60%/);
-  assert.match(foundation.Tabs([{ label: "One", value: "one", active: true }]), /role="tablist"[\s\S]+aria-selected="true"/);
-  assert.match(foundation.MobileSheet("Body", { title: "Filters" }), /role="dialog" aria-modal="true"[\s\S]+ui-mobile-sheet__handle/);
+  assert.match(foundation.Tabs([{ label: "One", value: "one", active: true }]), /role="tablist"[\s\S]+ui-tabs__indicator[\s\S]+aria-selected="true"/);
+  assert.match(foundation.MobileSheet("Body", { title: "Filters" }), /data-ui-sheet-backdrop[\s\S]+role="dialog" aria-modal="true" data-ui-dialog data-ui-sheet[\s\S]+data-ui-sheet-handle[\s\S]+data-ui-sheet-scroll/);
   assert.match(foundation.ConfirmDialog("Delete", "Are you sure?"), /role="alertdialog" aria-modal="true"/);
   ui.routeEntryMotion = "";
   assert.doesNotMatch(foundation.PresentationScreen("Body", { title:"Profile" }), /presentation-screen--enter/);

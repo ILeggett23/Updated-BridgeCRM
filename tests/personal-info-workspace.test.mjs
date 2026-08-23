@@ -31,7 +31,7 @@ test("Personal Info saves only its dedicated field and guards unsaved navigation
 });
 
 test("Personal Info form remains usable above the keyboard and bottom navigation",()=>{
-  assert.match(styles,/\.personal-info-workspace textarea \{[^}]*min-height: 188px/);
-  assert.match(styles,/\.personal-info-actions \{[^}]*position: sticky;[^}]*bottom: calc\(var\(--nav-height\)/);
+  assert.match(styles,/\.relationship-personal-info \.field textarea \{ min-height: 188px; \}/);
+  assert.match(styles,/\.relationship-personal-info \.personal-info-actions \{ position: static; inset: auto;/);
   assert.match(styles,/\.personal-info-actions \.button \{ width: 100%; min-height: 50px; \}/);
 });

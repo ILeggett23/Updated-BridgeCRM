@@ -60,7 +60,8 @@ test("goals and notification screens disclose production capability honestly", (
   assert.ok(app.includes("Finish turning on reminders"));
   assert.equal(app.includes("Stalled-relationship and weekly-recap notifications are not shown"), false);
   assert.equal(app.includes("Progress uses existing production calculations"), false);
-  assert.ok(app.includes("View unlocked milestones and progress"));
+  assert.equal(app.includes("View unlocked milestones and progress"), false);
+  assert.match(app,/data-open-goals[\s\S]*icons\.fire|icons\.fire[\s\S]*data-open-goals/);
   assert.match(app,/next\.dailyGoal=Math\.min\(100,Math\.max\(1,/);
   assert.match(app,/next\.weeklyGoal=Math\.min\(500,Math\.max\(1,/);
   assert.match(app,/next\.monthlyGoal=Math\.min\(2000,Math\.max\(1,/);
