@@ -1,8 +1,8 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.13",
-    assetVersion: "v1.3.13",
+    version: "1.3.14",
+    assetVersion: "v1.3.14",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
@@ -17,8 +17,8 @@
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Capture matches the preview",
-        description: "The short Capture chooser returns to the Magic Patterns 16-pixel finish beneath its final row."
+        title: "Updates that reach Safari",
+        description: "The PWA now loads current shell assets first and falls back to its offline cache only when the network is unavailable."
       })
     ])
   });

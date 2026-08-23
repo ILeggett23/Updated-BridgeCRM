@@ -6,6 +6,7 @@ const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const page = await readFile(new URL("../src/index.html", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 const foundation = await readFile(new URL("../src/ui-foundation.js", import.meta.url), "utf8");
+const worker = await readFile(new URL("../src/sw.js", import.meta.url), "utf8");
 
 test("mobile viewport and controls disable accidental Safari zoom globally", () => {
   assert.match(page, /width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover/);
@@ -68,4 +69,12 @@ test("What's New reuses Bridge surfaces, typography, accent, and compact geometr
   assert.match(styles, /\.release-notes-header h2 \{[^}]*font-family: var\(--font-editorial\)[^}]*font-size: 26px/);
   assert.match(styles, /\.release-note-icon \{[^}]*background: var\(--surface-brand-subtle\)/);
   assert.match(styles, /\.release-notes-actions \.button\.primary \{[^}]*background: var\(--color-brand\)[^}]*font-size: 15px/);
+});
+
+test("Safari receives current shell assets before falling back to offline cache", () => {
+  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.14"\)/);
+  assert.doesNotMatch(app, /serviceWorker\.register\(`/);
+  assert.match(worker, /fetch\(event\.request, \{ cache: "no-store" \}\)/);
+  assert.match(worker, /\.catch\(\(\) => caches\.match\(event\.request, \{ ignoreSearch: true \}\)\)/);
+  assert.doesNotMatch(worker, /return cached \|\| network/);
 });

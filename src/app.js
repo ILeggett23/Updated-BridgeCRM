@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.13";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.14";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -4481,7 +4481,6 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
     }
     consumeNotificationNavigation(event.data.url);
   });
-  window.addEventListener("load", () => navigator.serviceWorker.register(`./sw.js?v=${APP_RELEASE.version}`).catch(() => {}), { once: true });
 }
 
 startBridge().catch(error => {
