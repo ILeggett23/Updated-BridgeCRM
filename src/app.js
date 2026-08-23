@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.9";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.10";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -260,7 +260,6 @@ let ui = {
   quickCreateContactId: "",
   scorecardShareOpen: false,
   scorecardIncludeContacts: false,
-  scorecardConfirmed: false,
   scorecardShareBusy: false,
   scorecardCreated: null,
   releaseNotesOpen: false,
@@ -1881,6 +1880,13 @@ function syncDocumentScrollLock(shouldLock) {
   document.documentElement.style.scrollBehavior = "auto";
   window.scrollTo(0, restoreY);
   document.documentElement.style.scrollBehavior = previousBehavior;
+  requestAnimationFrame(() => {
+    if (lockedDocumentScrollY !== null) return;
+    const behavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, restoreY);
+    document.documentElement.style.scrollBehavior = behavior;
+  });
 }
 
 function springProgress(seconds, { stiffness, damping }) {
@@ -2057,7 +2063,7 @@ function bindSharedPrimitiveEvents() {
         if(shell){shell.inert=false;shell.removeAttribute('aria-hidden');}
       }
       if(!blockingModalOpen())syncDocumentScrollLock(false);
-      if (returnFocus?.isConnected) returnFocus.focus();
+      if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
       if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
       else if (ui.releaseNotesPending && !blockingModalOpen()) setTimeout(maybePresentReleaseNotes, 0);
     };
@@ -2230,7 +2236,7 @@ function quickCreateModal() {
 function closeQuickCreate() {
   ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";
   const backdrop=$('#quickCreateBackdrop');
-  const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus();quickCreateFocusReturn=null;});};
+  const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus({preventScroll:true});quickCreateFocusReturn=null;});};
   if(!backdrop||backdrop.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches){finish();return;}
   if(backdrop.classList.contains('is-closing'))return;
   backdrop.classList.add('is-closing');
@@ -2447,10 +2453,15 @@ function renderDashboard() {
   </section>`;
 }
 function todayGoalProgress(dailyGoal) {
-  const segmentCount = Math.min(8, Math.max(1, dailyGoal.goal));
-  const completeSegments = Math.min(segmentCount, Math.round((dailyGoal.todayCount / dailyGoal.goal) * segmentCount));
-  const goalLabel = dailyGoal.todayComplete ? "Goal reached" : `${dailyGoal.todayCount} / ${dailyGoal.goal} conversations today`;
-  return `<section class="today-goal" aria-label="Daily conversation progress"><div class="today-goal__segments" aria-hidden="true">${Array.from({ length:segmentCount }, (_, index) => `<span class="${index < completeSegments ? "is-complete" : ""}"></span>`).join("")}</div><strong>${escapeHTML(goalLabel)}</strong><button class="today-goal__streak" data-open-goals type="button" aria-label="Open goals and streak; ${dailyGoal.goalStreak} day streak">${icons.fire}<span>${dailyGoal.goalStreak}</span></button></section>`;
+  const completed = Number.isFinite(Number(dailyGoal?.todayCount)) ? Math.max(0, Number(dailyGoal.todayCount)) : 0;
+  const goal = Number.isFinite(Number(dailyGoal?.goal)) ? Math.max(1, Number(dailyGoal.goal)) : 1;
+  const ratio = Math.min(1, completed / goal);
+  const percentage = Math.round(ratio * 10000) / 100;
+  const visual = goal <= 8
+    ? `<div class="today-goal__segments" aria-hidden="true">${Array.from({ length:goal }, (_, index) => `<span class="${index < Math.min(goal, Math.floor(completed)) ? "is-complete" : ""}"></span>`).join("")}</div>`
+    : `<div class="today-goal__track" aria-hidden="true"><span style="width:${percentage}%"></span></div>`;
+  const progressText = completed >= goal ? "Goal reached" : `${Math.round(percentage)}% complete`;
+  return `<section class="today-goal" aria-label="Daily conversation progress"><div class="today-goal__visual" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${completed}" aria-valuetext="${escapeHTML(`${completed} of ${goal} conversations; ${progressText}`)}">${visual}</div><strong><span>${escapeHTML(`${completed} / ${goal}`)}</span><small>conversations today</small></strong><button class="today-goal__streak" data-open-goals type="button" aria-label="Open goals and streak; ${dailyGoal.goalStreak} day streak">${icons.fire}<span>${dailyGoal.goalStreak}</span></button></section>`;
 }
 function todayRelativeTime(value, now = new Date()) {
   const days = calendarDaysBetween(now, value);
@@ -2914,7 +2925,7 @@ function scorecardShareModal({ routed=false }={}) {
   const preview=scorecardSharePreview(data);
   const created=ui.scorecardCreated;
   const privacySummary=ui.scorecardIncludeContacts?"Names, roles, stages, and places only":"No personal relationship details";
-  const body=created?`<div class="scorecard-share-result">${preview}<section class="share-result ${created.revoked?"is-revoked":""}" aria-live="polite"><span class="ui-eyebrow">${created.revoked?"Access removed":"Secure link ready"}</span><h3>${created.revoked?"Scorecard link revoked":"Ready to share"}</h3><p>${created.revoked?"This link no longer opens the scorecard.":`This link expires ${escapeHTML(fmtDateTime(created.expiresAt))}.`}</p>${created.revoked?"":`<a href="${escapeHTML(created.url)}" target="_blank" rel="noreferrer">Open shared scorecard ${icons.chevronRight}</a><div class="scorecard-result-actions"><button class="button primary" id="messageScorecardLink" type="button">${icons.chat}<span>Message link</span></button><button class="button subtle" id="revokeScorecardLink" type="button" ${ui.scorecardShareBusy?"disabled":""}>${icons.trash}<span>${ui.scorecardShareBusy?"Revoking…":"Revoke link"}</span></button></div>`}<button class="button subtle" id="createAnotherScorecard" type="button">Create another scorecard</button></section></div>`:`${preview}<form id="scorecardShareForm" class="scorecard-share-form"><fieldset><legend>Include</legend><div class="scorecard-scope-options"><label class="share-scope-option"><input type="radio" name="scorecardScope" value="scorecard" ${!ui.scorecardIncludeContacts ? "checked" : ""}><span><strong>Metrics only</strong><small>The four numbers and the date range.</small></span></label><label class="share-scope-option"><input type="radio" name="scorecardScope" value="contacts" ${ui.scorecardIncludeContacts ? "checked" : ""}><span><strong>Metrics + new contacts</strong><small>Adds ${data.newContacts.length} ${data.newContacts.length===1?"person":"people"}: name, role, stage, and place only.</small></span></label></div></fieldset><p class="scorecard-expiry-note">Links expire after seven days.</p><details class="scorecard-privacy-disclosure" id="scorecardSharePrivacy"><summary><span><strong>What gets shared?</strong><small>${escapeHTML(privacySummary)}</small></span>${icons.chevronDown}</summary><div><p>Phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls are never shared.</p><label class="share-confirmation"><input type="checkbox" name="scorecardConfirmed" ${ui.scorecardConfirmed ? "checked" : ""}><span>I understand what this scorecard will include.</span></label></div></details><button class="button primary scorecard-create-link" name="shareAction" value="link" type="submit" ${ui.scorecardShareBusy ? "disabled" : ""}>${ui.scorecardShareBusy?"Creating secure link…":"Create share link"}</button><button class="button subtle scorecard-share-image" name="shareAction" value="image" type="submit" ${ui.scorecardShareBusy ? "disabled" : ""}>${icons.share}<span>Share metrics as image</span></button></form>`;
+  const body=created?`<div class="scorecard-share-result">${preview}<section class="share-result ${created.revoked?"is-revoked":""}" aria-live="polite"><span class="ui-eyebrow">${created.revoked?"Access removed":"Secure link ready"}</span><h3>${created.revoked?"Scorecard link revoked":"Ready to share"}</h3><p>${created.revoked?"This link no longer opens the scorecard.":`This link expires ${escapeHTML(fmtDateTime(created.expiresAt))}.`}</p>${created.revoked?"":`<a href="${escapeHTML(created.url)}" target="_blank" rel="noreferrer">Open shared scorecard ${icons.chevronRight}</a><div class="scorecard-result-actions"><button class="button primary" id="messageScorecardLink" type="button">${icons.chat}<span>Message link</span></button><button class="button subtle" id="revokeScorecardLink" type="button" ${ui.scorecardShareBusy?"disabled":""}>${icons.trash}<span>${ui.scorecardShareBusy?"Revoking…":"Revoke link"}</span></button></div>`}<button class="button subtle" id="createAnotherScorecard" type="button">Create another scorecard</button></section></div>`:`${preview}<form id="scorecardShareForm" class="scorecard-share-form"><fieldset><legend>Include</legend><div class="scorecard-scope-options"><label class="share-scope-option"><input type="radio" name="scorecardScope" value="scorecard" ${!ui.scorecardIncludeContacts ? "checked" : ""}><span><strong>Metrics only</strong><small>The four numbers and the date range.</small></span></label><label class="share-scope-option"><input type="radio" name="scorecardScope" value="contacts" ${ui.scorecardIncludeContacts ? "checked" : ""}><span><strong>Metrics + new contacts</strong><small>Adds ${data.newContacts.length} ${data.newContacts.length===1?"person":"people"}: name, role, stage, and place only.</small></span></label></div></fieldset><p class="scorecard-expiry-note">Links expire after seven days.</p><details class="scorecard-privacy-disclosure" id="scorecardSharePrivacy"><summary><span><strong>What gets shared?</strong><small>${escapeHTML(privacySummary)}</small></span>${icons.chevronDown}</summary><div><p>Phone numbers, notes, follow-ups, private judgements, interest levels, and editing controls are never shared.</p></div></details><button class="button primary scorecard-create-link" name="shareAction" value="link" type="submit" ${ui.scorecardShareBusy ? "disabled" : ""}>${ui.scorecardShareBusy?"Creating secure link…":"Create share link"}</button><button class="button subtle scorecard-share-image" name="shareAction" value="image" type="submit" ${ui.scorecardShareBusy ? "disabled" : ""}>${icons.share}<span>Share metrics as image</span></button></form>`;
   if(routed)return PresentationScreen(body,{title:"Share scorecard",eyebrow:compactScorecardRangeLabel(range),className:"scorecard-share-screen"});
   return `<div class="modal-backdrop scorecard-share-backdrop" id="scorecardShareBackdrop"><section class="modal scorecard-share-modal" role="dialog" aria-modal="true" aria-labelledby="shareScorecardTitle"><header class="modal-head scorecard-share-head">${IconButton("chevronRight", "Close scorecard sharing", { className: "close-scorecard-share scorecard-share-back" })}<div><span class="ui-eyebrow">${escapeHTML(range.label)}</span><h2 class="ui-editorial-heading" id="shareScorecardTitle">Share scorecard</h2></div></header><div class="modal-body">${body}</div></section></div>`;
 }
@@ -3466,7 +3477,7 @@ function bindCommonEvents(){
   $$('[data-open-goals]').forEach(button=>button.addEventListener('click',()=>navigatePresentation("goals",{}, {opener:button})));
   $('[data-open-analytics-detail], .insights-details > summary')?.addEventListener('click',event=>{if(ui.routedScreen==="analytics-detail")return;event.preventDefault();navigatePresentation("analytics-detail",{}, {opener:event.currentTarget});});
   $$('[data-settings-section-open]').forEach(button=>button.addEventListener('click',event=>{const section=button.dataset.settingsSectionOpen||"root";event.preventDefault();navigatePresentation("settings",{section},{opener:button});}));
-  $('[data-open-scorecard-settings]')?.addEventListener('click',event=>{scorecardFocusReturn=event.currentTarget;ui.scorecardConfirmed=false;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:event.currentTarget});});
+  $('[data-open-scorecard-settings]')?.addEventListener('click',event=>{scorecardFocusReturn=event.currentTarget;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:event.currentTarget});});
   $('#settingsBackdrop')?.addEventListener('click',event=>{if(event.target.id==='settingsBackdrop')closeSettings();});
   $('#contactBackdrop')?.addEventListener('click',event=>{if(event.target.id==='contactBackdrop')closeContactDetail(render);});
   $('#scorecardShareBackdrop')?.addEventListener('click',event=>{if(event.target.id==='scorecardShareBackdrop')closeScorecardShare();});
@@ -3676,7 +3687,7 @@ function bindTodaySwipeCard() {
 
 function bindPageEvents(){
   $('#settingsButton')?.addEventListener('click',()=>{settingsFocusReturn=document.activeElement;ui.settingsExcludedDatesDraft=[...normalizeExcludedDates(state.settings.streakExcludedDates)];ui.settingsRestRulesDraft=normalizeRestRules(state.settings.streakRestRules);ui.settingsRestFrequencyDraft="once";ui.accountPanelLoaded=false;ui.accountPanelError="";navigatePresentation("settings",{section:"root"},{opener:settingsFocusReturn});refreshAccountPanelData().catch(()=>{});});
-  $('#shareScorecard')?.addEventListener('click',()=>{scorecardFocusReturn=document.activeElement;ui.scorecardConfirmed=false;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:scorecardFocusReturn});});
+  $('#shareScorecard')?.addEventListener('click',()=>{scorecardFocusReturn=document.activeElement;ui.scorecardCreated=null;navigatePresentation("scorecard",{}, {opener:scorecardFocusReturn});});
   $$('[data-insights-pipeline]').forEach(button=>button.addEventListener('click',()=>{const role=button.dataset.insightsPipeline;if(!["Prospect","Customer"].includes(role))return;navigateMain("contacts",{mode:"pipeline",role,opener:button});}));
   $('[data-insights-places]')?.addEventListener('click',event=>navigateMain("contacts",{mode:"places",opener:event.currentTarget}));
   $$('[data-insights-place-id]').forEach(button=>button.addEventListener('click',()=>{const place=state.places.find(item=>String(item.id)===String(button.dataset.insightsPlaceId));if(!place)return;navigatePresentation("place",{place:place.id},{opener:button});}));
@@ -3976,7 +3987,6 @@ function bindScorecardShareEvents() {
   $("#scorecardShareForm")?.addEventListener("change", event => {
     const form = event.currentTarget;
     ui.scorecardIncludeContacts = form.scorecardScope.value === "contacts";
-    ui.scorecardConfirmed = Boolean(form.scorecardConfirmed.checked);
     render();
   });
   $("#scorecardShareForm")?.addEventListener("submit", async event => {
@@ -3984,8 +3994,6 @@ function bindScorecardShareEvents() {
     const action = event.submitter?.value === "image" ? "image" : "link";
     const form = new FormData(event.currentTarget);
     ui.scorecardIncludeContacts = form.get("scorecardScope") === "contacts";
-    ui.scorecardConfirmed = form.get("scorecardConfirmed") === "on";
-    if (!ui.scorecardConfirmed) { showToast("Confirm what will be shared before continuing"); return; }
     ui.scorecardShareBusy = true;
     render();
     try {
@@ -4010,7 +4018,7 @@ function bindScorecardShareEvents() {
     }
   });
   $("#messageScorecardLink")?.addEventListener("click",()=>{if(ui.scorecardCreated?.url)messageScorecard(ui.scorecardCreated.url);});
-  $("#createAnotherScorecard")?.addEventListener("click",()=>{ui.scorecardCreated=null;ui.scorecardConfirmed=false;render();requestAnimationFrame(()=>$("#scorecardShareForm input")?.focus());});
+  $("#createAnotherScorecard")?.addEventListener("click",()=>{ui.scorecardCreated=null;render();requestAnimationFrame(()=>$("#scorecardShareForm input")?.focus());});
   $("#revokeScorecardLink")?.addEventListener("click",()=>{
     if(ui.scorecardShareBusy||!ui.scorecardCreated)return;
     const scorecard=ui.scorecardCreated;
