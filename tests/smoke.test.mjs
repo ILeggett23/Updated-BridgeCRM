@@ -74,7 +74,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.6"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.7"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -95,7 +95,7 @@ test("production worker supports durable background follow-up pushes", () => {
   assert.ok(source.includes("enableBackgroundPush"));
   assert.ok(source.includes("syncHostedReminderSchedule"));
   assert.ok(source.includes("bridge-hosted-push-device-token-v1"));
-  assert.ok(source.includes("Background reminders active"));
+  assert.ok(source.includes("Reminders ready"));
 });
 
 test("hosted reminders remain isolated from device-local CRM state", () => {
@@ -150,7 +150,8 @@ test("Phase 15A high-visibility icons use the approved Lucide 0.522 geometry", (
   assert.ok(source.includes('M9.937 15.5'));
   assert.ok(source.includes('icons.calendarPlus'));
   assert.ok(source.includes('icons.penLine'));
-  assert.ok(source.includes('event.kind==="pipeline"?"arrowUpRight":"handshake"'));
+  assert.ok(source.includes('if(event.kind==="pipeline")return "arrowUpRight"'));
+  assert.ok(source.includes('return "handshake"'));
 });
 
 test("role-specific pipeline stages remain separated from MSA and DTM", () => {
@@ -404,13 +405,13 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.6 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.6"));
-  assert.ok(page.includes("./styles.css?v=1.3.6"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.6"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.6"));
-  assert.ok(page.includes("./app.js?v=1.3.6"));
-  assert.ok(worker.includes("bridge-app-v1.3.6"));
+test("v1.3.7 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.7"));
+  assert.ok(page.includes("./styles.css?v=1.3.7"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.7"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.7"));
+  assert.ok(page.includes("./app.js?v=1.3.7"));
+  assert.ok(worker.includes("bridge-app-v1.3.7"));
 });
 
 test("the GitHub Pages client opens locally without loading the Cloudflare account gate", async () => {
@@ -422,7 +423,7 @@ test("the GitHub Pages client opens locally without loading the Cloudflare accou
   assert.ok(source.includes('mode: "local"'));
   assert.equal(page.includes("account-client.js"), false);
   assert.equal(serviceWorker.includes("account-client.js"), false);
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.6", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.7", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));

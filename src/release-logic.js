@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.6",
-    assetVersion: "v1.3.6",
+    version: "1.3.7",
+    assetVersion: "v1.3.7",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "bridge",
-        title: "One cohesive Bridge",
-        description: "Today, People, Pipeline, Insights, Settings, forms, cards, and dialogs now share the same compact mobile design system."
+        icon: "messages",
+        title: "Clearer capture and follow-up",
+        description: "Person selection, timeline events, cadence controls, and Capture sheets now stay clear and consistent on mobile."
       }),
       Object.freeze({
-        icon: "plus",
-        title: "Faster everyday interactions",
-        description: "People Search, swipe actions, profile headers, and navigation now stay responsive without unnecessary page rebuilds or layout shifts."
+        icon: "chart",
+        title: "Reliable activity charts",
+        description: "Day and Month analytics now handle empty, single-value, and dense activity ranges without oversized bars or overlapping labels."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Your data stays put",
-        description: "The update preserves your relationships, follow-ups, analytics, exact pipeline stages, history, and local or account-backed storage."
+        title: "Mobile forms that fit",
+        description: "Notifications, Goals, Personal Info, Edit Person, and Log Text now share accessible controls, safe-area spacing, and product-facing copy."
       })
     ])
   });

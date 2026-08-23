@@ -27,7 +27,8 @@ test("split Settings forms merge only controls rendered on the current page", ()
   assert.ok(app.includes('if(hasControl("followUpNotifications"))next.followUpNotifications='));
   assert.ok(app.includes('if(hasControl("healthScoresVisible"))next.healthScoresVisible='));
   assert.equal(app.includes('name="healthNotificationsEnabled"'), false);
-  assert.ok(app.includes("Bridge stores the existing preference for compatibility"));
+  assert.ok(app.includes("healthNotificationsEnabled"));
+  assert.equal(app.includes("Bridge stores the existing preference for compatibility"), false);
 });
 
 test("approved appearance is fixed while accessibility preferences remain active", () => {
@@ -54,9 +55,17 @@ test("goals and notification screens disclose production capability honestly", (
   assert.ok(app.includes("function goalPeriodMetrics("));
   assert.ok(app.includes("countedConversations(weekRange).length"));
   assert.ok(app.includes("countedConversations(monthRange).length"));
-  assert.ok(app.includes("Stalled-relationship and weekly-recap notifications are not shown"));
-  assert.ok(app.includes("Health notifications are not delivered"));
-  assert.ok(app.includes("no production scheduler currently sends relationship-health reminders"));
+  assert.ok(app.includes("function notificationDeliveryState()"));
+  assert.ok(app.includes("Notifications blocked"));
+  assert.ok(app.includes("Finish turning on reminders"));
+  assert.equal(app.includes("Stalled-relationship and weekly-recap notifications are not shown"), false);
+  assert.equal(app.includes("Progress uses existing production calculations"), false);
+  assert.ok(app.includes("View unlocked milestones and progress"));
+  assert.match(app,/next\.dailyGoal=Math\.min\(100,Math\.max\(1,/);
+  assert.match(app,/next\.weeklyGoal=Math\.min\(500,Math\.max\(1,/);
+  assert.match(app,/next\.monthlyGoal=Math\.min\(2000,Math\.max\(1,/);
+  assert.equal(app.includes("Health notifications are not delivered"), false);
+  assert.equal(app.includes("no production scheduler currently sends relationship-health reminders"), false);
   assert.equal(app.includes("weeklyGoal*3"), false);
 });
 

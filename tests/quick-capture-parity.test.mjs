@@ -62,10 +62,33 @@ test("Real person and place pickers never rely on demo records",()=>{
   assert.match(people,/data-capture-recent/);
   assert.match(people,/data-capture-new-person/);
   assert.match(people,/data-new-person-name hidden/);
+  assert.match(people,/aria-pressed="\$\{selected\}"/);
+  assert.match(people,/data-capture-selected/);
   assert.match(places,/state\.places/);
   assert.match(places,/contact\.placeId/);
   assert.match(places,/data-capture-new-place/);
   assert.doesNotMatch(`${people}${places}`,/Jasmine|Mario|Onyx Coffee|mock|seed/i);
+});
+
+test("Conversation and follow-up share an explicit, touch-safe selected-person contract",()=>{
+  const picker=sourceBetween("function quickCapturePersonPicker","function quickCapturePlaceActivityMap");
+  const binding=sourceBetween("function syncQuickCapturePickerState","function updateQuickCaptureReview");
+  const forms=sourceBetween("function quickCaptureConversationForm","function quickCaptureNoteForm");
+
+  assert.equal((forms.match(/quickCapturePersonPicker\(contacts/g)||[]).length,3);
+  assert.match(picker,/class="quick-capture-picker__row\$\{selected\?" is-selected":""\}"/);
+  assert.match(binding,/button\.setAttribute\('aria-pressed',String\(selected\)\)/);
+  assert.match(binding,/marker\.textContent=selected\?'Selected':''/);
+  assert.match(styles,/@media \(hover: hover\) and \(pointer: fine\) \{ \.quick-capture-picker__row:hover/);
+  assert.match(styles,/\.quick-capture-picker__row\.is-selected \.ui-avatar/);
+  assert.doesNotMatch(styles,/\.quick-capture-picker__row:hover \{[^}]*background: var\(--color-surface-soft\);[^}]*\}\s*\.quick-capture-picker__row\[hidden\]/);
+});
+
+test("Follow-up launch context preselects only the relationship that opened it",()=>{
+  const globalCapture=sourceBetween("function bindQuickCreateEvents","function renderPage");
+  assert.match(app,/\$\$\('\[data-profile-followup\]'\)[\s\S]*ui\.quickCreateMode="action";ui\.quickCreateContactId=c\.id/);
+  assert.match(globalCapture,/\$\$\('\[data-quick-mode\]'\)[\s\S]*ui\.quickCreateContactId=""/);
+  assert.match(app,/function closeQuickCreate\(\) \{[\s\S]*ui\.quickCreateContactId=""/);
 });
 
 test("Step validation protects required data and final submission retains production writes",()=>{
@@ -97,10 +120,11 @@ test("Wizard presentation supports safe areas, reduced motion, and touch-sized c
 
 test("profile call and text logging reuse the capture sheet visual grammar",()=>{
   const modal=sourceBetween("function communicationLogModal","function discardContactEdit");
-  assert.match(modal,/class="modal call-log-modal capture-detail-sheet"/);
+  assert.match(modal,/class="modal call-log-modal capture-detail-sheet capture-sheet"/);
   assert.match(modal,/class="call-log-form capture-detail-form"/);
   assert.match(modal,/Pipeline and activity details/);
-  assert.match(modal,/Communication logs never increase the Conversations metric/);
+  assert.match(modal,/Opening Messages does not confirm that a text was sent/);
+  assert.doesNotMatch(modal,/Communication logs never increase the Conversations metric/);
   for(const contract of [".capture-detail-sheet",".capture-detail-person",".capture-detail-section",".capture-detail-actions"]) {
     assert.ok(styles.includes(contract),`missing ${contract}`);
   }
