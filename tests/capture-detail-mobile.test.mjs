@@ -18,10 +18,14 @@ test("Log Text follows the intended mobile field order and one-column breakpoint
   assert.match(styles,/@media \(max-width: 600px\) \{[\s\S]*\.capture-detail-fields \{ grid-template-columns: minmax\(0,1fr\); \}/);
 });
 
-test("capture detail sheet owns scrolling, safe areas, and visible actions",()=>{
+test("capture detail sheet separates its header, scrolling form, and action footer",()=>{
+  const modal=app.slice(app.indexOf("function communicationLogModal"),app.indexOf("function clearContactEdit"));
   assert.match(styles,/\.capture-detail-sheet \{[^}]*height: min\(92dvh, 780px\);[^}]*display: flex;[^}]*overflow: hidden/);
-  assert.match(styles,/\.capture-detail-sheet \.capture-sheet-body \{[^}]*flex: 1 1 auto;[^}]*scroll-padding-bottom:/);
-  assert.match(styles,/\.capture-detail-actions \{[^}]*position: sticky; bottom: 0;/);
+  assert.match(styles,/\.capture-detail-sheet \.capture-sheet-body \{[^}]*min-height: 0;[^}]*flex: 1 1 auto;[^}]*overflow-y: auto;[^}]*scroll-padding-bottom:/);
+  assert.match(styles,/\.capture-detail-actions \{[^}]*flex: 0 0 auto;[^}]*safe-bottom[^}]*border-top: 1px solid var\(--color-border\);/);
+  assert.doesNotMatch(styles,/\.capture-detail-actions \{[^}]*position: sticky/);
+  assert.match(modal,/<\/form><\/div><footer class="form-actions capture-detail-actions">/);
+  assert.match(modal,/type="submit" form="communicationLogForm"/);
   assert.match(styles,/\.capture-detail-sheet \.modal-head \.ui-icon-button \{[^}]*border: 0;[^}]*border-radius: 50%/);
   assert.match(app,/transientModalOpen=Boolean\([^\n]*ui\.communicationContactId/);
   assert.match(styles,/html\.modal-open, body\.modal-open \{ overflow: hidden; overscroll-behavior: none; \}/);

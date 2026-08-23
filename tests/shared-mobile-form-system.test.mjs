@@ -21,7 +21,8 @@ test("shared forms remain reachable above keyboards and the bottom navigation",(
   assert.match(styles,/scroll-margin-bottom: calc\(var\(--nav-height\) \+ var\(--safe-bottom\) \+ 82px\)/);
   assert.match(styles,/\.settings-screen:not\(\.settings-screen--root\) \.hn-settings-save \{[^}]*position: sticky;[^}]*bottom: calc\(var\(--nav-height\)/);
   assert.match(styles,/\.relationship-personal-info \.personal-info-actions \{ position: static/);
-  assert.match(styles,/\.capture-detail-actions \{[^}]*position: sticky/);
+  assert.match(styles,/\.capture-detail-actions \{[^}]*flex: 0 0 auto;[^}]*safe-bottom/);
+  assert.doesNotMatch(styles,/\.capture-detail-actions \{[^}]*position: sticky/);
   assert.match(styles,/\.relationship-profile--editor \.contact-edit-actions \{[^}]*position: sticky/);
 });
 

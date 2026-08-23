@@ -23,6 +23,18 @@ test("Today renders one swipe shell while retaining explicit accessible actions"
   assert.match(card,/aria-label="Mark follow-up with \$\{escapeHTML\(name\)\} done"/);
 });
 
+test("Next Up gives its two standard actions the full card width",()=>{
+  const card=between("function todayNextAction","function todayClearAction");
+  assert.match(card,/today-next-card__actions\$\{followUp \? " has-follow-up" : ""\}/);
+  assert.match(styles,/\.today-next-card \{[^}]*display: grid;[^}]*gap: 16px/);
+  assert.match(styles,/\.today-next-card__identity > div \{[^}]*gap: 6px/);
+  assert.match(styles,/\.today-next-card__actions \{[^}]*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, \.65fr\)/);
+  assert.match(styles,/\.today-next-card__actions\.has-follow-up \{[^}]*44px/);
+  assert.match(styles,/\.today-next-card h3 \{[^}]*overflow-wrap: anywhere/);
+  assert.match(styles,/\.today-stage-chip \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis/);
+  assert.match(styles,/\.today-stage-chip \{[^}]*justify-self: start/);
+});
+
 test("Today gesture uses intent, distance, and velocity thresholds without stealing vertical scroll",()=>{
   const gesture=between("const TODAY_SWIPE_INTENT_PX","function bindPageEvents");
   assert.match(gesture,/TODAY_SWIPE_INTENT_PX=8/);
