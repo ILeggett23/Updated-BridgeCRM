@@ -54,10 +54,11 @@ test("shared sheets apply the bottom safe area exactly once when a footer exists
   assert.match(app, /target\?\.focus\(\{preventScroll:true\}\)/);
 });
 
-test("the primary dock and short Capture chooser meet the mobile bottom edge", () => {
-  assert.match(styles, /body \.bridge-pattern-shell > \.bridge-pattern-nav \{\s+height: var\(--nav-height\) !important;\s+padding-bottom: 0 !important;/);
-  assert.match(styles, /body \.bridge-pattern-nav \.nav-selection-indicator \{ bottom: 3px; \}/);
-  assert.match(styles, /\.quick-create-modal:not\(\.has-step\) \.modal-body \{ padding-bottom: var\(--space-4\); \}/);
+test("the primary dock and short Capture chooser use a compact Safari interaction inset", () => {
+  assert.match(styles, /--nav-interaction-inset: clamp\(12px, var\(--safe-bottom\), 16px\)/);
+  assert.match(styles, /body \.bridge-pattern-shell > \.bridge-pattern-nav \{\s+height: calc\(var\(--nav-height\) \+ var\(--nav-interaction-inset\)\) !important;\s+padding-bottom: var\(--nav-interaction-inset\) !important;/);
+  assert.match(styles, /body \.bridge-pattern-nav \.nav-selection-indicator \{ bottom: calc\(var\(--nav-interaction-inset\) \+ 3px\); \}/);
+  assert.match(styles, /\.quick-create-modal:not\(\.has-step\) \.modal-body \{ padding-bottom: calc\(var\(--space-4\) \+ var\(--nav-interaction-inset\)\); \}/);
 });
 
 test("What's New reuses Bridge surfaces, typography, accent, and compact geometry", () => {

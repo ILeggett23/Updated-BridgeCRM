@@ -325,7 +325,7 @@ test("JSON backup round trips recurring schedules alongside legacy one-time date
 
 test("PWA notifications and favorite stars are wired accessibly", () => {
   assert.match(workerSource, /notificationclick/);
-  assert.match(workerSource, /bridge-app-v1\.3\.11/);
+  assert.match(workerSource, /bridge-app-v1\.3\.12/);
   assert.match(workerSource, /addEventListener\("push"/);
   assert.match(workerSource, /setAppBadge/);
   assert.match(appSource, /aria-label="Favorite place"/);
