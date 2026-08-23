@@ -4640,17 +4640,17 @@ body .bridge-pattern-shell > .main {
    Capture chooser. */
 @media (max-width: 767px) {
   :root { --nav-interaction-inset: 16px; }
+  html, body, #app { background: var(--color-page); }
   body .bridge-pattern-shell > .bridge-pattern-nav {
     height: calc(var(--nav-height) + var(--nav-interaction-inset)) !important;
     padding-bottom: var(--nav-interaction-inset) !important;
     border-top-color: var(--color-surface-soft) !important;
     background: var(--color-page) !important;
-    box-shadow: none !important;
+    box-shadow: var(--shadow-nav) !important;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
   body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--nav-interaction-inset) + 3px); }
-  body .bridge-pattern-nav.is-covered-by-capture { visibility: hidden; pointer-events: none; }
   body .bridge-pattern-shell > .main {
     padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-7)) !important;
     scroll-padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-5));

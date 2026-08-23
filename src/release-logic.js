@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.15",
-    assetVersion: "v1.3.15",
+    version: "1.3.16",
+    assetVersion: "v1.3.16",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "messages",
         title: "Capture without dock bleed-through",
-        description: "Opening Capture now covers the fixed navigation dock instead of blurring its border or shadow through the sheet."
+        description: "Opening Capture now removes the fixed dock from Safari's backdrop composition and restores it at the same position on close."
       }),
       Object.freeze({
         icon: "chart",
@@ -17,8 +17,8 @@
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Updates that reach Safari",
-        description: "The PWA now loads current shell assets first and falls back to its offline cache only when the network is unavailable."
+        title: "One continuous bottom surface",
+        description: "Safari's outer mobile canvas now matches the dock and Capture sheet while the intended dock shadow remains above navigation."
       })
     ])
   });

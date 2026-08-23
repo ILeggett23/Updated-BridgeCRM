@@ -31,8 +31,7 @@ test("navigation state follows the production page and contact mode", () => {
   assert.match(foundation.BottomNavigation(), /data-open-pipeline[^>]+aria-label="Pipeline" aria-current="page"/);
   ui.quickCreateOpen = true;
   assert.equal(foundation.navSelectionIndex(), 3);
-  assert.match(foundation.BottomNavigation(), /aria-expanded="true" aria-label="Capture what happened"/);
-  assert.doesNotMatch(foundation.BottomNavigation(), /aria-label="Capture what happened" aria-current="page"/);
+  assert.equal(foundation.BottomNavigation(), "");
   ui.routedScreen = "person";
   assert.equal(foundation.navSelectionIndex(), 1);
   ui.routedScreen = "pipeline-stage";

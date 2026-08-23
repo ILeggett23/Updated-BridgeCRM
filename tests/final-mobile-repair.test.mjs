@@ -59,7 +59,8 @@ test("the primary dock is raised cleanly while short Capture keeps preview spaci
   assert.match(styles, /--nav-interaction-inset: 16px/);
   assert.match(styles, /body \.bridge-pattern-shell > \.bridge-pattern-nav \{\s+height: calc\(var\(--nav-height\) \+ var\(--nav-interaction-inset\)\) !important;\s+padding-bottom: var\(--nav-interaction-inset\) !important;/);
   assert.match(styles, /body \.bridge-pattern-nav \.nav-selection-indicator \{ bottom: calc\(var\(--nav-interaction-inset\) \+ 3px\); \}/);
-  assert.match(styles, /border-top-color: var\(--color-surface-soft\) !important;[\s\S]*?background: var\(--color-page\) !important;[\s\S]*?box-shadow: none !important;/);
+  assert.match(styles, /html, body, #app \{ background: var\(--color-page\); \}/);
+  assert.match(styles, /border-top-color: var\(--color-surface-soft\) !important;[\s\S]*?background: var\(--color-page\) !important;[\s\S]*?box-shadow: var\(--shadow-nav\) !important;/);
   assert.match(styles, /\.quick-create-modal:not\(\.has-step\) \.modal-body \{ padding-bottom: var\(--space-4\); \}/);
 });
 
@@ -72,15 +73,15 @@ test("What's New reuses Bridge surfaces, typography, accent, and compact geometr
 });
 
 test("Safari receives current shell assets before falling back to offline cache", () => {
-  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.15"\)/);
+  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.16"\)/);
   assert.doesNotMatch(app, /serviceWorker\.register\(`/);
   assert.match(worker, /fetch\(event\.request, \{ cache: "no-store" \}\)/);
   assert.match(worker, /\.catch\(\(\) => caches\.match\(event\.request, \{ ignoreSearch: true \}\)\)/);
   assert.doesNotMatch(worker, /return cached \|\| network/);
 });
 
-test("Capture covers the dock without changing its fixed geometry", () => {
-  assert.match(foundation, /bridge-pattern-nav\$\{captureOpen \? " is-covered-by-capture" : ""\}/);
-  assert.match(foundation, /captureOpen \? ' aria-hidden="true"' : ""/);
-  assert.match(styles, /body \.bridge-pattern-nav\.is-covered-by-capture \{ visibility: hidden; pointer-events: none; \}/);
+test("Capture removes the fixed dock from Safari's backdrop composition", () => {
+  assert.match(foundation, /if \(ui\.quickCreateOpen\) return "";/);
+  assert.doesNotMatch(foundation, /is-covered-by-capture/);
+  assert.doesNotMatch(styles, /bridge-pattern-nav\.is-covered-by-capture/);
 });
