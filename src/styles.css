@@ -4639,15 +4639,20 @@ body .bridge-pattern-shell > .main {
    not turn it into visible empty space beneath the primary dock or the short
    Capture chooser. */
 @media (max-width: 767px) {
-  :root { --nav-interaction-inset: clamp(12px, var(--safe-bottom), 16px); }
+  :root { --nav-interaction-inset: 16px; }
   body .bridge-pattern-shell > .bridge-pattern-nav {
     height: calc(var(--nav-height) + var(--nav-interaction-inset)) !important;
     padding-bottom: var(--nav-interaction-inset) !important;
+    border-top-color: var(--color-surface-soft) !important;
+    background: var(--color-page) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--nav-interaction-inset) + 3px); }
   body .bridge-pattern-shell > .main {
     padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-7)) !important;
     scroll-padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-5));
   }
-  .quick-create-modal:not(.has-step) .modal-body { padding-bottom: calc(var(--space-4) + var(--nav-interaction-inset)); }
+  .quick-create-modal:not(.has-step) .modal-body { padding-bottom: var(--space-4); }
 }

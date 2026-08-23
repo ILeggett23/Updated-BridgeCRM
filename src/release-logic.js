@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.12",
-    assetVersion: "v1.3.12",
+    version: "1.3.13",
+    assetVersion: "v1.3.13",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "messages",
-        title: "A Safari-safe bottom dock",
-        description: "Navigation now keeps a compact interaction inset as Safari reveals or collapses its bottom controls."
+        title: "A cleaner raised dock",
+        description: "Navigation now sits slightly higher on iPhone without the dark translucent border or shadow band."
       }),
       Object.freeze({
         icon: "chart",
@@ -17,8 +17,8 @@
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Compact Capture clearance",
-        description: "The short Capture chooser stays clear of the iPhone gesture zone without recreating the oversized empty panel."
+        title: "Capture matches the preview",
+        description: "The short Capture chooser returns to the Magic Patterns 16-pixel finish beneath its final row."
       })
     ])
   });
