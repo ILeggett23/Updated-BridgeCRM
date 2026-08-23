@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.10";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.11";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -2721,7 +2721,7 @@ function renderCustomerPipeline(contacts,now=new Date()) {
 }
 function renderPipeline(connectionState="") {
   const prospectContacts=activePipelineContacts("Prospect"),customerContacts=activePipelineContacts("Customer");const now=new Date();const selectedContact=state.contacts.find(contact=>String(contact.id)===String(ui.pipelineContactId));const selectedCustomerContact=state.contacts.find(contact=>String(contact.id)===String(ui.customerPipelineContactId));
-  const tabs=Tabs([{label:`Prospect ${prospectContacts.length}`,value:"Prospect",active:ui.pipelineRole==="Prospect",attributes:'data-pipeline-role="Prospect"'},{label:`Customer ${customerContacts.length}`,value:"Customer",active:ui.pipelineRole==="Customer",attributes:'data-pipeline-role="Customer"'}],{label:"Pipeline type",className:"pipeline-home__tabs",idPrefix:"pipeline-role"});
+  const tabs=Tabs([{label:"Prospect",value:"Prospect",active:ui.pipelineRole==="Prospect",attributes:'data-pipeline-role="Prospect"'},{label:"Customer",value:"Customer",active:ui.pipelineRole==="Customer",attributes:'data-pipeline-role="Customer"'}],{label:"Pipeline type",className:"pipeline-home__tabs",idPrefix:"pipeline-role"});
   return `<section class="contacts-route pipeline-home" aria-label="Pipeline"><header class="pipeline-home__header"><h1>Pipeline</h1></header>${tabs}${connectionState}<div id="pipeline-role-panel-${escapeHTML(ui.pipelineRole)}" role="tabpanel" aria-labelledby="pipeline-role-tab-${escapeHTML(ui.pipelineRole)}">${ui.pipelineRole==="Prospect"?renderProspectPipeline(prospectContacts,now):renderCustomerPipeline(customerContacts,now)}</div>${ui.pipelineStageDetail?prospectStageDetailSheet(ui.pipelineStageDetail,prospectContacts,now):""}${selectedContact?prospectTransitionSheet(selectedContact):""}${ui.customerPipelineStageDetail?customerStageDetailSheet(ui.customerPipelineStageDetail,customerContacts,now):""}${selectedCustomerContact?customerTransitionSheet(selectedCustomerContact):""}</section>`;
 }
 function placeMatchesContact(place,contact){return String(contact?.placeId||"")===String(place?.id||"")||(!contact?.placeId&&String(contact?.placeName||"").trim().toLowerCase()===String(place?.name||"").trim().toLowerCase());}

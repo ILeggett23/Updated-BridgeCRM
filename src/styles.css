@@ -4118,8 +4118,8 @@ body .bridge-pattern-shell > .main {
 .pipeline-home,
 .insights-home { padding-top: 0; }
 .pipeline-home__header h1 { margin-bottom: 8px; font-size: 26px; letter-spacing: -.025em; line-height: 1.15; }
-.pipeline-home__tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; overflow: hidden; }
-.pipeline-home__tabs button { width: 100%; min-height: 40px; padding: 4px 8px 10px; overflow: hidden; font-size: 14px; text-align: center; text-overflow: ellipsis; }
+.pipeline-home__tabs { display: flex; grid-template-columns: none; gap: 20px; overflow: visible; }
+.pipeline-home__tabs button { width: auto; min-height: 40px; flex: 0 0 auto; padding: 4px 0 10px; overflow: visible; font-size: 14px; text-align: left; }
 .prospect-pipeline__summary { margin: 16px 0 16px; font-size: 13px; line-height: 1.55; }
 .prospect-pipeline-stages::before { left: 7px; top: 16px; bottom: 25px; }
 .prospect-stage { padding-bottom: 0; }
@@ -4633,3 +4633,20 @@ body .bridge-pattern-shell > .main {
    multiline workspace or pull its action over editable content. */
 .relationship-personal-info .field textarea { min-height: 188px; }
 .relationship-personal-info .personal-info-actions { position: static; inset: auto; padding-top: 0; background: none; }
+
+/* The installed iPhone shell should meet the physical bottom edge like the
+   approved preview. Keep safe-area padding in forms and long sheets, but do
+   not turn it into visible empty space beneath the primary dock or the short
+   Capture chooser. */
+@media (max-width: 767px) {
+  body .bridge-pattern-shell > .bridge-pattern-nav {
+    height: var(--nav-height) !important;
+    padding-bottom: 0 !important;
+  }
+  body .bridge-pattern-nav .nav-selection-indicator { bottom: 3px; }
+  body .bridge-pattern-shell > .main {
+    padding-bottom: calc(var(--nav-height) + var(--space-7)) !important;
+    scroll-padding-bottom: calc(var(--nav-height) + var(--space-5));
+  }
+  .quick-create-modal:not(.has-step) .modal-body { padding-bottom: var(--space-4); }
+}

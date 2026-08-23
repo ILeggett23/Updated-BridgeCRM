@@ -35,10 +35,12 @@ test("Today preserves exact tallies and uses proportional progress for large goa
   assert.match(styles, /\.today-goal__track span[^{]*\{[^}]*background: var\(--color-brand\)/);
 });
 
-test("People filters and Pipeline tabs keep predictable equal geometry", () => {
+test("People filters stay predictable while Pipeline tabs remain compact", () => {
   assert.match(styles, /\.people-home__quick-filter,[\s\S]*?\.people-home__filter-button \{ min-width: 68px; \}/);
-  assert.match(styles, /\.pipeline-home__tabs \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 0; overflow: hidden; \}/);
-  assert.match(styles, /\.pipeline-home__tabs button \{ width: 100%;[^}]*text-overflow: ellipsis/);
+  assert.match(app, /\{label:"Prospect",value:"Prospect"[\s\S]*?\{label:"Customer",value:"Customer"/);
+  assert.doesNotMatch(app, /label:`Prospect \$\{prospectContacts\.length\}`|label:`Customer \$\{customerContacts\.length\}`/);
+  assert.match(styles, /\.pipeline-home__tabs \{ display: flex; grid-template-columns: none; gap: 20px; overflow: visible; \}/);
+  assert.match(styles, /\.pipeline-home__tabs button \{ width: auto;[^}]*flex: 0 0 auto;[^}]*text-align: left/);
   assert.match(styles, /\.people-row__open \{[\s\S]*?grid-template-columns: 40px minmax\(0, 1fr\) 16px/);
   assert.match(styles, /\.prospect-stage__chevron \{ width: 16px; display: grid; justify-self: end/);
 });
@@ -50,6 +52,12 @@ test("shared sheets apply the bottom safe area exactly once when a footer exists
   assert.match(styles, /\.modal \{ width: 100%;[^}]*padding-bottom: 0; \}/);
   assert.match(app, /requestAnimationFrame\(\(\) => \{\s+if \(lockedDocumentScrollY !== null\) return;[\s\S]*?window\.scrollTo\(0, restoreY\)/);
   assert.match(app, /target\?\.focus\(\{preventScroll:true\}\)/);
+});
+
+test("the primary dock and short Capture chooser meet the mobile bottom edge", () => {
+  assert.match(styles, /body \.bridge-pattern-shell > \.bridge-pattern-nav \{\s+height: var\(--nav-height\) !important;\s+padding-bottom: 0 !important;/);
+  assert.match(styles, /body \.bridge-pattern-nav \.nav-selection-indicator \{ bottom: 3px; \}/);
+  assert.match(styles, /\.quick-create-modal:not\(\.has-step\) \.modal-body \{ padding-bottom: var\(--space-4\); \}/);
 });
 
 test("What's New reuses Bridge surfaces, typography, accent, and compact geometry", () => {

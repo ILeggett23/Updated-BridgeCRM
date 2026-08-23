@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.10",
-    assetVersion: "v1.3.10",
+    version: "1.3.11",
+    assetVersion: "v1.3.11",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "messages",
-        title: "Sheets that stay in your hand",
-        description: "Capture, filters, and follow-up sheets now lock the page behind them, scroll independently, and dismiss with a downward swipe."
+        title: "Bottom edges that stay clean",
+        description: "The primary dock and short Capture chooser now meet the iPhone edge without leaving an empty safe-area panel."
       }),
       Object.freeze({
         icon: "chart",
-        title: "Motion that connects the app",
-        description: "Pipeline, follow-up, analytics, and navigation indicators now travel between selections with the same restrained spring motion."
+        title: "Pipeline tabs, back in proportion",
+        description: "Prospect and Customer are compact content-width tabs again, without totals beside their labels."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Cleaner mobile actions",
-        description: "Filter and reschedule actions stay above the safe area, while the redundant Settings achievements entry has been removed."
+        title: "Safe where it matters",
+        description: "Long forms and action sheets keep their protective spacing while the two visible bottom gaps are removed."
       })
     ])
   });
