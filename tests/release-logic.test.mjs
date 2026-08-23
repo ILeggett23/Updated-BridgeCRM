@@ -17,8 +17,8 @@ function memoryStorage(initial = {}) {
   };
 }
 
-test("new and legacy users see release 1.3.14", () => {
-  assert.equal(release.APP_RELEASE.version, "1.3.14");
+test("new and legacy users see release 1.3.15", () => {
+  assert.equal(release.APP_RELEASE.version, "1.3.15");
   assert.equal(release.shouldShowRelease(""), true);
   assert.equal(release.shouldShowRelease("v64"), true);
   assert.equal(release.shouldShowRelease("1.1.63"), true);
@@ -27,12 +27,12 @@ test("new and legacy users see release 1.3.14", () => {
 test("continuing records the exact release and suppresses the same version", () => {
   const storage = memoryStorage();
   assert.equal(release.markReleaseSeen(storage), true);
-  assert.equal(storage.getItem(release.RELEASE_STORAGE_KEY), "1.3.14");
+  assert.equal(storage.getItem(release.RELEASE_STORAGE_KEY), "1.3.15");
   assert.equal(release.shouldShowRelease(release.readLastSeenVersion(storage)), false);
 });
 
 test("a future version is not suppressed by the current viewed value", () => {
-  const storage = memoryStorage({ bridgeLastSeenVersion: "1.3.14" });
+  const storage = memoryStorage({ bridgeLastSeenVersion: "1.3.15" });
   const future = { ...release.APP_RELEASE, version: "1.4.0" };
   assert.equal(release.shouldShowRelease(release.readLastSeenVersion(storage), future), true);
 });
@@ -49,8 +49,8 @@ test("release notes are reusable, accessible, and manually available", () => {
 });
 
 test("service worker uses the semantic release cache", () => {
-  assert.match(serviceWorker, /bridge-app-v1\.3\.14/);
-  assert.match(serviceWorker, /config\.js\?v=1\.3\.14/);
+  assert.match(serviceWorker, /bridge-app-v1\.3\.15/);
+  assert.match(serviceWorker, /config\.js\?v=1\.3\.15/);
 });
 
 test("local preview serves release dependencies as JavaScript", () => {

@@ -41,7 +41,8 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
       const label = destination.capture ? "Capture what happened" : destination.label;
       return `<button type="button" class="nav-button${captureClass}${destination.active ? " active" : ""}" ${destination.attributes} aria-label="${escapeHTML(label)}"${current}>${icons[destination.icon]}<span>${escapeHTML(destination.label)}</span></button>`;
     }).join("");
-    return `<nav class="nav bridge-pattern-nav" aria-label="Primary navigation">${buttons}<span class="nav-selection-indicator" aria-hidden="true" style="--nav-selection-index:${Math.max(0, selection)};--nav-selection-visible:${selection < 0 ? 0 : 1}"></span></nav>`;
+    const captureOpen = Boolean(ui.quickCreateOpen);
+    return `<nav class="nav bridge-pattern-nav${captureOpen ? " is-covered-by-capture" : ""}" aria-label="Primary navigation"${captureOpen ? ' aria-hidden="true"' : ""}>${buttons}<span class="nav-selection-indicator" aria-hidden="true" style="--nav-selection-index:${Math.max(0, selection)};--nav-selection-visible:${selection < 0 ? 0 : 1}"></span></nav>`;
   }
 
   function AppShell(content, { pageClass = "", inert = false } = {}) {

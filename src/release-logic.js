@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.14",
-    assetVersion: "v1.3.14",
+    version: "1.3.15",
+    assetVersion: "v1.3.15",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "messages",
-        title: "A cleaner raised dock",
-        description: "Navigation now sits slightly higher on iPhone without the dark translucent border or shadow band."
+        title: "Capture without dock bleed-through",
+        description: "Opening Capture now covers the fixed navigation dock instead of blurring its border or shadow through the sheet."
       }),
       Object.freeze({
         icon: "chart",

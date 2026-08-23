@@ -4650,6 +4650,7 @@ body .bridge-pattern-shell > .main {
     backdrop-filter: none;
   }
   body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--nav-interaction-inset) + 3px); }
+  body .bridge-pattern-nav.is-covered-by-capture { visibility: hidden; pointer-events: none; }
   body .bridge-pattern-shell > .main {
     padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-7)) !important;
     scroll-padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-5));

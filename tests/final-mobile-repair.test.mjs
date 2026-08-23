@@ -72,9 +72,15 @@ test("What's New reuses Bridge surfaces, typography, accent, and compact geometr
 });
 
 test("Safari receives current shell assets before falling back to offline cache", () => {
-  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.14"\)/);
+  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.15"\)/);
   assert.doesNotMatch(app, /serviceWorker\.register\(`/);
   assert.match(worker, /fetch\(event\.request, \{ cache: "no-store" \}\)/);
   assert.match(worker, /\.catch\(\(\) => caches\.match\(event\.request, \{ ignoreSearch: true \}\)\)/);
   assert.doesNotMatch(worker, /return cached \|\| network/);
+});
+
+test("Capture covers the dock without changing its fixed geometry", () => {
+  assert.match(foundation, /bridge-pattern-nav\$\{captureOpen \? " is-covered-by-capture" : ""\}/);
+  assert.match(foundation, /captureOpen \? ' aria-hidden="true"' : ""/);
+  assert.match(styles, /body \.bridge-pattern-nav\.is-covered-by-capture \{ visibility: hidden; pointer-events: none; \}/);
 });
