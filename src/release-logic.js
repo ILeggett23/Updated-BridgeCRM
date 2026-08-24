@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.19",
-    assetVersion: "v1.3.19",
+    version: "1.3.20",
+    assetVersion: "v1.3.20",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "Email from the relationship header",
-        description: "A dedicated Email action now sits beside Call, Text, Log, and Follow up for fast access."
+        title: "Bottom navigation stays anchored",
+        description: "The primary dock now returns to the true screen bottom after scrolling, keyboard use, and viewport changes."
       }),
       Object.freeze({
         icon: "people",

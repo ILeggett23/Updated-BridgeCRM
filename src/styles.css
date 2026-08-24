@@ -407,8 +407,8 @@ a { color: inherit; }
 @keyframes ui-sheet-exit { from { transform: translateY(0); } to { transform: translateY(100%); } }
 .motion-step { animation: ui-step-forward-in 180ms var(--motion-ease) both; }
 .motion-step[data-motion-direction="back"] { animation-name: ui-step-back-in; }
-@keyframes ui-step-forward-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes ui-step-back-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ui-step-forward-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes ui-step-back-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
 .motion-disclosure { overflow: clip; }
 @supports (interpolate-size: allow-keywords) {
   :root { interpolate-size: allow-keywords; }
@@ -2545,7 +2545,7 @@ body .bridge-pattern-shell > .main > .page { width: 100%; max-width: none; margi
 body .bridge-pattern-shell > .bridge-pattern-nav {
   position: fixed !important;
   z-index: 40;
-  inset: auto 0 0 50% !important;
+  inset: auto 0 0 0 !important;
   width: min(100%, var(--app-max-width)) !important;
   height: calc(var(--nav-height) + var(--safe-bottom)) !important;
   display: grid !important;
@@ -2560,7 +2560,8 @@ body .bridge-pattern-shell > .bridge-pattern-nav {
   box-shadow: var(--shadow-nav) !important;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  transform: translateX(-50%);
+  margin-inline: auto;
+  transform: none;
 }
 body .bridge-pattern-nav .nav-button {
   position: relative;
@@ -3558,7 +3559,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
   background: var(--color-page);
   animation: none;
 }
-.presentation-screen--enter { animation: ui-step-forward-in 180ms var(--motion-ease) both; }
+.presentation-screen--enter { animation: ui-step-forward-in 180ms var(--motion-ease) backwards; }
 .presentation-screen--enter-back { animation-name: ui-step-back-in; }
 .ui-screen-header {
   position: sticky;
