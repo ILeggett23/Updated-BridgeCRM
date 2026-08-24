@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.21",
-    assetVersion: "v1.3.21",
+    version: "1.3.22",
+    assetVersion: "v1.3.22",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "Pages open without jumping",
-        description: "Settings sections and focused screens now render at their final scroll position with motion that never shifts the layout."
+        title: "Smooth transitions without flashing",
+        description: "Supported devices crossfade complete page snapshots, while fallback devices switch instantly without exposing the background."
       }),
       Object.freeze({
         icon: "people",

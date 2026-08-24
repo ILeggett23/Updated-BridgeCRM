@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.21";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.22";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -411,6 +411,24 @@ function focusPresentationEntry() {
   target?.focus({ preventScroll:true });
 }
 
+function updatePresentationView(update, onReady = null) {
+  const ready = () => { if (onReady) requestAnimationFrame(onReady); };
+  if (typeof document.startViewTransition !== "function" || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    update();
+    ready();
+    return null;
+  }
+  try {
+    const transition = document.startViewTransition(update);
+    if (onReady) transition.updateCallbackDone.then(ready, ready);
+    return transition;
+  } catch {
+    update();
+    ready();
+    return null;
+  }
+}
+
 function presentationParentURL(screen = ui.routedScreen) {
   const contactId = ui.detailId || ui.activityHistoryContactId || ui.pipelineContactId || ui.customerPipelineContactId;
   if (["person-timeline", "person-edit", "stage-transition"].includes(screen) && contactId) return presentationURL({ page:"contacts", mode:"list", screen:"person", person:contactId });
@@ -496,10 +514,11 @@ function navigatePresentation(screen, values = {}, { replace = false, opener = d
   if (replace) history.replaceState(nextState, "", presentationPath(next));
   else history.pushState(nextState, "", presentationPath(next));
   presentationHistoryIndex = nextIndex;
-  applyPresentationRoute(next, { renderNow:true, direction:"forward" });
-  window.scrollTo({ top:0, left:0, behavior:"auto" });
-  profileHeaderScrollSync?.();
-  requestAnimationFrame(focusPresentationEntry);
+  updatePresentationView(() => {
+    applyPresentationRoute(next, { renderNow:true, direction:"forward" });
+    window.scrollTo({ top:0, left:0, behavior:"auto" });
+    profileHeaderScrollSync?.();
+  }, focusPresentationEntry);
   return true;
 }
 
@@ -516,9 +535,11 @@ function navigateMain(page, { mode = page === "contacts" ? "list" : ui.contactMo
   if (replace) history.replaceState(nextState, "", presentationPath(next));
   else history.pushState(nextState, "", presentationPath(next));
   presentationHistoryIndex = nextIndex;
-  applyPresentationRoute(next, { renderNow:true, direction:"forward" });
-  window.scrollTo({ top:0, left:0, behavior:"auto" });
-  profileHeaderScrollSync?.();
+  updatePresentationView(() => {
+    applyPresentationRoute(next, { renderNow:true, direction:"forward" });
+    window.scrollTo({ top:0, left:0, behavior:"auto" });
+    profileHeaderScrollSync?.();
+  });
   return true;
 }
 
@@ -532,10 +553,11 @@ function presentationBack() {
   if (stateParent && history.state?.bridgeIndex > 0) { history.back(); return; }
   const nextIndex = presentationHistoryIndex;
   history.replaceState({ ...(history.state || {}), bridgeIndex:nextIndex, bridgeScrollY:0 }, "", presentationPath(parent));
-  applyPresentationRoute(parent, { renderNow:true, direction:"back" });
-  window.scrollTo({ top:0, left:0, behavior:"auto" });
-  profileHeaderScrollSync?.();
-  requestAnimationFrame(focusPresentationEntry);
+  updatePresentationView(() => {
+    applyPresentationRoute(parent, { renderNow:true, direction:"back" });
+    window.scrollTo({ top:0, left:0, behavior:"auto" });
+    profileHeaderScrollSync?.();
+  }, focusPresentationEntry);
 }
 
 function initializePresentationHistory() {
@@ -545,10 +567,11 @@ function initializePresentationHistory() {
     const nextIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
     const direction = nextIndex < presentationHistoryIndex ? "back" : "forward";
     presentationHistoryIndex = nextIndex;
-    applyPresentationRoute(location.href, { renderNow:true, direction });
-    window.scrollTo({ top:Number(event.state?.bridgeScrollY) || 0, left:0, behavior:"auto" });
-    profileHeaderScrollSync?.();
-    requestAnimationFrame(() => {
+    updatePresentationView(() => {
+      applyPresentationRoute(location.href, { renderNow:true, direction });
+      window.scrollTo({ top:Number(event.state?.bridgeScrollY) || 0, left:0, behavior:"auto" });
+      profileHeaderScrollSync?.();
+    }, () => {
       const selector = String(event.state?.bridgeFocusSelector || "");
       if (selector) {
         if (selector === "#contactSearch") suppressPeopleSearchRouteOnce = true;

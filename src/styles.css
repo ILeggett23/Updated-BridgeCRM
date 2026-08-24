@@ -419,7 +419,8 @@ a { color: inherit; }
 .motion-step[data-motion-direction="back"] { animation-name: ui-step-back-in; }
 @keyframes ui-step-forward-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 @keyframes ui-step-back-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
-@keyframes ui-route-fade-in { from { opacity: .96; } to { opacity: 1; } }
+@keyframes ui-route-old-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-route-new-in { from { opacity: 0; } to { opacity: 1; } }
 .motion-disclosure { overflow: clip; }
 @supports (interpolate-size: allow-keywords) {
   :root { interpolate-size: allow-keywords; }
@@ -3570,8 +3571,16 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
   background: var(--color-page);
   animation: none;
 }
-.presentation-screen--enter { animation: ui-route-fade-in 100ms ease-out backwards; }
-.presentation-screen--enter-back { animation-name: ui-route-fade-in; }
+.presentation-screen--enter,
+.presentation-screen--enter-back { animation: none; }
+@supports (view-transition-name: bridge-page) {
+  .page { view-transition-name: bridge-page; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+  ::view-transition-group(bridge-page) { animation-duration: 140ms; }
+  ::view-transition-old(bridge-page) { animation: ui-route-old-out 140ms ease-out both; }
+  ::view-transition-new(bridge-page) { animation: ui-route-new-in 140ms ease-out both; }
+}
 .ui-screen-header {
   position: sticky;
   top: 0;

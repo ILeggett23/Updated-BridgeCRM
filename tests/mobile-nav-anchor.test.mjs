@@ -16,7 +16,7 @@ test("the primary dock has no transformed fixed layer that can retain an iOS key
 });
 
 test("settled presentation routes release their transform compositor layer", () => {
-  assert.match(styles, /\.presentation-screen--enter \{ animation: ui-route-fade-in 100ms ease-out backwards; \}/);
+  assert.match(styles, /\.presentation-screen--enter,[\s\S]*?\.presentation-screen--enter-back \{ animation: none; \}/);
   assert.match(styles, /@keyframes ui-step-forward-in \{[^}]*from \{[^}]*translateX\(16px\)[^}]*\} to \{[^}]*transform: none/);
   assert.match(styles, /@keyframes ui-step-back-in \{[^}]*from \{[^}]*translateX\(-16px\)[^}]*\} to \{[^}]*transform: none/);
 });
