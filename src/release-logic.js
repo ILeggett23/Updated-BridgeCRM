@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.17",
-    assetVersion: "v1.3.17",
+    version: "1.3.18",
+    assetVersion: "v1.3.18",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "People filters stay in proportion",
-        description: "Selected filters now keep the same size and touch target as every other option."
+        title: "Cleaner relationship actions",
+        description: "Next Up now uses one clear relationship action, and the bottom navigation keeps a simple underline."
       }),
       Object.freeze({
-        icon: "messages",
-        title: "MSA and DTM are easier to find",
-        description: "Activity classification now uses the same prominent multi-select control throughout capture and relationship tracking."
+        icon: "people",
+        title: "Email for every relationship",
+        description: "Save, edit, search, export, and open a person's optional email address from their profile."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "Safer mobile forms and navigation",
-        description: "Edit Person fields stay reachable, while the bottom navigation clears the safe area and focuses the selected destination locally."
+        title: "More compact contact details",
+        description: "Phone and email now fit into a tighter profile layout without crowding mobile controls."
       })
     ])
   });
