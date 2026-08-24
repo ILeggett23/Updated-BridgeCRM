@@ -81,7 +81,7 @@ test("warm notification navigation waits for the active modal without discarding
   );
   const blocker = appSource.slice(
     appSource.indexOf("function blockingModalOpen"),
-    appSource.indexOf("function queueAutomaticReleaseNotes")
+    appSource.indexOf("function releaseNotesModal")
   );
   const deferredNavigation = appSource.slice(
     appSource.indexOf("function deferNotificationNavigation"),

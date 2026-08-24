@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.23";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.24";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -7,7 +7,7 @@ const { dailyGoalMetrics, dayKey, definitions: ACHIEVEMENTS, dueReminderEvents, 
 const { analyticsRange, buildInsightsModel, inAnalyticsRange, uniquePhoneCaptures } = globalThis.BridgeAnalytics;
 const { canonicalPhone, phoneIdentity, telHref, smsHref } = globalThis.BridgeCommunication;
 const { createSnapshot, scorecardSummary } = globalThis.BridgeScorecard || {};
-const { APP_RELEASE, markReleaseSeen, readLastSeenVersion, shouldShowRelease } = globalThis.BridgeRelease;
+const { APP_RELEASE, markReleaseSeen } = globalThis.BridgeRelease;
 const {
   DEFAULT_CADENCE_PRESETS,
   FORMULA_VERSION: HEALTH_FORMULA_VERSION,
@@ -264,7 +264,6 @@ let ui = {
   scorecardShareBusy: false,
   scorecardCreated: null,
   releaseNotesOpen: false,
-  releaseNotesPending: false,
   releaseNotesReturnToSettings: false,
   sharedScorecard: null,
   sharedScorecardLoading: false,
@@ -788,7 +787,6 @@ function finishStateHydration() {
   if (!consumedNotification) applyPresentationRoute(location.href, { renderNow:false, direction:"forward" });
   render();
   if(ui.routedScreen)requestAnimationFrame(focusPresentationEntry);
-  queueAutomaticReleaseNotes();
   refreshPushSubscriptionState().catch(() => {});
   startReminderChecks();
 }
@@ -1721,7 +1719,6 @@ function render() {
     navIndicator.animate(frames,{duration:320,easing:'cubic-bezier(.16,1,.3,1)'});
   }
   if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
-  else if (ui.releaseNotesPending && !blockingModalOpen()) setTimeout(maybePresentReleaseNotes, 0);
 }
 
 function renderSharedScorecard() {
@@ -1787,21 +1784,6 @@ function bindConfirmationEvents() {
     if(ui.confirmation===confirmation)ui.confirmation=null;
     confirmation.onConfirm?.();
   },{once:true});
-}
-
-function queueAutomaticReleaseNotes() {
-  if (!shouldShowRelease(readLastSeenVersion(), APP_RELEASE)) return;
-  ui.releaseNotesPending = true;
-  setTimeout(maybePresentReleaseNotes, 0);
-}
-
-function maybePresentReleaseNotes() {
-  if (!ui.releaseNotesPending || ui.releaseNotesOpen || blockingModalOpen() || sharedScorecardToken) return;
-  releaseFocusReturn = document.activeElement;
-  ui.releaseNotesPending = false;
-  ui.releaseNotesOpen = true;
-  ui.releaseNotesReturnToSettings = false;
-  render();
 }
 
 function releaseNotesModal() {
@@ -2089,7 +2071,6 @@ function bindSharedPrimitiveEvents() {
       if(!blockingModalOpen())syncDocumentScrollLock(false);
       if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
       if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
-      else if (ui.releaseNotesPending && !blockingModalOpen()) setTimeout(maybePresentReleaseNotes, 0);
     };
     if (backdrop?.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
     else setTimeout(finish, 180);
