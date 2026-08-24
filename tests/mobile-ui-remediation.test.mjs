@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-const remediation = styles.slice(styles.indexOf("/* 1.3.18 — relationship contact flow"));
+const remediation = styles.slice(styles.indexOf("/* 1.3.19 — relationship email action"));
 
 test("people quick filters keep one physical control contract", () => {
   assert.match(remediation, /\.people-home__quick-filter,[\s\S]*?height: 44px;[\s\S]*?min-height: 44px;[\s\S]*?max-height: 44px;/);

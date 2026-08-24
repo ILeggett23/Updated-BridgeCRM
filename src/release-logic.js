@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.18",
-    assetVersion: "v1.3.18",
+    version: "1.3.19",
+    assetVersion: "v1.3.19",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "Cleaner relationship actions",
-        description: "Next Up now uses one clear relationship action, and the bottom navigation keeps a simple underline."
+        title: "Email from the relationship header",
+        description: "A dedicated Email action now sits beside Call, Text, Log, and Follow up for fast access."
       }),
       Object.freeze({
         icon: "people",

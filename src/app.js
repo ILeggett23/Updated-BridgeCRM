@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.18";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.19";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -145,6 +145,7 @@ const icons = {
   messages: icon('<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>'),
   phone: icon('<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>'),
   phoneCall: icon('<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>'),
+  mail: icon('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
   bridge: icon('<path d="M3 18c2-7 5-10 9-10s7 3 9 10M3 18h18M6 18v3M18 18v3M8.5 10.5V18M15.5 10.5V18"/>'),
   sort: icon('<path d="m3 8 4-4 4 4M7 4v16M21 16l-4 4-4-4M17 20V4"/>'),
   tags: icon('<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414L10 20l10-10Z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><path d="m13.5 6.5 4 4"/>'),
@@ -3406,9 +3407,10 @@ function profileHeader(c, { routed=false }={}) {
 }
 function relationshipProfileOverview(c,active,{routed=false}={}) {
   const callable=isCallablePhone(c.phoneNumber);
+  const emailable=Boolean(String(c.email||"").trim()&&isValidEmail(c.email));
   const latest=latestConversationTime(c);
   const current=currentPipelineStage(c);
-  const actions=`${callable?`<a href="${phoneHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Call" aria-label="Call ${escapeHTML(c.fullName)}">${icons.phone}<span>Call</span></a>`:`<button type="button" disabled aria-label="Call unavailable; no phone number">${icons.phone}<span>Call</span></button>`}${callable?`<a href="${messageHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Text" aria-label="Text ${escapeHTML(c.fullName)}">${icons.chat}<span>Text</span></a>`:`<button type="button" disabled aria-label="Text unavailable; no phone number">${icons.chat}<span>Text</span></button>`}<button type="button" data-contact-detail-tab="notes">${icons.penLine}<span>Log</span></button><button type="button" data-profile-followup>${icons.calendarPlus}<span>Follow up</span></button>`;
+  const actions=`${callable?`<a href="${phoneHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Call" aria-label="Call ${escapeHTML(c.fullName)}">${icons.phone}<span>Call</span></a>`:`<button type="button" disabled aria-label="Call unavailable; no phone number">${icons.phone}<span>Call</span></button>`}${callable?`<a href="${messageHref(c.phoneNumber)}" data-communication-contact-id="${c.id}" data-communication-type="Text" aria-label="Text ${escapeHTML(c.fullName)}">${icons.chat}<span>Text</span></a>`:`<button type="button" disabled aria-label="Text unavailable; no phone number">${icons.chat}<span>Text</span></button>`}${emailable?`<a href="${emailHref(c.email)}" aria-label="Email ${escapeHTML(c.fullName)}">${icons.mail}<span>Email</span></a>`:`<button type="button" disabled aria-label="Email unavailable; no email address">${icons.mail}<span>Email</span></button>`}<button type="button" data-contact-detail-tab="notes">${icons.penLine}<span>Log</span></button><button type="button" data-profile-followup>${icons.calendarPlus}<span>Follow up</span></button>`;
   const context=[c.conversationType,c.placeName?`met at ${c.placeName}`:""].filter(Boolean).join(" · ");
   const identityTitle=routed?`<h1 id="presentationTitle" tabindex="-1" data-profile-large-title>${escapeHTML(c.fullName)}</h1>`:`<h2>${escapeHTML(c.fullName)}</h2>`;
   return `<div class="relationship-profile"><section class="profile-identity">${identityTitle}<div class="profile-identity__status">${c.role==="Team"?`<span class="profile-role-chip">Team</span>`:`<span class="profile-role-chip"><i aria-hidden="true"></i>${escapeHTML(`${c.role} · ${current||"No stage"}`)}</span>`}<span>Last interaction ${latest?escapeHTML(peopleRelativeDate(latest)):"not recorded"}</span></div>${context?`<p>${escapeHTML(context)}</p>`:""}</section><div class="profile-quick-actions" aria-label="Quick contact actions">${actions}</div>${profileNextAction(c,active)}${profileBridgeBrief(c)}${profileTimeline(c)}${profilePipelineSection(c)}${profileDetails(c)}</div>`;
