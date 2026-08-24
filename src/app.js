@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.22";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.23";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -412,21 +412,8 @@ function focusPresentationEntry() {
 }
 
 function updatePresentationView(update, onReady = null) {
-  const ready = () => { if (onReady) requestAnimationFrame(onReady); };
-  if (typeof document.startViewTransition !== "function" || matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    update();
-    ready();
-    return null;
-  }
-  try {
-    const transition = document.startViewTransition(update);
-    if (onReady) transition.updateCallbackDone.then(ready, ready);
-    return transition;
-  } catch {
-    update();
-    ready();
-    return null;
-  }
+  update();
+  if (onReady) requestAnimationFrame(onReady);
 }
 
 function presentationParentURL(screen = ui.routedScreen) {

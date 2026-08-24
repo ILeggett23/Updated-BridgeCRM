@@ -23,13 +23,10 @@ test("history restoration sets scroll synchronously and defers only focus", () =
   assert.ok(transition >= 0 && apply > transition && scroll > apply && focus > scroll);
 });
 
-test("routed screens crossfade snapshots without exposing the page background", () => {
+test("routed screens update atomically without page-level animation layers", () => {
   assert.match(app, /function updatePresentationView\(update, onReady = null\)/);
-  assert.match(app, /document\.startViewTransition\(update\)/);
-  assert.match(app, /prefers-reduced-motion: reduce/);
+  assert.match(app, /function updatePresentationView\(update, onReady = null\) \{\n  update\(\);\n  if \(onReady\) requestAnimationFrame\(onReady\);\n\}/);
+  assert.doesNotMatch(app, /document\.startViewTransition/);
   assert.match(styles, /\.presentation-screen--enter,[\s\S]*?\.presentation-screen--enter-back \{ animation: none; \}/);
-  assert.match(styles, /::view-transition-old\(bridge-page\) \{ animation: ui-route-old-out 140ms ease-out both; \}/);
-  assert.match(styles, /::view-transition-new\(bridge-page\) \{ animation: ui-route-new-in 140ms ease-out both; \}/);
-  const routeKeyframes = `${styles.match(/@keyframes ui-route-old-out \{[^\n]+\}/)?.[0] || ""}${styles.match(/@keyframes ui-route-new-in \{[^\n]+\}/)?.[0] || ""}`;
-  assert.doesNotMatch(routeKeyframes, /translate|transform/);
+  assert.doesNotMatch(styles, /::view-transition|view-transition-name/);
 });

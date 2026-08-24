@@ -35,7 +35,7 @@ test("presentation navigation supports browser history, focus return, and scroll
   assert.match(app, /lastRenderedPresentationKey/);
   assert.match(app, /ui\.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey\?ui\.routeDirection:""/);
   assert.match(styles, /\.presentation-screen--enter,[\s\S]*?\.presentation-screen--enter-back \{ animation: none; \}/);
-  assert.match(styles, /view-transition-name: bridge-page/);
+  assert.doesNotMatch(styles, /view-transition-name: bridge-page/);
   assert.match(styles, /\.page\.page-enter, \.page\.mode-enter \{ animation: none; \}/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]+\.presentation-screen \{ animation: none !important; \}/);
 });
