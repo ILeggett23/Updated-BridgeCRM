@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.24",
-    assetVersion: "v1.3.24",
+    version: "1.3.25",
+    assetVersion: "v1.3.25",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "Release notes stay out of the way",
-        description: "Updates now open directly into Bridge; release notes are available only when requested from Settings."
+        title: "A new Bridge identity",
+        description: "The new app icon now appears on the Home Screen, startup splash, and Today interface."
       }),
       Object.freeze({
         icon: "people",

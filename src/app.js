@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.24";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.25";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -2450,7 +2450,7 @@ function renderDashboard() {
   const momentum = todayMomentum(now);
   return `<section class="today-home" aria-label="Today">
     <header class="today-home__header">
-      <div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1>${greeting}</h1></div>
+      <div class="today-home__identity"><img class="today-home__app-icon" src="./bridge-icon-192.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1>${greeting}</h1></div></div>
       ${IconButton("gear", "Settings", { attributes:'id="settingsButton"', className:"today-home__settings" })}
     </header>
     ${todayGoalProgress(dailyGoal)}

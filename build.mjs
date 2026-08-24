@@ -27,6 +27,7 @@ const serviceWorker = await readFile(new URL("./src/sw.js", import.meta.url), "u
 const appleTouchIcon = await readFile(new URL("./src/apple-touch-icon.png", import.meta.url));
 const icon192 = await readFile(new URL("./src/bridge-icon-192.png", import.meta.url));
 const icon512 = await readFile(new URL("./src/bridge-icon-512.png", import.meta.url));
+const icon1024 = await readFile(new URL("./src/bridge-icon-1024.png", import.meta.url));
 const fontFileNames = [
   "inter-tight-latin.woff2",
   "inter-tight-latin-ext.woff2",
@@ -65,6 +66,7 @@ const SERVICE_WORKER = ${JSON.stringify(serviceWorker)};
 const APPLE_TOUCH_ICON_BASE64 = ${JSON.stringify(appleTouchIcon.toString("base64"))};
 const ICON_192_BASE64 = ${JSON.stringify(icon192.toString("base64"))};
 const ICON_512_BASE64 = ${JSON.stringify(icon512.toString("base64"))};
+const ICON_1024_BASE64 = ${JSON.stringify(icon1024.toString("base64"))};
 const FONT_ASSETS = ${JSON.stringify(fontAssets)};
 const EMPTY_STATE = ${JSON.stringify({ contacts: [], places: [], settings: {}, meta: { version: 1 } })};
 const json = (value, status = 200, extraHeaders = {}) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders } });
@@ -418,6 +420,7 @@ async function handleRequest(request, env) {
     if (url.pathname === "/apple-touch-icon.png") return new Response(binaryFromBase64(APPLE_TOUCH_ICON_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-192.png") return new Response(binaryFromBase64(ICON_192_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-512.png") return new Response(binaryFromBase64(ICON_512_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/bridge-icon-1024.png") return new Response(binaryFromBase64(ICON_1024_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     const publicScorecardMatch = url.pathname.match(/^\\/s\\/([A-Za-z0-9_-]{24,128})(?:\\/(preview\\.png))?$/);
     if (publicScorecardMatch && request.method === "GET") {
       if (!env.DB) return noIndexHTML("<!doctype html><title>Scorecard unavailable</title><p>This scorecard is unavailable.</p>", 404);
@@ -619,6 +622,7 @@ await Promise.all([
   copyFile(new URL("./src/apple-touch-icon.png", import.meta.url), new URL("./dist/apple-touch-icon.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-192.png", import.meta.url), new URL("./dist/bridge-icon-192.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-512.png", import.meta.url), new URL("./dist/bridge-icon-512.png", import.meta.url)),
+  copyFile(new URL("./src/bridge-icon-1024.png", import.meta.url), new URL("./dist/bridge-icon-1024.png", import.meta.url)),
   ...fontFileNames.map(fileName => copyFile(new URL(`./src/fonts/${fileName}`, import.meta.url), new URL(`./dist/fonts/${fileName}`, import.meta.url))),
   copyFile(new URL("./src/fonts/inter-tight-OFL.txt", import.meta.url), new URL("./dist/fonts/inter-tight-OFL.txt", import.meta.url)),
   copyFile(new URL("./src/fonts/newsreader-OFL.txt", import.meta.url), new URL("./dist/fonts/newsreader-OFL.txt", import.meta.url))

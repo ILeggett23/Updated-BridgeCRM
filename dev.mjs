@@ -24,7 +24,8 @@ const staticFiles = new Map([
   ["/manifest.webmanifest", ["./src/manifest.webmanifest", "application/manifest+json; charset=utf-8"]],
   ["/apple-touch-icon.png", ["./src/apple-touch-icon.png", "image/png"]],
   ["/bridge-icon-192.png", ["./src/bridge-icon-192.png", "image/png"]],
-  ["/bridge-icon-512.png", ["./src/bridge-icon-512.png", "image/png"]]
+  ["/bridge-icon-512.png", ["./src/bridge-icon-512.png", "image/png"]],
+  ["/bridge-icon-1024.png", ["./src/bridge-icon-1024.png", "image/png"]]
 ]);
 
 for (const fontFile of [
