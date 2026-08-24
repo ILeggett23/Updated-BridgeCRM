@@ -223,6 +223,16 @@ img, video, canvas, svg { max-width: 100%; }
 .app-icon { display: block; overflow: visible; shape-rendering: geometricPrecision; }
 a { color: inherit; }
 :focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+@media (hover: none) and (pointer: coarse) {
+  :is(a, button, input, select, textarea, [role="button"]):is(:focus, :focus-visible) {
+    outline: 0;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :is(.search, .ui-search-field, .quick-capture-picker__search, .select-wrap, .ui-filter-control, .activity-selector__option, .followup-filter-control, .cadence-input):focus-within {
+    box-shadow: none !important;
+  }
+}
 .hidden { display: none !important; }
 #app, .app-shell, .main, .page { min-width: 0; max-width: 100%; }
 .boot { min-height: 100vh; min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 12px; font-size: 22px; }
@@ -409,6 +419,7 @@ a { color: inherit; }
 .motion-step[data-motion-direction="back"] { animation-name: ui-step-back-in; }
 @keyframes ui-step-forward-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 @keyframes ui-step-back-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes ui-route-fade-in { from { opacity: .96; } to { opacity: 1; } }
 .motion-disclosure { overflow: clip; }
 @supports (interpolate-size: allow-keywords) {
   :root { interpolate-size: allow-keywords; }
@@ -3559,8 +3570,8 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
   background: var(--color-page);
   animation: none;
 }
-.presentation-screen--enter { animation: ui-step-forward-in 180ms var(--motion-ease) backwards; }
-.presentation-screen--enter-back { animation-name: ui-step-back-in; }
+.presentation-screen--enter { animation: ui-route-fade-in 100ms ease-out backwards; }
+.presentation-screen--enter-back { animation-name: ui-route-fade-in; }
 .ui-screen-header {
   position: sticky;
   top: 0;

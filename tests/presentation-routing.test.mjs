@@ -34,8 +34,8 @@ test("presentation navigation supports browser history, focus return, and scroll
   assert.match(foundation, /ui\.routeEntryMotion \? ` presentation-screen--enter/);
   assert.match(app, /lastRenderedPresentationKey/);
   assert.match(app, /ui\.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey\?ui\.routeDirection:""/);
-  assert.match(styles, /\.presentation-screen--enter \{ animation: ui-step-forward-in 180ms/);
-  assert.match(styles, /\.presentation-screen--enter-back \{ animation-name: ui-step-back-in; \}/);
+  assert.match(styles, /\.presentation-screen--enter \{ animation: ui-route-fade-in 100ms ease-out backwards; \}/);
+  assert.match(styles, /\.presentation-screen--enter-back \{ animation-name: ui-route-fade-in; \}/);
   assert.match(styles, /\.page\.page-enter, \.page\.mode-enter \{ animation: none; \}/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]+\.presentation-screen \{ animation: none !important; \}/);
 });

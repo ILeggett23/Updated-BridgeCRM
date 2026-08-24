@@ -34,6 +34,6 @@ test("Profile collapse switches only after the large title passes the sticky hea
 test("Profile collapse controller is disposed on rerender and synchronized after scroll restoration",()=>{
   assert.match(app,/profileHeaderScrollCleanup\?\.\(\);\s*profileHeaderScrollCleanup=null;\s*profileHeaderScrollSync=null;/);
   assert.match(app,/window\.scrollTo\(\{ top:Number\(event\.state\?\.bridgeScrollY\) \|\| 0[^\n]+\n\s*profileHeaderScrollSync\?\.\(\)/);
-  assert.match(app,/window\.scrollTo\(\{ top:0, left:0, behavior:"auto" \}\); profileHeaderScrollSync\?\.\(\)/);
+  assert.match(app,/window\.scrollTo\(\{ top:0, left:0, behavior:"auto" \}\);\s*profileHeaderScrollSync\?\.\(\)/);
   assert.match(app,/if\(ui\.routedScreen==="person"\)bindProfileCollapsingHeader\(\)/);
 });
