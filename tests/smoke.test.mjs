@@ -74,7 +74,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.16"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.17"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -174,8 +174,9 @@ test("pipeline stage labels preserve exact saved values", () => {
 test("standalone MSA and DTM cards use concise names without grey descriptions", () => {
   assert.ok(source.includes('stageCheck("MSA","",{showDescription:false})'));
   assert.ok(source.includes('stageCheck("DTM","",{showDescription:false})'));
-  assert.ok(source.includes('editStageCheck(c,"MSA","")'));
-  assert.ok(source.includes('editStageCheck(c,"DTM","")'));
+  assert.ok(source.includes('function ActivitySelector('));
+  assert.ok(source.includes('stage==="MSA"?"Made aware":"Drop the message"'));
+  assert.equal(source.includes('<select name="standaloneActivity"'), false);
 });
 
 test("Conversation Studio uses the six-step guided flow without changing saved fields", () => {
@@ -405,13 +406,13 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.16 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.16"));
-  assert.ok(page.includes("./styles.css?v=1.3.16"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.16"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.16"));
-  assert.ok(page.includes("./app.js?v=1.3.16"));
-  assert.ok(worker.includes("bridge-app-v1.3.16"));
+test("v1.3.17 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.17"));
+  assert.ok(page.includes("./styles.css?v=1.3.17"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.17"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.17"));
+  assert.ok(page.includes("./app.js?v=1.3.17"));
+  assert.ok(worker.includes("bridge-app-v1.3.17"));
 });
 
 test("the GitHub Pages client opens locally without loading the Cloudflare account gate", async () => {
@@ -423,7 +424,7 @@ test("the GitHub Pages client opens locally without loading the Cloudflare accou
   assert.ok(source.includes('mode: "local"'));
   assert.equal(page.includes("account-client.js"), false);
   assert.equal(serviceWorker.includes("account-client.js"), false);
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.16", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.17", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));

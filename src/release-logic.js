@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.16",
-    assetVersion: "v1.3.16",
+    version: "1.3.17",
+    assetVersion: "v1.3.17",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "messages",
-        title: "Capture without dock bleed-through",
-        description: "Opening Capture now removes the fixed dock from Safari's backdrop composition and restores it at the same position on close."
+        icon: "people",
+        title: "People filters stay in proportion",
+        description: "Selected filters now keep the same size and touch target as every other option."
       }),
       Object.freeze({
-        icon: "chart",
-        title: "Pipeline tabs, back in proportion",
-        description: "Prospect and Customer are compact content-width tabs again, without totals beside their labels."
+        icon: "messages",
+        title: "MSA and DTM are easier to find",
+        description: "Activity classification now uses the same prominent multi-select control throughout capture and relationship tracking."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "One continuous bottom surface",
-        description: "Safari's outer mobile canvas now matches the dock and Capture sheet while the intended dock shadow remains above navigation."
+        title: "Safer mobile forms and navigation",
+        description: "Edit Person fields stay reachable, while the bottom navigation clears the safe area and focuses the selected destination locally."
       })
     ])
   });
