@@ -4,15 +4,18 @@ import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-const remediation = styles.slice(styles.indexOf("/* 1.3.17 — shared mobile hierarchy"));
+const remediation = styles.slice(styles.indexOf("/* 1.3.18 — relationship contact flow"));
 
 test("people quick filters keep one physical control contract", () => {
   assert.match(remediation, /\.people-home__quick-filter,[\s\S]*?height: 44px;[\s\S]*?min-height: 44px;[\s\S]*?max-height: 44px;/);
-  assert.match(remediation, /\.people-home__quick-filter\.is-active \{[\s\S]*?height: 44px;[\s\S]*?padding-inline: 12px;/);
+  assert.match(remediation, /\.people-home__quick-filter\.is-active \{[\s\S]*?height: 44px;[\s\S]*?min-width: 60px;[\s\S]*?padding-inline: 10px;/);
 });
 
-test("mobile navigation uses safe-area clearance and a moving local focus zone", () => {
-  assert.match(remediation, /\.nav-selection-indicator \{[\s\S]*?radial-gradient[\s\S]*?box-shadow:/);
+test("mobile navigation uses safe-area clearance without a selected-tab glow", () => {
+  assert.match(remediation, /\.nav-selection-indicator \{[\s\S]*?height: 3px;[\s\S]*?background: transparent;[\s\S]*?box-shadow: none;/);
+  const indicator = remediation.slice(remediation.indexOf("body .bridge-pattern-nav .nav-selection-indicator"), remediation.indexOf("body .bridge-pattern-nav .quick-create-button"));
+  assert.doesNotMatch(indicator, /radial-gradient/);
+  assert.match(styles, /bridge-pattern-shell > \.bridge-pattern-nav[\s\S]*?box-shadow: var\(--shadow-nav\)/);
   assert.match(remediation, /height: calc\(var\(--nav-height\) \+ var\(--safe-bottom\) \+ var\(--nav-lift\)\)/);
   assert.match(remediation, /padding-bottom: calc\(var\(--safe-bottom\) \+ var\(--nav-lift\)\)/);
   assert.match(remediation, /\.quick-create-button \{ z-index: 3; \}/);
