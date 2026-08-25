@@ -86,7 +86,7 @@ test("hosted scorecards are private, revocable, and not indexable", async () => 
   assert.equal(pageResponse.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
   assert.match(page, /property="og:image"/);
   assert.match(page, /7 conversations, 4 contacts, 5 prospects/);
-  assert.match(page, /https:\/\/bridgecrm-human-network\.mr-zayway\.chatgpt\.site\/\?shared=/);
+  assert.match(page, /https:\/\/ileggett23\.github\.io\/Updated-BridgeCRM\/\?shared=/);
 
   const previewResponse = await worker.fetch(new Request(created.url + "/preview.png"), env);
   assert.equal(previewResponse.status, 200);
@@ -106,7 +106,7 @@ test("configured hosted browser origins can use the backend", async () => {
   const env = {
     BACKEND_ONLY: "true",
     ALLOWED_ORIGINS: "https://ileggett23.github.io",
-    PUBLIC_APP_URL: "https://ileggett23.github.io/bridge-crm/",
+    PUBLIC_APP_URL: "https://ileggett23.github.io/Updated-BridgeCRM/",
     DB: new ScorecardDatabase()
   };
 
@@ -129,11 +129,11 @@ test("configured hosted browser origins can use the backend", async () => {
   assert.equal(root.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 });
 
-test("the root-hosted Sites origin is allowed by the production defaults", async () => {
+test("the GitHub Pages origin is allowed by the production defaults", async () => {
   const workerURL = new URL("../dist/server/index.js", import.meta.url);
-  workerURL.searchParams.set("sites-cors-test", String(Date.now()));
+  workerURL.searchParams.set("github-pages-cors-test", String(Date.now()));
   const worker = (await import(workerURL.href)).default;
-  const origin = "https://bridgecrm-human-network.mr-zayway.chatgpt.site";
+  const origin = "https://ileggett23.github.io";
   const response = await worker.fetch(new Request("https://bridge-api.example/api/health", {
     headers: { Origin: origin }
   }), { BACKEND_ONLY: "true" });
@@ -148,7 +148,7 @@ test("scorecard links provide a rich preview before opening the public GitHub Pa
   const env = {
     BACKEND_ONLY: "true",
     ALLOWED_ORIGINS: "https://ileggett23.github.io",
-    PUBLIC_APP_URL: "https://ileggett23.github.io/bridge-crm/",
+    PUBLIC_APP_URL: "https://ileggett23.github.io/Updated-BridgeCRM/",
     DB: new ScorecardDatabase()
   };
   const response = await worker.fetch(new Request("https://bridge-api.example/api/scorecards", {
