@@ -23,6 +23,12 @@ test("the supplied app artwork owns every required icon size", async () => {
   assert.ok(manifest.icons.some(icon => icon.src.includes("bridge-icon-1024.png") && icon.sizes === "1024x1024"));
 });
 
+test("the Today mark is derived from the canonical icon with real transparency", async () => {
+  const mark = await readFile(new URL("src/bridge-mark-transparent.png", root));
+  assert.deepEqual(pngDimensions(mark), [192, 192]);
+  assert.equal(mark[25], 6, "transparent mark must use PNG RGBA color type");
+});
+
 test("boot and authenticated session loading render the canonical app icon", () => {
   assert.match(page, /class="brand-mark boot__icon" src="\.\/bridge-icon-192\.png/);
   assert.match(page, /Relationships that move forward/);
@@ -35,22 +41,27 @@ test("boot and authenticated session loading render the canonical app icon", () 
   assert.match(page, /class="auth-logo"|account-client\.js/);
 });
 
-test("Today keeps a compact transparent Bridge at-mark aligned with the greeting", () => {
-  assert.match(app, /class="today-home__brand-mark" aria-hidden="true">@<\/span>/);
-  assert.doesNotMatch(app, /class="today-home__app-icon"/);
+test("Today uses the compact canonical Bridge app icon aligned with the greeting", () => {
+  assert.match(app, /class="today-home__brand-mark" src="\.\/bridge-mark-transparent\.png\?v=\$\{escapeHTML\(APP_RELEASE\.version\)\}" alt="">/);
+  assert.doesNotMatch(app, /class="today-home__brand-mark"[^>]*>@<\/span>/);
   assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 36px minmax\(0, 1fr\)/);
   const baseMark = styles.slice(styles.indexOf(".today-home__brand-mark {"), styles.indexOf("}", styles.indexOf(".today-home__brand-mark {")) + 1);
   assert.match(baseMark, /width: 36px; height: 36px/);
-  assert.match(baseMark, /font-size: 44px/);
+  assert.match(baseMark, /border-radius: 0/);
   assert.match(baseMark, /background: transparent/);
   assert.match(baseMark, /box-shadow: none/);
+  assert.match(baseMark, /object-fit: contain/);
   assert.match(styles, /\.today-home__identity \{ grid-template-columns: 28px minmax\(0, 1fr\); gap: 9px; \}/);
-  assert.match(styles, /\.today-home__brand-mark \{ width: 28px; height: 28px; font-size: 34px; \}/);
+  assert.match(styles, /\.today-home__brand-mark \{ width: 28px; height: 28px; \}/);
 });
 
 test("all build and preview paths serve the 1024px icon", () => {
   assert.match(build, /ICON_1024_BASE64/);
+  assert.match(build, /BRIDGE_MARK_TRANSPARENT_BASE64/);
+  assert.match(build, /url\.pathname === "\/bridge-mark-transparent\.png"/);
+  assert.match(build, /dist\/bridge-mark-transparent\.png/);
   assert.match(build, /url\.pathname === "\/bridge-icon-1024\.png"/);
   assert.match(build, /dist\/bridge-icon-1024\.png/);
   assert.match(dev, /"\/bridge-icon-1024\.png"/);
+  assert.match(dev, /"\/bridge-mark-transparent\.png"/);
 });
