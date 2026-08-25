@@ -23,6 +23,7 @@ const staticFiles = new Map([
   ["/sw.js", ["./src/sw.js", "text/javascript; charset=utf-8"]],
   ["/manifest.webmanifest", ["./src/manifest.webmanifest", "application/manifest+json; charset=utf-8"]],
   ["/apple-touch-icon.png", ["./src/apple-touch-icon.png", "image/png"]],
+  ["/bridge-mark-transparent.png", ["./src/bridge-mark-transparent.png", "image/png"]],
   ["/bridge-icon-192.png", ["./src/bridge-icon-192.png", "image/png"]],
   ["/bridge-icon-512.png", ["./src/bridge-icon-512.png", "image/png"]],
   ["/bridge-icon-1024.png", ["./src/bridge-icon-1024.png", "image/png"]]

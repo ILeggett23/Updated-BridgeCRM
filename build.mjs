@@ -25,6 +25,7 @@ const js = await readFile(new URL("./src/app.js", import.meta.url), "utf8");
 const manifest = await readFile(new URL("./src/manifest.webmanifest", import.meta.url), "utf8");
 const serviceWorker = await readFile(new URL("./src/sw.js", import.meta.url), "utf8");
 const appleTouchIcon = await readFile(new URL("./src/apple-touch-icon.png", import.meta.url));
+const bridgeMarkTransparent = await readFile(new URL("./src/bridge-mark-transparent.png", import.meta.url));
 const icon192 = await readFile(new URL("./src/bridge-icon-192.png", import.meta.url));
 const icon512 = await readFile(new URL("./src/bridge-icon-512.png", import.meta.url));
 const icon1024 = await readFile(new URL("./src/bridge-icon-1024.png", import.meta.url));
@@ -64,6 +65,7 @@ const APP_JS = ${JSON.stringify(js)};
 const MANIFEST = ${JSON.stringify(manifest)};
 const SERVICE_WORKER = ${JSON.stringify(serviceWorker)};
 const APPLE_TOUCH_ICON_BASE64 = ${JSON.stringify(appleTouchIcon.toString("base64"))};
+const BRIDGE_MARK_TRANSPARENT_BASE64 = ${JSON.stringify(bridgeMarkTransparent.toString("base64"))};
 const ICON_192_BASE64 = ${JSON.stringify(icon192.toString("base64"))};
 const ICON_512_BASE64 = ${JSON.stringify(icon512.toString("base64"))};
 const ICON_1024_BASE64 = ${JSON.stringify(icon1024.toString("base64"))};
@@ -418,6 +420,7 @@ async function handleRequest(request, env) {
     if (url.pathname === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "public, max-age=3600" } });
     if (url.pathname === "/sw.js") return new Response(SERVICE_WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
     if (url.pathname === "/apple-touch-icon.png") return new Response(binaryFromBase64(APPLE_TOUCH_ICON_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/bridge-mark-transparent.png") return new Response(binaryFromBase64(BRIDGE_MARK_TRANSPARENT_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-192.png") return new Response(binaryFromBase64(ICON_192_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-512.png") return new Response(binaryFromBase64(ICON_512_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-1024.png") return new Response(binaryFromBase64(ICON_1024_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
@@ -620,6 +623,7 @@ await writeFile(new URL("./dist/config.js", import.meta.url), config);
 await writeFile(new URL("./dist/account-client.js", import.meta.url), accountClient);
 await Promise.all([
   copyFile(new URL("./src/apple-touch-icon.png", import.meta.url), new URL("./dist/apple-touch-icon.png", import.meta.url)),
+  copyFile(new URL("./src/bridge-mark-transparent.png", import.meta.url), new URL("./dist/bridge-mark-transparent.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-192.png", import.meta.url), new URL("./dist/bridge-icon-192.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-512.png", import.meta.url), new URL("./dist/bridge-icon-512.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-1024.png", import.meta.url), new URL("./dist/bridge-icon-1024.png", import.meta.url)),
