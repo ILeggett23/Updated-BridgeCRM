@@ -2,29 +2,26 @@
 
 ## Current Status
 
-Bridge now contains a guarded Cloudflare account, synchronization, backup, and
-recovery foundation. It is **not enabled or deployed as a production login
-system yet**.
+Bridge contains a guarded Cloudflare account, synchronization, backup, and
+recovery system. The production Worker currently has authentication enabled,
+but this repository must not claim production readiness until disposable-account
+Email, Turnstile, session, sync, reset, backup, and restore acceptance flows pass.
 
-`wrangler.jsonc` deliberately keeps:
+`wrangler.jsonc` keeps:
 
 ```json
-"AUTH_ENABLED": "false"
+"AUTH_ENABLED": "true"
 ```
 
-Do not change that value until the email sender, Turnstile widget, password
-pepper, R2 bucket, D1 migrations, and end-to-end account tests are complete.
-With the gate disabled, the existing GitHub Pages PWA continues to use its
-local offline data without forcing users through an unfinished login flow.
+Local development explicitly reports `authEnabled: false` unless a Worker API
+is supplied, preserving the local-first workflow without weakening production.
 
 This project uses only:
 
 - GitHub Pages for the Bridge PWA
 - A Cloudflare Worker for hosted API features
 - Cloudflare D1 for structured account and sync data
-- Cloudflare R2 for logical JSON backup objects once configured
-
-ChatGPT Sites is not part of this architecture.
+- Cloudflare R2 for private logical JSON backup objects
 
 ## Architecture
 
@@ -116,9 +113,15 @@ SameSite cookies.
 
 ### Password hashing
 
-Passwords use PBKDF2-HMAC-SHA-256 with unique random salts and 210,000
+Passwords use PBKDF2-HMAC-SHA-256 with unique random salts, a stored per-user
+iteration count, and currently 100,000
 iterations because it is available in the Workers Web Crypto runtime without
 shipping fragile native code. Passwords are never stored or logged.
+
+`AUTH_HASH_PEPPER` is used only when hashing request IP and device fingerprints
+for abuse controls and session metadata. It is not included in password
+derivation. Do not silently add a password pepper: existing stored hashes must
+continue to verify, and any cost upgrade must use compatible, post-login rehashing.
 
 PBKDF2 is deliberately slow but is not memory-hard. Before a broad production
 launch, reassess a Workers-compatible Argon2id implementation and benchmark it
@@ -253,20 +256,23 @@ pnpm wrangler secret put TURNSTILE_SECRET_KEY
 The Worker validates each token with Cloudflare. A browser-side success alone
 is never treated as proof.
 
-### 5. Password pepper
+### 5. Fingerprint pepper and push dispatch secret
 
-Generate a long random value and store it as a Worker secret:
+Generate long random values and store them as Worker secrets:
 
 ```bash
 pnpm wrangler secret put AUTH_HASH_PEPPER
+pnpm wrangler secret put PUSH_DISPATCH_SECRET
 ```
 
-Keep it in the production secret manager and an owner-controlled recovery
-vault. Rotating it without a migration plan invalidates password verification.
+Keep them in the production secret manager and an owner-controlled recovery
+vault. Rotating `AUTH_HASH_PEPPER` changes request/device fingerprint hashes;
+it does not invalidate user passwords. `PUSH_DISPATCH_SECRET` authorizes the
+administrative push dispatch endpoints and must not appear in source or logs.
 
 ## Activation Checklist
 
-Complete all items before setting `AUTH_ENABLED=true`:
+Complete all items before keeping `AUTH_ENABLED=true` for a production release:
 
 - [ ] D1 production backup retained
 - [ ] migration tested locally and in staging
@@ -285,12 +291,15 @@ Complete all items before setting `AUTH_ENABLED=true`:
 - [ ] account export inspected
 - [ ] account deletion/recovery-retention behavior approved
 - [ ] GitHub Pages CORS origin verified
+- [ ] verification, reset, push, and scorecard URLs retain `/Updated-BridgeCRM/`
+- [ ] required Worker secret names include `PUSH_DISPATCH_SECRET`
 - [ ] session expiration, logout, and revoke-other-session flows verified
 - [ ] privacy and support copy reviewed
 
-Then change the production variable to `AUTH_ENABLED=true`, run the complete
-test/build/dry-run suite, deploy the Worker, and verify the configuration
-endpoint before publishing frontend UI that requires login.
+Run the complete test/build/dry-run suite, deploy the Worker, and verify the
+configuration endpoint before publishing frontend UI that requires login. If
+acceptance fails, set `AUTH_ENABLED=false` at the Worker before rolling back the
+frontend gate.
 
 ## Migration and Data Safety
 

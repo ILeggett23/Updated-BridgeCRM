@@ -72,7 +72,7 @@ const EMPTY_STATE = ${JSON.stringify({ contacts: [], places: [], settings: {}, m
 const json = (value, status = 200, extraHeaders = {}) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders } });
 const noIndexJSON = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow, noarchive" } });
 const noIndexHTML = (value, status = 200) => new Response(value, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "x-robots-tag": "noindex, nofollow, noarchive", "content-security-policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
-const defaultAllowedOrigins = ["https://bridgecrm-human-network.mr-zayway.chatgpt.site", "https://ileggett23.github.io"];
+const defaultAllowedOrigins = ["https://ileggett23.github.io"];
 const allowedOrigins = env => new Set(String(env.ALLOWED_ORIGINS || defaultAllowedOrigins.join(",")).split(",").map(value => value.trim()).filter(Boolean));
 const requestOriginAllowed = (request, env) => {
   const origin = request.headers.get("origin");
@@ -259,7 +259,7 @@ function scorecardDescription(scorecard) {
 }
 
 function scorecardSharePage(scorecard, token, request, env) {
-  const publicApp = new URL(env.PUBLIC_APP_URL || "https://bridgecrm-human-network.mr-zayway.chatgpt.site/");
+  const publicApp = new URL(env.PUBLIC_APP_URL || "https://ileggett23.github.io/Updated-BridgeCRM/");
   publicApp.searchParams.set("shared", token);
   const shareURL = new URL("/s/" + token, request.url);
   const previewURL = new URL("/s/" + token + "/preview.png", request.url);
@@ -296,8 +296,8 @@ function endpointKey(endpoint) {
 
 function bridgeAppURL(env, params = {}) {
   let target;
-  try { target = new URL(env.PUBLIC_APP_URL || "https://bridgecrm-human-network.mr-zayway.chatgpt.site/"); }
-  catch { target = new URL("https://bridgecrm-human-network.mr-zayway.chatgpt.site/"); }
+  try { target = new URL(env.PUBLIC_APP_URL || "https://ileggett23.github.io/Updated-BridgeCRM/"); }
+  catch { target = new URL("https://ileggett23.github.io/Updated-BridgeCRM/"); }
   if (!target.pathname.endsWith("/")) target.pathname += "/";
   target.search = "";
   for (const [key, value] of Object.entries(params)) {
