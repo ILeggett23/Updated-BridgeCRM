@@ -35,11 +35,17 @@ test("boot and authenticated session loading render the canonical app icon", () 
   assert.match(page, /class="auth-logo"|account-client\.js/);
 });
 
-test("Today keeps a transparent Bridge at-mark without shrinking header geometry", () => {
+test("Today keeps a compact transparent Bridge at-mark aligned with the greeting", () => {
   assert.match(app, /class="today-home__brand-mark" aria-hidden="true">@<\/span>/);
   assert.doesNotMatch(app, /class="today-home__app-icon"/);
-  assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 46px minmax\(0, 1fr\)/);
-  assert.match(styles, /\.today-home__brand-mark \{[^}]*width: 46px; height: 46px;[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*box-shadow: none;/);
+  assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 36px minmax\(0, 1fr\)/);
+  const baseMark = styles.slice(styles.indexOf(".today-home__brand-mark {"), styles.indexOf("}", styles.indexOf(".today-home__brand-mark {")) + 1);
+  assert.match(baseMark, /width: 36px; height: 36px/);
+  assert.match(baseMark, /font-size: 44px/);
+  assert.match(baseMark, /background: transparent/);
+  assert.match(baseMark, /box-shadow: none/);
+  assert.match(styles, /\.today-home__identity \{ grid-template-columns: 28px minmax\(0, 1fr\); gap: 9px; \}/);
+  assert.match(styles, /\.today-home__brand-mark \{ width: 28px; height: 28px; font-size: 34px; \}/);
 });
 
 test("all build and preview paths serve the 1024px icon", () => {
