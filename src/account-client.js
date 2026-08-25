@@ -736,7 +736,7 @@
       : message ? `<p class="auth-message" role="status">${escapeText(message)}</p>` : "";
     app.innerHTML = `<main class="auth-shell hn-auth-shell">
       <section class="auth-card hn-auth-card" aria-labelledby="authTitle">
-        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png?v=1.3.28" alt="" /><span>Bridge CRM</span></div>
+        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png?v=1.3.29" alt="" /><span>Bridge CRM</span></div>
         <div class="auth-heading">
           <p class="eyebrow">Your private network</p>
           <h1 id="authTitle">${activeMode === "signup" ? "Create your account" : activeMode === "forgot" ? "Reset your password" : activeMode === "reset" ? "Choose a new password" : activeMode === "resend" ? "Resend verification" : "Welcome back"}</h1>
