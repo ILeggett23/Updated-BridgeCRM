@@ -30,6 +30,8 @@ test("splash and Today both render the canonical app icon", () => {
   assert.match(styles, /\.boot__icon \{ width: 92px; height: 92px/);
   assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 46px minmax\(0, 1fr\)/);
   assert.match(styles, /\.today-home__app-icon \{ width: 46px; height: 46px/);
+  assert.doesNotMatch(styles, /\.hn-auth-brand \.auth-logo \{[^}]*filter:/);
+  assert.match(page, /class="auth-logo"|account-client\.js/);
 });
 
 test("all build and preview paths serve the 1024px icon", () => {

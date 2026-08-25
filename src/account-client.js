@@ -723,39 +723,41 @@
     return () => listeners.delete(listener);
   }
 
-  function renderAuthScreen({ mode = "login", message = "", error = "" } = {}) {
+  function renderAuthScreen({ mode = "login", message = "", error = "", email = "" } = {}) {
     const app = document.getElementById("app");
     if (!app) return;
     const resetToken = new URLSearchParams(location.search).get("resetPassword") || "";
     const activeMode = resetToken ? "reset" : mode;
+    const verificationEmail = String(email || "").trim();
+    const escapedEmail = escapeText(verificationEmail);
     const turnstile = config?.turnstileSiteKey ? `<div class="auth-turnstile" data-turnstile></div>` : "";
     const status = error
       ? `<p class="auth-message auth-error" role="alert">${escapeText(error)}</p>`
       : message ? `<p class="auth-message" role="status">${escapeText(message)}</p>` : "";
     app.innerHTML = `<main class="auth-shell hn-auth-shell">
       <section class="auth-card hn-auth-card" aria-labelledby="authTitle">
-        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png" alt="" /><span>Bridge CRM</span></div>
+        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png?v=1.3.26" alt="" /><span>Bridge CRM</span></div>
         <div class="auth-heading">
           <p class="eyebrow">Your private network</p>
-          <h1 id="authTitle">${activeMode === "signup" ? "Create your account" : activeMode === "forgot" ? "Reset your password" : activeMode === "reset" ? "Choose a new password" : "Welcome back"}</h1>
-          <p>${activeMode === "signup" ? "Securely sync Bridge across your devices." : activeMode === "forgot" ? "We will send a secure reset link if the account exists." : activeMode === "reset" ? "Use at least 12 characters." : "Sign in to open your private CRM."}</p>
+          <h1 id="authTitle">${activeMode === "signup" ? "Create your account" : activeMode === "forgot" ? "Reset your password" : activeMode === "reset" ? "Choose a new password" : activeMode === "resend" ? "Resend verification" : "Welcome back"}</h1>
+          <p>${activeMode === "signup" ? "Securely sync Bridge across your devices." : activeMode === "forgot" ? "We will send a secure reset link if the account exists." : activeMode === "reset" ? "Use at least 12 characters." : activeMode === "resend" ? "Request a fresh verification link for an unverified account." : "Sign in to open your private CRM."}</p>
         </div>
         ${status}
         <form class="auth-form" data-auth-form="${activeMode}">
           ${activeMode === "signup" ? `<div class="auth-name-grid"><label>First name<input name="firstName" autocomplete="given-name" maxlength="80" /></label><label>Last name<input name="lastName" autocomplete="family-name" maxlength="80" /></label></div>` : ""}
-          ${activeMode !== "reset" ? `<label>Email<input name="email" type="email" autocomplete="email" inputmode="email" required maxlength="254" /></label>` : ""}
+          ${activeMode !== "reset" ? `<label>Email<input name="email" type="email" autocomplete="email" inputmode="email" required maxlength="254" value="${escapedEmail}" /></label>` : ""}
           ${["login", "signup", "reset"].includes(activeMode) ? `<label>${activeMode === "reset" ? "New password" : "Password"}<input name="password" type="password" autocomplete="${activeMode === "login" ? "current-password" : "new-password"}" minlength="12" maxlength="256" required /></label>` : ""}
           ${activeMode === "login" ? `<label class="auth-check"><input name="rememberMe" type="checkbox" /> Keep me signed in on this device</label>` : ""}
           ${turnstile}
-          <button class="primary auth-submit" type="submit">${activeMode === "signup" ? "Create account" : activeMode === "forgot" ? "Send reset link" : activeMode === "reset" ? "Save new password" : "Sign in"}</button>
+          <button class="primary auth-submit" type="submit">${activeMode === "signup" ? "Create account" : activeMode === "forgot" ? "Send reset link" : activeMode === "reset" ? "Save new password" : activeMode === "resend" ? "Send verification email" : "Sign in"}</button>
         </form>
         <div class="auth-links">
-          ${activeMode === "login" ? `<button type="button" data-auth-mode="forgot">Forgot password?</button><button type="button" data-auth-mode="signup">Create account</button>` : `<button type="button" data-auth-mode="login">Back to sign in</button>`}
+          ${activeMode === "login" ? `<button type="button" data-auth-mode="forgot" data-auth-email="${escapedEmail}">Forgot password?</button><button type="button" data-auth-mode="resend" data-auth-email="${escapedEmail}">Resend verification email</button><button type="button" data-auth-mode="signup" data-auth-email="${escapedEmail}">Create account</button>` : `<button type="button" data-auth-mode="login" data-auth-email="${escapedEmail}">Back to sign in</button>`}
         </div>
         <p class="auth-storage-note"><span aria-hidden="true">●</span> Your account data is private. Offline changes stay on this device and sync when you reconnect.</p>
       </section>
     </main>`;
-    bindAuthScreen(activeMode, resetToken);
+    bindAuthScreen(activeMode, resetToken, verificationEmail);
   }
 
   function escapeText(value) {
@@ -795,11 +797,11 @@
     script.addEventListener("load", render, { once: true });
   }
 
-  function bindAuthScreen(mode, resetToken) {
+  function bindAuthScreen(mode, resetToken, email = "") {
     const form = document.querySelector("[data-auth-form]");
     loadTurnstile(form);
     document.querySelectorAll("[data-auth-mode]").forEach(button => {
-      button.addEventListener("click", () => renderAuthScreen({ mode: button.dataset.authMode }));
+      button.addEventListener("click", () => renderAuthScreen({ mode: button.dataset.authMode, email: button.dataset.authEmail || email }));
     });
     form?.addEventListener("submit", async event => {
       event.preventDefault();
@@ -823,6 +825,11 @@
           renderAuthScreen({ mode: "login", message: "If that account exists, a reset link is on its way." });
           return;
         }
+        if (mode === "resend") {
+          await resendVerification(values.email, securityToken);
+          renderAuthScreen({ mode: "login", message: "If that unverified account exists, a fresh verification email is on its way.", email: values.email });
+          return;
+        }
         if (mode === "reset") {
           await resetPassword(resetToken, values.password);
           const next = new URL(location.href);
@@ -831,7 +838,7 @@
           renderAuthScreen({ mode: "login", message: "Password updated. Sign in with your new password." });
         }
       } catch (error) {
-        renderAuthScreen({ mode, error: error.message });
+        renderAuthScreen({ mode, error: error.message, email: values.email || email });
       }
     });
   }

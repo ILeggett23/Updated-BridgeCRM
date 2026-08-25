@@ -1,24 +1,24 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.25",
-    assetVersion: "v1.3.25",
+    version: "1.3.26",
+    assetVersion: "v1.3.26",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "people",
-        title: "A new Bridge identity",
-        description: "The new app icon now appears on the Home Screen, startup splash, and Today interface."
+        title: "Secure Bridge accounts",
+        description: "Sign in with email and password to keep your private relationship workspace synced across devices."
       }),
       Object.freeze({
         icon: "people",
-        title: "Email for every relationship",
-        description: "Save, edit, search, export, and open a person's optional email address from their profile."
+        title: "Local-first when disabled",
+        description: "Local development still opens directly when cloud authentication is explicitly turned off."
       }),
       Object.freeze({
         icon: "circleCheck",
-        title: "More compact contact details",
-        description: "Phone and email now fit into a tighter profile layout without crowding mobile controls."
+        title: "Verification recovery",
+        description: "A dedicated resend action helps unverified accounts request a fresh email safely."
       })
     ])
   });

@@ -17,3 +17,4 @@ ENVIRONMENT=development
 VAPID_PUBLIC_KEY=replace-with-a-development-public-key
 VAPID_PRIVATE_KEY=replace-with-a-development-private-key
 VAPID_SUBJECT=mailto:developer@example.com
+PUSH_DISPATCH_SECRET=replace-with-a-long-random-local-development-value

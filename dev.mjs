@@ -41,6 +41,19 @@ for (const fontFile of [
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
+  if (url.pathname === "/api/v1/config" && !configuredAPIBase) {
+    response.setHeader("content-type", "application/json; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
+    response.end(JSON.stringify({
+      authEnabled: false,
+      turnstileSiteKey: "",
+      emailConfigured: false,
+      cloudBackupConfigured: false,
+      sessionTransport: "bearer-indexeddb",
+      productionReady: false
+    }));
+    return;
+  }
   if (url.pathname === "/api/state") {
     response.setHeader("content-type", "application/json");
     if (request.method === "GET") {

@@ -6,6 +6,8 @@ import { DatabaseSync } from "node:sqlite";
 const accountRuntime = await readFile(new URL("../src/server/account-runtime.js", import.meta.url), "utf8");
 const accountClient = await readFile(new URL("../src/account-client.js", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const page = await readFile(new URL("../src/index.html", import.meta.url), "utf8");
+const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 const serviceWorker = await readFile(new URL("../src/sw.js", import.meta.url), "utf8");
 const migration = await readFile(new URL("../drizzle/0004_accounts_cloud_sync.sql", import.meta.url), "utf8");
 const analyticsMigration = await readFile(new URL("../drizzle/0005_analytics_cloud_sync.sql", import.meta.url), "utf8");
@@ -59,9 +61,12 @@ test("cloud accounts expose the configured production dependencies", async () =>
   assert.match(wrangler, /"send_email"/);
   assert.match(wrangler, /"name": "EMAIL"/);
   assert.match(wrangler, /"allowed_sender_addresses": \["no-reply@bridgecrm\.dev"\]/);
-  assert.equal(wrangler.includes("TURNSTILE_SECRET_KEY"), false);
-  assert.equal(wrangler.includes("AUTH_HASH_PEPPER"), false);
-  assert.equal(wrangler.includes("VAPID_PRIVATE_KEY"), false);
+  for (const secret of ["AUTH_HASH_PEPPER", "TURNSTILE_SECRET_KEY", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "PUSH_DISPATCH_SECRET"]) {
+    assert.match(wrangler, new RegExp(`"${secret}"`));
+  }
+  assert.match(wrangler, /"secrets"\s*:\s*\{\s*"required"/);
+  assert.match(wrangler, /"PUBLIC_APP_URL": "https:\/\/ileggett23\.github\.io\/Updated-BridgeCRM\/"/);
+  assert.match(wrangler, /"ALLOWED_ORIGINS": "https:\/\/ileggett23\.github\.io"/);
 
   const response = await worker.fetch(new Request("https://bridge-api.example/api/v1/config", {
     headers: { origin: "https://ileggett23.github.io" }
@@ -197,7 +202,7 @@ test("an earlier verification link cannot activate credentials replaced by a lat
     AUTH_REQUIRE_TURNSTILE: "false",
     AUTH_EMAIL_FROM: "no-reply@bridgecrm.dev",
     AUTH_HASH_PEPPER: "test-pepper",
-    PUBLIC_APP_URL: "https://ileggett23.github.io/bridge-crm/",
+    PUBLIC_APP_URL: "https://ileggett23.github.io/Updated-BridgeCRM/",
     BACKEND_ONLY: "true",
     ALLOWED_ORIGINS: "https://ileggett23.github.io",
     DB: sqliteD1(database),
@@ -257,6 +262,28 @@ test("sessions stay out of localStorage and are verified by a server-side token 
   assert.match(accountRuntime, /WHERE s\.token_hash = \?1 AND s\.revoked_at IS NULL/);
   assert.match(accountRuntime, /s\.expires_at > \?2/);
   assert.match(accountRuntime, /u\.disabled_at IS NULL AND u\.deleted_at IS NULL/);
+});
+
+test("GitHub Pages loads the real account client and exposes verification recovery", () => {
+  assert.ok(page.indexOf("account-client.js?v=1.3.26") < page.indexOf("app.js?v=1.3.26"));
+  assert.match(serviceWorker, /new URL\("account-client\.js", ROOT\)\.href/);
+  assert.match(accountClient, /data-auth-mode="resend"/);
+  assert.match(accountClient, /await resendVerification\(values\.email, securityToken\)/);
+  assert.match(accountClient, /Resend verification email/);
+  assert.match(accountClient, /email: values\.email \|\| email/);
+  assert.doesNotMatch(styles, /\.hn-auth-brand \.auth-logo \{[^}]*filter:/);
+  assert.match(styles, /\.hn-auth-card \.auth-submit \{ min-height: 44px/);
+  assert.match(styles, /\.hn-auth-card \.auth-links button \{ min-height: 44px/);
+});
+
+test("password documentation matches the compatibility-preserving runtime", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const accountDocs = await readFile(new URL("../CLOUD_ACCOUNTS.md", import.meta.url), "utf8");
+  assert.match(accountRuntime, /ACCOUNT_PASSWORD_ITERATIONS = 100000/);
+  assert.match(accountDocs, /currently 100,000/);
+  assert.match(accountDocs, /AUTH_HASH_PEPPER[^\n]+request IP and device fingerprints/);
+  assert.match(readme, /it is not part of password derivation/);
+  assert.doesNotMatch(accountDocs, /210,000/);
 });
 
 test("sync storage and mutations are isolated per user, revision-aware, and idempotent", () => {

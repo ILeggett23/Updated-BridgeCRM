@@ -9,7 +9,7 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 const serviceWorker = await readFile(new URL("../src/sw.js", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../src/manifest.webmanifest", import.meta.url), "utf8"));
 
-const env = { PUBLIC_APP_URL: "https://ileggett23.github.io/bridge-crm/" };
+const env = { PUBLIC_APP_URL: "https://ileggett23.github.io/Updated-BridgeCRM/" };
 
 test("hosted reminder URLs stay inside the GitHub Pages project path", () => {
   const target = new URL(bridgeAppURL(env, {
@@ -18,7 +18,7 @@ test("hosted reminder URLs stay inside the GitHub Pages project path", () => {
     followUp: "followup-7"
   }));
   assert.equal(target.origin, "https://ileggett23.github.io");
-  assert.equal(target.pathname, "/bridge-crm/");
+  assert.equal(target.pathname, "/Updated-BridgeCRM/");
   assert.equal(target.searchParams.get("page"), "followups");
   assert.equal(target.searchParams.get("contact"), "contact-42");
   assert.equal(target.searchParams.get("followUp"), "followup-7");
@@ -45,7 +45,7 @@ test("scheduled follow-ups carry the exact contact and follow-up destination", (
   const reminders = remindersForSubscription(row, env, new Date("2026-07-29T12:00:00.000Z"));
   assert.equal(reminders.length, 1);
   const target = new URL(reminders[0].url);
-  assert.equal(target.pathname, "/bridge-crm/");
+  assert.equal(target.pathname, "/Updated-BridgeCRM/");
   assert.equal(target.searchParams.get("contact"), "contact-42");
   assert.equal(target.searchParams.get("followUp"), "followup-7");
 });

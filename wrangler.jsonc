@@ -6,14 +6,24 @@
   "workers_dev": true,
   "vars": {
     "BACKEND_ONLY": "true",
-    "ALLOWED_ORIGINS": "https://bridgecrm-human-network.mr-zayway.chatgpt.site,https://ileggett23.github.io",
-    "PUBLIC_APP_URL": "https://bridgecrm-human-network.mr-zayway.chatgpt.site/",
+    "ALLOWED_ORIGINS": "https://ileggett23.github.io",
+    "PUBLIC_APP_URL": "https://ileggett23.github.io/Updated-BridgeCRM/",
     "AUTH_ENABLED": "true",
     "AUTH_REQUIRE_TURNSTILE": "true",
     "AUTH_EMAIL_FROM": "no-reply@bridgecrm.dev",
     "AUTH_EMAIL_NAME": "Bridge",
     "TURNSTILE_SITE_KEY": "0x4AAAAAAEBFY9H4PCiJInux",
     "ENVIRONMENT": "production"
+  },
+  "secrets": {
+    "required": [
+      "AUTH_HASH_PEPPER",
+      "TURNSTILE_SECRET_KEY",
+      "VAPID_PUBLIC_KEY",
+      "VAPID_PRIVATE_KEY",
+      "VAPID_SUBJECT",
+      "PUSH_DISPATCH_SECRET"
+    ]
   },
   "send_email": [
     {
