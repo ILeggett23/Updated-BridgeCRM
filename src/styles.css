@@ -875,9 +875,8 @@ input[type="date"]::-webkit-datetime-edit, input[type="datetime-local"]::-webkit
 }
 
 .session-loading { min-height: 100vh; min-height: 100dvh; padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; }
-.session-brand-symbol, .shared-brand-symbol, .release-notes-mark { display: grid; place-items: center; color: var(--color-brand); border: 1px solid rgba(var(--color-brand-rgb), .2); border-radius: 50%; background: var(--surface-brand-subtle); }
-.session-brand-symbol { width: 58px; height: 58px; margin-bottom: 8px; }
-.session-brand-symbol .app-icon { width: 31px; height: 31px; }
+.shared-brand-symbol, .release-notes-mark { display: grid; place-items: center; color: var(--color-brand); border: 1px solid rgba(var(--color-brand-rgb), .2); border-radius: 50%; background: var(--surface-brand-subtle); }
+.session-brand-icon { width: 72px; height: 72px; margin-bottom: 8px; display: block; border-radius: 20px; object-fit: cover; box-shadow: 0 10px 26px rgba(27, 25, 19, .09); }
 .shared-brand-symbol { width: 32px; height: 32px; }
 .shared-brand-symbol .app-icon { width: 18px; height: 18px; }
 .release-notes-mark { width: 44px; height: 44px; margin: 0 auto 12px; }
@@ -2710,7 +2709,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .today-home__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-bottom: 25px; border-bottom: 1px solid var(--color-border); }
 .today-home__header > div { min-width: 0; }
 .today-home__identity { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 12px; }
-.today-home__app-icon { width: 46px; height: 46px; display: block; border-radius: 14px; object-fit: cover; box-shadow: var(--shadow-control); }
+.today-home__brand-mark { width: 46px; height: 46px; display: grid; place-items: center; overflow: visible; color: var(--color-brand-strong); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-family: var(--font-editorial); font-size: 58px; font-weight: var(--font-weight-regular); letter-spacing: -.08em; line-height: 1; }
 .today-home__date, .today-home h2 { margin: 0; color: var(--color-text-tertiary); font-size: 12px; font-weight: var(--font-weight-semibold); letter-spacing: .075em; line-height: 1.2; text-transform: uppercase; }
 .today-home__header h1 { margin: 5px 0 0; color: var(--color-text-primary); font-family: var(--font-editorial); font-size: clamp(39px, 10vw, 48px); font-weight: var(--font-weight-medium); letter-spacing: -.045em; line-height: .98; overflow-wrap: anywhere; }
 .today-home__settings { width: 42px; height: 42px; flex: 0 0 42px; color: var(--color-text-secondary); border: 0; background: transparent; box-shadow: none; }
@@ -2783,7 +2782,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 /* Phase 3 — People replaces cards with the approved calm, scannable directory. */
 .people-home { display: grid; gap: 0; padding-bottom: var(--space-3); }
 .people-home__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: 22px; }
-.people-home__header h1 { margin: 0; color: var(--color-text-primary); font-family: var(--font-editorial); font-size: clamp(40px, 10.7vw, 50px); font-weight: var(--font-weight-medium); letter-spacing: -.05em; line-height: .96; }
+.primary-page-title { margin: 0; color: var(--color-text-primary); font-family: var(--font-editorial); font-size: clamp(40px, 10.7vw, 50px); font-weight: var(--font-weight-medium); letter-spacing: -.05em; line-height: .96; }
 .people-home__places { width: 42px; height: 42px; display: grid; flex: 0 0 42px; place-items: center; padding: 0; color: var(--color-text-secondary); border: 0; border-radius: 50%; background: transparent; box-shadow: none; }
 .people-home__places:hover { color: var(--color-text-primary); background: var(--color-surface-soft); }
 .people-home__places .app-icon { width: 25px; height: 25px; stroke-width: 1.9; }
@@ -3180,7 +3179,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 
 /* Phase 6 — Prospect pipeline, backed by the canonical Prospect stage array */
 .pipeline-home { width: min(100%, var(--app-max-width)); min-height: 100%; padding: 22px 20px calc(var(--nav-height) + var(--safe-bottom) + 32px); color: var(--color-text-primary); background: var(--color-page); }
-.pipeline-home__header h1 { margin: 0 0 18px; font-family: var(--font-display); font-size: 39px; font-weight: var(--font-weight-regular); line-height: 1; letter-spacing: -.035em; }
+.pipeline-home__header { margin-bottom: 18px; }
 .pipeline-home__tabs { margin: 0; padding: 0; display: flex; gap: 24px; border-bottom: 1px solid var(--color-border); }
 .pipeline-home__tabs::before { display: none; }
 .pipeline-home__tabs button { position: relative; min-width: 0; min-height: 48px; padding: 0 0 12px; color: var(--color-text-tertiary); border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 18px; font-weight: var(--font-weight-medium); }
@@ -3718,6 +3717,14 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .settings-screen .hn-account-sync { border-radius: var(--radius-sm); }
 .settings-screen .account-session-list, .settings-screen .cloud-backup-block { margin: 0; padding: 0; border: 0; }
 .settings-screen .account-session-row, .settings-screen .backup-row { min-height: 62px; padding-inline: 0; }
+.latest-cloud-backup { min-width: 0; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--color-surface-soft); }
+.latest-cloud-backup h3 { margin: 0; color: var(--color-text-tertiary); font-size: 10px; font-weight: var(--font-weight-semibold); letter-spacing: .1em; line-height: 13px; text-transform: uppercase; }
+.latest-cloud-backup .backup-list { margin-top: 8px; }
+.latest-cloud-backup .backup-row { align-items: start; border-bottom: 0; }
+.latest-cloud-backup .backup-row > div { gap: 5px; }
+.latest-cloud-backup .backup-row strong { color: var(--color-text-primary); font-size: 17px; font-weight: var(--font-weight-semibold); line-height: 1.25; }
+.latest-cloud-backup .backup-row small { color: var(--color-text-secondary); font-size: 13px; text-transform: none; }
+.latest-cloud-backup .restore-cloud-backup { min-width: 96px; min-height: 44px; }
 .settings-screen .account-danger-zone { margin: 0; }
 .settings-screen .hn-settings-section { padding-top: 0; }
 .settings-screen .hn-settings-save { bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-2)); margin-top: 0; }
@@ -3978,7 +3985,7 @@ body .bridge-pattern-shell > .main {
   line-height: 1.15;
 }
 .today-home__identity { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; }
-.today-home__app-icon { width: 38px; height: 38px; border-radius: 12px; box-shadow: none; }
+.today-home__brand-mark { width: 38px; height: 38px; font-size: 48px; }
 .today-home__settings { width: 36px; height: 36px; flex-basis: 36px; }
 .today-home__settings .app-icon { width: 19px; height: 19px; stroke-width: 1.8; }
 .today-goal {
@@ -4097,7 +4104,7 @@ body .bridge-pattern-shell > .main {
 
 /* People */
 .people-home__header { margin-bottom: 12px; }
-.people-home__header h1 { font-size: 26px; letter-spacing: -.025em; line-height: 1.15; }
+.primary-page-title, .page-head h1.primary-page-title { font-size: 26px !important; letter-spacing: -.025em !important; line-height: 1.15 !important; }
 .people-home__places { width: 36px; height: 36px; flex-basis: 36px; }
 .people-home__places .app-icon { width: 19px; height: 19px; stroke-width: 1.8; }
 .people-home__search {
@@ -4140,7 +4147,7 @@ body .bridge-pattern-shell > .main {
 /* Prospect and Customer pipeline presentation; canonical arrays remain in JS. */
 .pipeline-home,
 .insights-home { padding-top: 0; }
-.pipeline-home__header h1 { margin-bottom: 8px; font-size: 26px; letter-spacing: -.025em; line-height: 1.15; }
+.pipeline-home__header { margin-bottom: 8px; }
 .pipeline-home__tabs { display: flex; grid-template-columns: none; gap: 20px; overflow: visible; }
 .pipeline-home__tabs button { width: auto; min-height: 40px; flex: 0 0 auto; padding: 4px 0 10px; overflow: visible; font-size: 14px; text-align: left; }
 .prospect-pipeline__summary { margin: 16px 0 16px; font-size: 13px; line-height: 1.55; }

@@ -23,15 +23,23 @@ test("the supplied app artwork owns every required icon size", async () => {
   assert.ok(manifest.icons.some(icon => icon.src.includes("bridge-icon-1024.png") && icon.sizes === "1024x1024"));
 });
 
-test("splash and Today both render the canonical app icon", () => {
+test("boot and authenticated session loading render the canonical app icon", () => {
   assert.match(page, /class="brand-mark boot__icon" src="\.\/bridge-icon-192\.png/);
   assert.match(page, /Relationships that move forward/);
-  assert.match(app, /class="today-home__app-icon" src="\.\/bridge-icon-192\.png\?v=\$\{escapeHTML\(APP_RELEASE\.version\)\}"/);
+  assert.match(app, /class="session-brand-icon" src="\.\/bridge-icon-192\.png\?v=\$\{escapeHTML\(APP_RELEASE\.version\)\}"/);
+  const loading = app.slice(app.indexOf("function renderSessionLoading"), app.indexOf("function cleanAccountURLParameter"));
+  assert.doesNotMatch(loading, /icons\.bridge|session-brand-symbol|<svg/);
   assert.match(styles, /\.boot__icon \{ width: 92px; height: 92px/);
-  assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 46px minmax\(0, 1fr\)/);
-  assert.match(styles, /\.today-home__app-icon \{ width: 46px; height: 46px/);
+  assert.match(styles, /\.session-brand-icon \{ width: 72px; height: 72px/);
   assert.doesNotMatch(styles, /\.hn-auth-brand \.auth-logo \{[^}]*filter:/);
   assert.match(page, /class="auth-logo"|account-client\.js/);
+});
+
+test("Today keeps a transparent Bridge at-mark without shrinking header geometry", () => {
+  assert.match(app, /class="today-home__brand-mark" aria-hidden="true">@<\/span>/);
+  assert.doesNotMatch(app, /class="today-home__app-icon"/);
+  assert.match(styles, /\.today-home__identity \{[^}]*grid-template-columns: 46px minmax\(0, 1fr\)/);
+  assert.match(styles, /\.today-home__brand-mark \{[^}]*width: 46px; height: 46px;[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*box-shadow: none;/);
 });
 
 test("all build and preview paths serve the 1024px icon", () => {

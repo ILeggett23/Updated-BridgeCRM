@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.26";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.27";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -801,7 +801,7 @@ function accountSyncLabel() {
 function renderSessionLoading() {
   document.body.classList.remove("modal-open");
   const app = $("#app");
-  app.innerHTML = `<main class="session-loading"><span class="session-brand-symbol" aria-hidden="true">${icons.bridge}</span><strong>Opening Bridge</strong><span>Checking your private workspace…</span></main>`;
+  app.innerHTML = `<main class="session-loading"><img class="session-brand-icon" src="./bridge-icon-192.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><strong>Opening Bridge</strong><span>Checking your private workspace…</span></main>`;
 }
 
 function cleanAccountURLParameter(name) {
@@ -1860,7 +1860,7 @@ function shellProfile() {
   const name = [accountUser.firstName, accountUser.lastName].filter(Boolean).join(" ") || state.settings.firstName || "Your workspace";
   return `<div class="shell-profile"><span class="shell-profile__avatar" aria-hidden="true">${escapeHTML(initials(name))}</span><span class="shell-profile__copy"><strong>${escapeHTML(name)}</strong><small>${escapeHTML(accountSyncLabel())}</small></span></div>`;
 }
-function pageHead(title, subtitle, actions = "") { return `<header class="page-head"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="head-actions">${actions}</div></header>`; }
+function pageHead(title, subtitle, actions = "", titleClass = "") { return `<header class="page-head"><div><h1${titleClass ? ` class="${escapeHTML(titleClass)}"` : ""}>${title}</h1><p>${subtitle}</p></div><div class="head-actions">${actions}</div></header>`; }
 
 function syncDocumentScrollLock(shouldLock) {
   if (shouldLock) {
@@ -2450,7 +2450,7 @@ function renderDashboard() {
   const momentum = todayMomentum(now);
   return `<section class="today-home" aria-label="Today">
     <header class="today-home__header">
-      <div class="today-home__identity"><img class="today-home__app-icon" src="./bridge-icon-192.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1>${greeting}</h1></div></div>
+      <div class="today-home__identity"><span class="today-home__brand-mark" aria-hidden="true">@</span><div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1>${greeting}</h1></div></div>
       ${IconButton("gear", "Settings", { attributes:'id="settingsButton"', className:"today-home__settings" })}
     </header>
     ${todayGoalProgress(dailyGoal)}
@@ -2590,7 +2590,7 @@ function renderContacts() {
   const people = peopleVisibleContacts(filtered);
   const activeContacts = state.contacts.filter(contact => !contact.archivedAt && !contact.isFilteredOut);
   return `<section class="people-home" aria-label="People">
-    <header class="people-home__header"><h1>People</h1><button class="people-home__places" type="button" data-people-contact-mode="places" aria-label="Browse places">${icons.location}</button></header>
+    <header class="people-home__header"><h1 class="primary-page-title">People</h1><button class="people-home__places" type="button" data-people-contact-mode="places" aria-label="Browse places">${icons.location}</button></header>
     ${SearchField({ id:"contactSearch", value:ui.search, placeholder:"Search people", label:"Search people", className:"people-home__search" })}
     <div class="people-home__filters" role="group" aria-label="Quick people filters">${["All","Recent","Priority","Prospects","Customers"].map(label => Chip(label, { active:ui.peopleQuick===label, className:"people-home__quick-filter", attributes:`data-people-quick="${label}"` })).join("")}${peopleFiltersTrigger()}</div>
     <p class="people-home__count">${people.length} ${people.length===1 ? "person" : "people"}</p>
@@ -2598,7 +2598,7 @@ function renderContacts() {
   </section>`;
 }
 function renderContactWorkspace(filtered, connectionState="") { const labels={pipeline:"Pipeline",places:"Places",network:"Human Network"}; if(ui.contactMode==="pipeline")return renderPipeline(connectionState); if(ui.contactMode==="places")return renderPlaces(connectionState); return `<section class="contacts-route contacts-route--workspace" aria-label="${labels[ui.contactMode]||"People"}">${pageHead(labels[ui.contactMode]||"People", "Your existing relationship workspace.", '<button class="button subtle" type="button" data-people-contact-mode="list">Back to People</button>')}${connectionState}${renderNetworkWorkspace(filtered)}</section>`; }
-function contactsLoading() { return `<section class="people-home people-home--loading" aria-label="People" aria-busy="true"><header class="people-home__header"><h1>People</h1></header>${LoadingSkeleton({lines:4})}<span class="sr-only">Loading people.</span></section>`; }
+function contactsLoading() { return `<section class="people-home people-home--loading" aria-label="People" aria-busy="true"><header class="people-home__header"><h1 class="primary-page-title">People</h1></header>${LoadingSkeleton({lines:4})}<span class="sr-only">Loading people.</span></section>`; }
 function peopleVisibleContacts(filtered = getFilteredContacts()) { if (ui.peopleQuick === "Recent") return filtered.filter(contact => contactRecencyDays(contact) <= 14); if (ui.peopleQuick === "Priority") return filtered.filter(contact => contact.interestLevel === "High" || relationshipActionState(contact) === "Overdue"); if (ui.peopleQuick === "Prospects") return filtered.filter(contact => contact.role === "Prospect"); if (ui.peopleQuick === "Customers") return filtered.filter(contact => contact.role === "Customer"); return filtered; }
 function peopleFiltersTrigger({className=""}={}) { return Chip("Filter", { count:peopleActiveFilterCount() || "", iconName:"sliders", className:`people-home__filter-button${className?` ${className}`:""}`, attributes:'data-open-people-filters' }); }
 function peopleActiveFilterCount() { return [ui.roleFilter !== "All Roles", ui.visibilityFilter !== "Active", ui.healthBandFilter !== "All", ui.healthTrendFilter !== "All", ui.actionCoverageFilter !== "All", ui.recencyFilter !== "All", ui.pipelineStageFilter !== "All", ui.interestFilter !== "All", ui.judgementFilter !== "All", ui.placeFilter !== "All", ui.followUpFilter !== "All", Boolean(ui.conversationFrom || ui.conversationTo), ui.sort !== "recentContact"].filter(Boolean).length; }
@@ -2731,7 +2731,7 @@ function renderCustomerPipeline(contacts,now=new Date()) {
 function renderPipeline(connectionState="") {
   const prospectContacts=activePipelineContacts("Prospect"),customerContacts=activePipelineContacts("Customer");const now=new Date();const selectedContact=state.contacts.find(contact=>String(contact.id)===String(ui.pipelineContactId));const selectedCustomerContact=state.contacts.find(contact=>String(contact.id)===String(ui.customerPipelineContactId));
   const tabs=Tabs([{label:"Prospect",value:"Prospect",active:ui.pipelineRole==="Prospect",attributes:'data-pipeline-role="Prospect"'},{label:"Customer",value:"Customer",active:ui.pipelineRole==="Customer",attributes:'data-pipeline-role="Customer"'}],{label:"Pipeline type",className:"pipeline-home__tabs",idPrefix:"pipeline-role"});
-  return `<section class="contacts-route pipeline-home" aria-label="Pipeline"><header class="pipeline-home__header"><h1>Pipeline</h1></header>${tabs}${connectionState}<div id="pipeline-role-panel-${escapeHTML(ui.pipelineRole)}" role="tabpanel" aria-labelledby="pipeline-role-tab-${escapeHTML(ui.pipelineRole)}">${ui.pipelineRole==="Prospect"?renderProspectPipeline(prospectContacts,now):renderCustomerPipeline(customerContacts,now)}</div>${ui.pipelineStageDetail?prospectStageDetailSheet(ui.pipelineStageDetail,prospectContacts,now):""}${selectedContact?prospectTransitionSheet(selectedContact):""}${ui.customerPipelineStageDetail?customerStageDetailSheet(ui.customerPipelineStageDetail,customerContacts,now):""}${selectedCustomerContact?customerTransitionSheet(selectedCustomerContact):""}</section>`;
+  return `<section class="contacts-route pipeline-home" aria-label="Pipeline"><header class="pipeline-home__header"><h1 class="primary-page-title">Pipeline</h1></header>${tabs}${connectionState}<div id="pipeline-role-panel-${escapeHTML(ui.pipelineRole)}" role="tabpanel" aria-labelledby="pipeline-role-tab-${escapeHTML(ui.pipelineRole)}">${ui.pipelineRole==="Prospect"?renderProspectPipeline(prospectContacts,now):renderCustomerPipeline(customerContacts,now)}</div>${ui.pipelineStageDetail?prospectStageDetailSheet(ui.pipelineStageDetail,prospectContacts,now):""}${selectedContact?prospectTransitionSheet(selectedContact):""}${ui.customerPipelineStageDetail?customerStageDetailSheet(ui.customerPipelineStageDetail,customerContacts,now):""}${selectedCustomerContact?customerTransitionSheet(selectedCustomerContact):""}</section>`;
 }
 function placeMatchesContact(place,contact){return String(contact?.placeId||"")===String(place?.id||"")||(!contact?.placeId&&String(contact?.placeName||"").trim().toLowerCase()===String(place?.name||"").trim().toLowerCase());}
 function placeActivityRecords(contacts=[]){return contacts.flatMap(contact=>(contact.conversations||[]).map(log=>({contact,log,at:log.conversationDate||log.createdAt}))).filter(item=>item.at).sort((left,right)=>new Date(right.at)-new Date(left.at));}
@@ -3016,7 +3016,7 @@ function renderAnalytics() {
   const summary=`${analyticsCountLabel(model.conversations.length,"conversation")}, ${analyticsCountLabel(model.newPeople.length,"new person","new people")}, ${analyticsCountLabel(model.pipelineEvents.length,"pipeline movement")}.`;
   const followUpSummary=model.followUps.length?`${model.completedFollowUps.length} of ${model.followUps.length} follow-ups completed.`:"No follow-ups recorded in this period.";
   const placeSummary=busiest?` Your busiest place was ${escapeHTML(busiest.place.name)}.`:"";
-  return `<section class="analytics-workspace insights-home" aria-label="Insights">${pageHead("Insights", "Relationship activity and momentum from your existing Bridge data.", IconButton("share","Share scorecard",{attributes:'id="shareScorecard"'}))}<section class="insights-hero" aria-labelledby="insights-period-summary"><span>${escapeHTML(analyticsPeriodEyebrow())}</span>${periodActivity?`<h2 id="insights-period-summary">${summary}</h2><p>${followUpSummary}${placeSummary}</p>`:`<div id="insights-period-summary">${emptyInline("No activity in this period","Open Detailed analytics to choose another period, or log a conversation to begin your Insights history.")}</div>`}</section>${insightsConversationChart(model)}${insightsPipelineIntelligence(model)}<section class="insights-section insights-pipeline-snapshot" aria-labelledby="insights-pipeline-snapshot"><h2 id="insights-pipeline-snapshot">Pipeline activity</h2><p class="insights-section__description">Current stage distribution uses Bridge’s exact Prospect and Customer stages.</p>${insightsStageSnapshot("Prospect",model)}${insightsStageSnapshot("Customer",model)}</section>${insightsFollowUpEffectiveness(model)}${insightsPlaces(model)}${insightsDetailedAnalytics(model,scorecard,previousScorecard)}</section>`;
+  return `<section class="analytics-workspace insights-home" aria-label="Insights">${pageHead("Insights", "Relationship activity and momentum from your existing Bridge data.", IconButton("share","Share scorecard",{attributes:'id="shareScorecard"'}), "primary-page-title")}<section class="insights-hero" aria-labelledby="insights-period-summary"><span>${escapeHTML(analyticsPeriodEyebrow())}</span>${periodActivity?`<h2 id="insights-period-summary">${summary}</h2><p>${followUpSummary}${placeSummary}</p>`:`<div id="insights-period-summary">${emptyInline("No activity in this period","Open Detailed analytics to choose another period, or log a conversation to begin your Insights history.")}</div>`}</section>${insightsConversationChart(model)}${insightsPipelineIntelligence(model)}<section class="insights-section insights-pipeline-snapshot" aria-labelledby="insights-pipeline-snapshot"><h2 id="insights-pipeline-snapshot">Pipeline activity</h2><p class="insights-section__description">Current stage distribution uses Bridge’s exact Prospect and Customer stages.</p>${insightsStageSnapshot("Prospect",model)}${insightsStageSnapshot("Customer",model)}</section>${insightsFollowUpEffectiveness(model)}${insightsPlaces(model)}${insightsDetailedAnalytics(model,scorecard,previousScorecard)}</section>`;
 }
 function metricBar(label,value,max){return `<div><div class="metric-label"><span>${escapeHTML(String(label))}</span><strong>${value}</strong></div>${ProgressBar(value,{label:`${String(label)} activity`,max})}</div>`;}
 
@@ -3072,28 +3072,44 @@ function accountSessionRow(session) {
 function accountBackupRows() {
   if (!accountModeActive()) return "";
   const backups = Array.isArray(ui.accountBackups) ? ui.accountBackups : [];
+  const latest = latestCloudBackup(backups);
   const list = !ui.accountPanelLoaded
     ? `<p class="settings-note">Loading cloud backups…</p>`
-    : backups.length
-      ? `<div class="backup-list">${backups.map(accountBackupRow).join("")}</div>`
-      : `<p class="settings-note">No cloud backups have been created for this account.</p>`;
+    : latest
+      ? `<div class="backup-list">${accountBackupRow(latest)}</div>`
+      : `<p class="settings-note">No cloud backup is available yet.</p>`;
   return `<div class="cloud-backup-block">
     <div class="account-actions">
       <button class="button subtle" id="createCloudBackup" type="button" ${ui.accountBusy ? "disabled" : ""}>${icons.download}<span>Create cloud backup</span></button>
       <button class="button subtle" id="exportAccountData" type="button" ${ui.accountBusy ? "disabled" : ""}>${icons.download}<span>Export my account</span></button>
     </div>
-    ${list}
+    <section class="latest-cloud-backup" aria-labelledby="latestCloudBackupTitle"><h3 id="latestCloudBackupTitle">Latest backup</h3>${list}</section>
   </div>`;
+}
+
+function cloudBackupTimestamp(backup) {
+  const value = backup?.completedAt || backup?.completed_at || backup?.createdAt || backup?.created_at;
+  const timestamp = new Date(value || "").getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function latestCloudBackup(backups) {
+  return (Array.isArray(backups) ? backups : [])
+    .filter(backup => backup?.id && cloudBackupTimestamp(backup) !== Number.NEGATIVE_INFINITY && String(backup.status || "").toLowerCase() !== "deleted")
+    .reduce((latest, backup) => !latest || cloudBackupTimestamp(backup) > cloudBackupTimestamp(latest) ? backup : latest, null);
 }
 
 function accountBackupRow(backup) {
   const createdAt = backup.createdAt || backup.created_at;
   const completedAt = backup.completedAt || backup.completed_at;
   const size = Number(backup.byteSize || backup.byte_size || 0);
-  const label = createdAt ? fmtDate(createdAt, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Cloud backup";
+  const status = String(backup.status || (completedAt ? "complete" : "processing")).toLowerCase();
+  const labelAt = completedAt || createdAt;
+  const label = labelAt ? fmtDate(labelAt, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Cloud backup";
+  const statusLabel = status === "complete" ? "Complete" : status === "running" || status === "queued" ? "Processing" : status[0]?.toUpperCase() + status.slice(1);
   return `<div class="backup-row">
-    <div><strong>${escapeHTML(label)}</strong><small>${escapeHTML(backup.status || "complete")}${completedAt ? "" : " · processing"}${size ? ` · ${Math.max(1, Math.round(size / 1024))} KB` : ""}</small></div>
-    <button class="button subtle restore-cloud-backup" type="button" data-backup-id="${escapeHTML(backup.id)}" ${backup.status && backup.status !== "complete" ? "disabled" : ""}>Restore</button>
+    <div><strong>${escapeHTML(label)}</strong><small>${escapeHTML(statusLabel)}${size ? ` · ${Math.max(1, Math.round(size / 1024))} KB` : ""}</small></div>
+    <button class="button subtle restore-cloud-backup" type="button" data-backup-id="${escapeHTML(backup.id)}" ${status !== "complete" ? "disabled" : ""}>Restore</button>
   </div>`;
 }
 
@@ -3892,7 +3908,7 @@ function scorecardPreviewPNG(scorecard, { format = "preview" } = {}) {
     const x = outerX + column * (cardWidth + columnGap);
     const y = cardTop + row * (cardHeight + rowGap);
     context.save();
-    context.shadowColor = dark ? "rgba(0,0,0,.24)" : "rgba(25,35,47,.07)";
+    context.shadowColor = "rgba(25,35,47,.07)";
     context.shadowBlur = isImage ? 28 : 18;
     context.shadowOffsetY = isImage ? 10 : 6;
     context.fillStyle = surface;
