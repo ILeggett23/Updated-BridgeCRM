@@ -195,7 +195,7 @@ async function accountIssueActionToken(env, user, purpose, request) {
 }
 
 async function accountSendActionEmail(env, user, purpose, rawToken) {
-  const appURL = new URL(env.PUBLIC_APP_URL || "https://bridgecrm-human-network.mr-zayway.chatgpt.site/");
+  const appURL = new URL(env.PUBLIC_APP_URL || "https://ileggett23.github.io/Updated-BridgeCRM/");
   if (purpose === "verify_email") appURL.searchParams.set("verifyEmail", rawToken);
   else appURL.searchParams.set("resetPassword", rawToken);
   const verification = purpose === "verify_email";
