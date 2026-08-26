@@ -36,16 +36,16 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"capture-tracking", chapter:"Capture", route:"capture-next", target:"capture-tracking", placement:"above", title:"Track activity and stage accurately", description:"Advanced details hold MSA and DTM activity markers plus exact Prospect or Customer stage movement. They never rewrite earlier history." }),
   step({ id:"save-capture", chapter:"Capture", route:"capture-next", target:"capture-save", placement:"above", title:"Review before saving", description:"Saving writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"Do not save a tutorial record. Select Next to continue safely." }),
 
-  step({ id:"open-people", chapter:"People", route:"today", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-people", chapter:"People", route:"current", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"people-search", chapter:"People", route:"people", target:"people-search", title:"Search saved context", description:"Search finds names, contact details, places, conversation notes, and What I Know text." }),
   step({ id:"people-filters", chapter:"People", route:"people", target:"people-filters", title:"Focus the list", description:"Quick filters and the full Filter control narrow relationships by role, stage, recency, health, follow-up state, and more." }),
-  step({ id:"open-person", chapter:"People", route:"people", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap any person row, or Skip step if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
+  step({ id:"open-person", chapter:"People", route:"current", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap any person row, or Skip step if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
   step({ id:"person-actions", chapter:"People", route:"current", target:"person-actions", placement:"below", title:"Act from the profile", description:"Call, text, log activity, schedule a follow-up, or edit the relationship from these production actions.", optional:true }),
   step({ id:"bridge-brief", chapter:"People", route:"current", target:"bridge-brief", title:"Read the Bridge Brief", description:"Bridge Brief summarizes durable What I Know context without mixing it into individual conversation notes.", optional:true }),
   step({ id:"person-timeline", chapter:"People", route:"current", target:"person-timeline", title:"Review the timeline", description:"The timeline keeps conversations, follow-ups, and exact pipeline events in chronological relationship history.", optional:true }),
   step({ id:"person-pipeline", chapter:"People", route:"current", target:"person-pipeline", title:"Understand status and history", description:"The profile shows the current stage separately from historical stage movement, along with relationship details and follow-up information.", optional:true }),
 
-  step({ id:"open-pipeline", chapter:"Pipeline", route:"people", target:"nav-pipeline", placement:"above", title:"Open Pipeline", description:"Pipeline shows where a relationship currently stands when the next stage is clear.", instruction:"Tap Pipeline in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-pipeline", chapter:"Pipeline", route:"current", target:"nav-pipeline", placement:"above", title:"Open Pipeline", description:"Pipeline shows where a relationship currently stands when the next stage is clear.", instruction:"Tap Pipeline in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"pipeline-types", chapter:"Pipeline", route:"pipeline", target:"pipeline-tabs", title:"Keep the pipelines distinct", description:"Prospect and Customer are separate workflows. Changing tabs never changes a person’s stored role or stage." }),
   step({ id:"prospect-stages", chapter:"Pipeline", route:"pipeline", target:"prospect-stages", title:"Follow the Prospect path", description:"Prospect stages remain exactly PQI → QI/P → FUP → LA. Counts show current people; MSA and DTM remain standalone activity markers." }),
   step({ id:"customer-tab", chapter:"Pipeline", route:"pipeline", target:"customer-tab", title:"View Customer relationships", description:"Customer work uses its own exact stage sequence.", instruction:"Tap Customer to switch pipeline views.", interaction:"target", advanceOn:"click" }),
@@ -57,7 +57,7 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"open-places", chapter:"Follow-ups / Places", route:"people", target:"people-places", title:"Open Places", description:"Places groups people and recorded interactions by genuine saved location context.", instruction:"Tap the location button beside People.", interaction:"target", advanceOn:"click" }),
   step({ id:"places-workspace", chapter:"Follow-ups / Places", route:"current", target:"places-workspace", title:"See where relationships happen", description:"Place totals come from saved people and conversations. Empty accounts stay empty—Bridge never creates tutorial data." }),
 
-  step({ id:"open-insights", chapter:"Insights", route:"today", target:"nav-insights", placement:"above", title:"Open Insights", description:"Insights explains the activity already recorded in Bridge.", instruction:"Tap Insights in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-insights", chapter:"Insights", route:"current", target:"nav-insights", placement:"above", title:"Open Insights", description:"Insights explains the activity already recorded in Bridge.", instruction:"Tap Insights in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"insights-week", chapter:"Insights", route:"insights", target:"insights-week", title:"Read the period summary", description:"The hero summarizes conversations, new people, pipeline movement, follow-through, and places for the selected period." }),
   step({ id:"insights-conversations", chapter:"Insights", route:"insights", target:"insights-conversations", title:"See conversation rhythm", description:"The chart uses counted conversations only, so calls, texts, and notes remain separate activity." }),
   step({ id:"insights-pipeline", chapter:"Insights", route:"insights", target:"insights-pipeline", title:"Spot pipeline signals", description:"Pipeline intelligence identifies genuine movement and relationships that may have stalled in their current exact stage." }),
@@ -65,7 +65,7 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"insights-followups", chapter:"Insights", route:"insights", target:"insights-followups", title:"Measure follow-through", description:"Follow-up effectiveness compares completed actions with follow-ups recorded or due in the selected period." }),
   step({ id:"analytics-periods", chapter:"Insights", route:"insights", target:"analytics-periods", title:"Choose the right period", description:"Detailed analytics offers day, week, month, and custom local-date views with the meaning of each real metric." }),
 
-  step({ id:"open-settings", chapter:"Settings", route:"today", target:"settings-button", title:"Open Settings", description:"Settings controls your account, goals, reminders, relationship workflow, and data tools.", instruction:"Tap Settings.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-settings", chapter:"Settings", route:"current", target:"settings-button", title:"Open Settings", description:"Settings controls your account, goals, reminders, relationship workflow, and data tools.", instruction:"Tap Settings.", interaction:"target", advanceOn:"click" }),
   step({ id:"settings-profile", chapter:"Settings", route:"settings", target:"settings-profile", title:"Manage profile and account", description:"Profile stores your Bridge identity. Account & Security manages password, sessions, and account controls when cloud accounts are enabled." }),
   step({ id:"settings-goals", chapter:"Settings", route:"settings", target:"settings-goals", title:"Set goals and protect streaks", description:"Choose daily, weekly, and monthly conversation goals. Rest days preserve streak continuity without inventing completed days." }),
   step({ id:"settings-notifications", chapter:"Settings", route:"settings", target:"settings-notifications", title:"Control reminders", description:"Configure the daily nudge and follow-up notifications according to the capabilities available on this device." }),
@@ -112,7 +112,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   let targetCleanup = null;
   let resizeObserver = null;
   let globalCleanup = null;
-  let originScrollY = 0;
+  let originScrollY = null;
 
   const currentStep = () => BRIDGE_GUIDE_STEPS[stepIndex] || BRIDGE_GUIDE_STEPS[0];
   const active = () => phase === "active";
@@ -131,6 +131,10 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const versionMatches = String(saved.version || "") === BRIDGE_GUIDE_VERSION;
     if (saved.status === GUIDE_STATUS.unseen && isFreshWorkspace(getState())) {
       phase = "intro";
+      originScrollY = window.scrollY;
+      document.body.classList.add("bridge-guide-active");
+      lockScroll(true);
+      bindGlobalLifecycle();
       return;
     }
     if (saved.status === GUIDE_STATUS.inProgress && versionMatches) stepIndex = firstStepIndex(saved.stepId);
@@ -241,7 +245,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     focusReturn = opener instanceof HTMLElement ? opener : null;
     phase = "active";
     stepIndex = 0;
-    originScrollY = window.scrollY;
+    if (originScrollY === null) originScrollY = window.scrollY;
     document.body.classList.add("bridge-guide-active");
     lockScroll(true);
     bindGlobalLifecycle();
@@ -324,6 +328,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     persistGuide(status, status === GUIDE_STATUS.inProgress ? currentStep() : null);
     close?.({ status });
     bringIntoView(null, originScrollY);
+    originScrollY = null;
     lockScroll(false);
     requestAnimationFrame(() => focusReturn?.isConnected && focusReturn.focus({ preventScroll:true }));
   }
