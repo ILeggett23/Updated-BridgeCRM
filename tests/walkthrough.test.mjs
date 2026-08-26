@@ -61,4 +61,5 @@ test("tour avoids scroll-time repaint traps and serializes step transitions", ()
   assert.doesNotMatch(styles, /bridge-tour__spotlight[^}]*transition:/);
   assert.doesNotMatch(walkthrough, /setTimeout/);
   assert.match(styles, /0 0 0 9999px/);
+  assert.match(styles, /\.bridge-tour-active \{ scroll-behavior: auto !important; \}/);
 });
