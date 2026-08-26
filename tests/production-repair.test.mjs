@@ -53,6 +53,7 @@ test("scorecard PNG generation has no stale undefined theme reference", () => {
   const preview = app.slice(app.indexOf("function scorecardPreviewPNG"), app.indexOf("function scorecardImageFile"));
   assert.match(preview, /canvas\.width = 1200/);
   assert.match(preview, /canvas\.height = isImage \? 1200 : 630/);
-  assert.match(preview, /context\.shadowColor = "rgba\(25,35,47,\.07\)"/);
+  assert.match(preview, /RELATIONSHIP ACTIVITY/);
+  assert.match(preview, /drawScorecardMetric\(context, metric/);
   assert.doesNotMatch(preview, /\bdark\b/);
 });

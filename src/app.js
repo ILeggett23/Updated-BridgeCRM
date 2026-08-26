@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.30";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.31";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -1725,6 +1725,15 @@ function sharedBrand() {
   return `<div class="shared-brand"><img class="shared-brand-icon" src="./bridge-mark-transparent.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><span>Bridge CRM</span></div>`;
 }
 
+function sharedScorecardMetricRows(metrics) {
+  return [
+    ["chart", "Conversations", metrics.conversations],
+    ["contactCard", "Contacts", metrics.contacts],
+    ["people", "Prospects", metrics.prospects],
+    ["target", "Prospective Customers", metrics.prospectiveCustomers]
+  ].map(([iconName, label, value]) => `<div class="shared-scorecard__metric-row"><span class="shared-scorecard__metric-icon" aria-hidden="true">${icons[iconName]}</span><span>${escapeHTML(label)}</span><strong>${escapeHTML(String(value || 0))}</strong></div>`).join("");
+}
+
 function renderSharedScorecard() {
   if (ui.sharedScorecardLoading) return `<main class="shared-scorecard-shell"><div class="shared-scorecard-loading">${LoadingSkeleton({ lines: 3, className: "shared-scorecard-skeleton" })}<strong>Opening shared scorecard</strong><span>Preparing this read-only relationship summary.</span></div></main>`;
   if (ui.sharedScorecardError) return `<main class="shared-scorecard-shell">${SurfaceCard(`${sharedBrand()}<div class="shared-scorecard-head"><span class="ui-eyebrow">Private link</span><h1 class="ui-editorial-heading">Scorecard unavailable</h1><p>${escapeHTML(ui.sharedScorecardError)}</p></div><p class="shared-read-only">This link may have expired or been revoked.</p>`, { className: "shared-scorecard shared-scorecard--error", raised: true })}</main>`;
@@ -1732,11 +1741,11 @@ function renderSharedScorecard() {
   const metrics = scorecard.metrics || {};
   const contacts = Array.isArray(scorecard.contacts) ? scorecard.contacts : [];
   const owner = escapeHTML(scorecard.ownerName || "Bridge");
-  const metricGrid = MetricGrid(`${MetricCard(String(metrics.conversations || 0), "Conversations", { iconName: "chart" })}${MetricCard(String(metrics.contacts || 0), "Contacts", { iconName: "contactCard" })}${MetricCard(String(metrics.prospects || 0), "Prospects", { iconName: "people" })}${MetricCard(String(metrics.prospectiveCustomers || 0), "Prospective Customers", { iconName: "target" })}`, { className: "shared-metrics", label: "Shared scorecard metrics" });
+  const metricLedger = `<section class="shared-scorecard__ledger" aria-label="Shared scorecard metrics"><div class="shared-scorecard__ledger-label">Relationship activity</div>${sharedScorecardMetricRows(metrics)}</section>`;
   const contactDisclosure = scorecard.includeContacts && contacts.length
     ? `${SurfaceCard(`${SectionHeader("New relationships", { eyebrow: "Shared with consent", action: StatusBadge(String(contacts.length), "brand"), level: 2 })}<p class="shared-contact-disclosure">Only name, role, stage, and place are included.</p><button class="button subtle shared-contacts-button" id="toggleSharedContacts" type="button" aria-expanded="${ui.sharedScorecardContactsOpen}" aria-controls="sharedContactList">${icons.people}<span>${ui.sharedScorecardContactsOpen ? "Hide new contacts" : `View ${contacts.length} new contact${contacts.length === 1 ? "" : "s"}`}</span></button>${ui.sharedScorecardContactsOpen ? `<section class="shared-contact-list" id="sharedContactList" aria-label="Shared contacts">${contacts.map(sharedScorecardContact).join("")}</section>` : ""}`, { cream: true, className: "shared-contacts-surface" })}`
     : `<p class="shared-privacy-note">This scorecard was shared without contact details.</p>`;
-  return `<main class="shared-scorecard-shell">${SurfaceCard(`${sharedBrand()}<header class="shared-scorecard-head"><span class="ui-eyebrow">Shared by ${owner}</span><h1 class="ui-editorial-heading">${owner}'s Scorecard</h1><p>${escapeHTML(scorecard.periodLabel || "Today")}</p></header>${metricGrid}<p class="shared-summary">${escapeHTML(`${metrics.conversations || 0} conversation${Number(metrics.conversations) === 1 ? "" : "s"} in this period`)}</p>${contactDisclosure}<p class="shared-read-only">Read-only scorecard · Contact details are shown only when the sender opted in.</p>`, { className: "shared-scorecard", raised: true })}</main>`;
+  return `<main class="shared-scorecard-shell"><article class="shared-scorecard">${sharedBrand()}<header class="shared-scorecard-head"><span class="ui-eyebrow">Shared by ${owner}</span><h1 class="ui-editorial-heading">${owner}'s Scorecard</h1><p>${escapeHTML(scorecard.periodLabel || "Today")}</p></header>${metricLedger}<p class="shared-summary">${escapeHTML(`${metrics.conversations || 0} conversation${Number(metrics.conversations) === 1 ? "" : "s"} in this period`)}</p>${contactDisclosure}<p class="shared-read-only">Read-only scorecard · Contact details are shown only when the sender opted in.</p></article></main>`;
 }
 
 function sharedScorecardContact(contact) {
@@ -3878,30 +3887,31 @@ function scorecardBrandMark() {
 
 function drawScorecardMetric(context, metric, { x, y, width, height, compact }) {
   const { iconName, label, value } = metric;
-  const inset = compact ? 30 : 42;
-  const iconSize = compact ? 46 : 60;
-  const iconGlyph = compact ? 24 : 30;
-  const foreground = "#1b1913";
-  const secondary = "#4b463c";
-  const accent = "#0e6b5c";
-  context.fillStyle = "rgba(14,107,92,.11)";
-  drawRoundedRect(context, x + inset, y + inset, iconSize, iconSize, compact ? 16 : 20);
-  context.fill();
-  drawScorecardIcon(context, iconName, x + inset + (iconSize - iconGlyph) / 2, y + inset + (iconSize - iconGlyph) / 2, iconGlyph, accent);
-  context.fillStyle = foreground;
-  context.font = `${compact ? "760 52px" : "760 76px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(String(value), x + inset, y + height - (compact ? 74 : 102));
-  context.fillStyle = secondary;
-  context.font = `${compact ? "600 23px" : "600 30px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
-  const available = width - inset * 2;
-  if (context.measureText(label).width <= available) {
-    context.fillText(label, x + inset, y + height - (compact ? 34 : 52));
-    return;
+  const iconSize = compact ? 22 : 28;
+  const labelSize = compact ? 25 : 34;
+  const valueSize = compact ? 48 : 72;
+  context.strokeStyle = "#e4dfd4";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(x, y + height); context.lineTo(x + width, y + height);
+  context.stroke();
+  drawScorecardIcon(context, iconName, x, y + (height - iconSize) / 2, iconSize, "#0e6b5c");
+  context.fillStyle = "#4b463c";
+  context.font = `600 ${labelSize}px Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const labelX = x + iconSize + (compact ? 18 : 22);
+  const labelWidth = width - (compact ? 150 : 200);
+  if (context.measureText(label).width <= labelWidth) {
+    context.fillText(label, labelX, y + height / 2 + labelSize * .36);
+  } else {
+    const words = label.split(" ");
+    context.fillText(words.slice(0, -1).join(" "), labelX, y + height / 2 - 4);
+    context.fillText(words.at(-1), labelX, y + height / 2 + labelSize + 2);
   }
-  const words = label.split(" ");
-  const breakAt = Math.max(1, Math.ceil(words.length / 2));
-  context.fillText(words.slice(0, breakAt).join(" "), x + inset, y + height - (compact ? 52 : 74));
-  context.fillText(words.slice(breakAt).join(" "), x + inset, y + height - (compact ? 25 : 38));
+  context.fillStyle = "#1b1913";
+  context.font = `600 ${valueSize}px Newsreader, Georgia, serif`;
+  context.textAlign = "right";
+  context.fillText(String(value), x + width, y + height / 2 + valueSize * .34);
+  context.textAlign = "left";
 }
 
 async function scorecardPreviewPNG(scorecard, { format = "preview" } = {}) {
@@ -3917,55 +3927,43 @@ async function scorecardPreviewPNG(scorecard, { format = "preview" } = {}) {
   const foreground = "#1b1913";
   const secondary = "#4b463c";
   const line = "#e4dfd4";
-  const outer = isImage ? 64 : 54;
-  const headerHeight = isImage ? 206 : 164;
-  const panelTop = outer + headerHeight;
-  const panelHeight = canvas.height - panelTop - outer;
-  const panelWidth = canvas.width - outer * 2;
+  const outer = isImage ? 76 : 64;
+  const headerHeight = isImage ? 320 : 214;
+  const ledgerTop = outer + headerHeight;
+  const ledgerWidth = canvas.width - outer * 2;
+  const rowHeight = isImage ? 170 : 80;
   const compact = !isImage;
   context.fillStyle = background;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.save();
-  context.shadowColor = "rgba(25,35,47,.07)";
-  context.shadowBlur = isImage ? 30 : 22;
-  context.shadowOffsetY = isImage ? 12 : 8;
-  context.fillStyle = surface;
-  drawRoundedRect(context, outer, panelTop, panelWidth, panelHeight, isImage ? 34 : 28);
-  context.fill();
-  context.restore();
-  context.strokeStyle = line;
-  context.lineWidth = 2;
-  drawRoundedRect(context, outer, panelTop, panelWidth, panelHeight, isImage ? 34 : 28);
-  context.stroke();
-  if (brandMark) context.drawImage(brandMark, outer, outer + 2, isImage ? 76 : 62, isImage ? 76 : 62);
+  if (brandMark) context.drawImage(brandMark, outer, outer, isImage ? 54 : 42, isImage ? 54 : 42);
   context.fillStyle = foreground;
-  context.font = `${isImage ? "600 58px" : "600 45px"} Newsreader, Georgia, serif`;
-  context.fillText("Bridge Scorecard", outer + (isImage ? 98 : 80), outer + (isImage ? 50 : 43));
+  context.font = `${isImage ? "600 26px" : "600 21px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText("Bridge CRM", outer + (isImage ? 72 : 56), outer + (isImage ? 36 : 29));
+  context.font = `${isImage ? "600 78px" : "600 53px"} Newsreader, Georgia, serif`;
+  context.fillText("Bridge Scorecard", outer, outer + (isImage ? 158 : 108));
   context.fillStyle = secondary;
-  context.font = `${isImage ? "600 25px" : "600 20px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(scorecard.periodLabel, outer + (isImage ? 100 : 82), outer + (isImage ? 82 : 70));
+  context.font = `${isImage ? "500 29px" : "500 21px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText(scorecard.periodLabel, outer, outer + (isImage ? 206 : 145));
   context.fillStyle = "#0e6b5c";
-  context.font = `${isImage ? "700 17px" : "700 15px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText("RELATIONSHIP ACTIVITY", outer + (isImage ? 100 : 82), outer + (isImage ? 112 : 96));
+  context.font = `${isImage ? "700 17px" : "700 13px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText("RELATIONSHIP ACTIVITY", outer, outer + (isImage ? 252 : 177));
   const cards = [
     { iconName: "chart", label: "Conversations", value: scorecard.metrics.conversations },
     { iconName: "contactCard", label: "Contacts", value: scorecard.metrics.contacts },
     { iconName: "people", label: "Prospects", value: scorecard.metrics.prospects },
     { iconName: "target", label: "Prospective Customers", value: scorecard.metrics.prospectiveCustomers }
   ];
-  const cardWidth = panelWidth / 2;
-  const cardHeight = panelHeight / 2;
-  context.strokeStyle = line;
+  context.strokeStyle = foreground;
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(outer + cardWidth, panelTop + (isImage ? 30 : 24)); context.lineTo(outer + cardWidth, panelTop + panelHeight - (isImage ? 30 : 24));
-  context.moveTo(outer + (isImage ? 30 : 24), panelTop + cardHeight); context.lineTo(outer + panelWidth - (isImage ? 30 : 24), panelTop + cardHeight);
+  context.moveTo(outer, ledgerTop); context.lineTo(outer + ledgerWidth, ledgerTop);
   context.stroke();
   cards.forEach((metric, index) => {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    drawScorecardMetric(context, metric, { x: outer + column * cardWidth, y: panelTop + row * cardHeight, width: cardWidth, height: cardHeight, compact });
+    drawScorecardMetric(context, metric, { x: outer, y: ledgerTop + index * rowHeight, width: ledgerWidth, height: rowHeight, compact });
   });
+  context.fillStyle = "#847d70";
+  context.font = `${isImage ? "500 19px" : "500 14px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText("A private snapshot of your Bridge relationships", outer, ledgerTop + rowHeight * 4 + (isImage ? 56 : 26));
   return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
 }
 

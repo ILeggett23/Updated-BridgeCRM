@@ -76,7 +76,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.30"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.31"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -409,14 +409,14 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.30 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.30"));
-  assert.ok(page.includes("./styles.css?v=1.3.30"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.30"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.30"));
-  assert.ok(page.includes("./account-client.js?v=1.3.30"));
-  assert.ok(page.includes("./app.js?v=1.3.30"));
-  assert.ok(worker.includes("bridge-app-v1.3.30"));
+test("v1.3.31 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.31"));
+  assert.ok(page.includes("./styles.css?v=1.3.31"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.31"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.31"));
+  assert.ok(page.includes("./account-client.js?v=1.3.31"));
+  assert.ok(page.includes("./app.js?v=1.3.31"));
+  assert.ok(worker.includes("bridge-app-v1.3.31"));
 });
 
 test("the GitHub Pages client loads the real account gate while localhost can disable it", async () => {
@@ -426,9 +426,9 @@ test("the GitHub Pages client loads the real account gate while localhost can di
   assert.ok(source.includes("globalThis.BridgeConfig?.apiBase"));
   assert.ok(source.includes("const apiFetch = (path, options) => fetch(apiURL(path), options)"));
   assert.ok(source.includes('mode: "local"'));
-  assert.ok(page.indexOf("account-client.js?v=1.3.30") < page.indexOf("app.js?v=1.3.30"));
+  assert.ok(page.indexOf("account-client.js?v=1.3.31") < page.indexOf("app.js?v=1.3.31"));
   assert.ok(serviceWorker.includes('new URL("account-client.js", ROOT).href'));
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.30", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.31", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));
