@@ -3677,6 +3677,7 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .bridge-tour--intro .bridge-tour__card { position: relative; top: auto; left: auto; width: min(380px, 100%); max-height: calc(100dvh - 32px); padding: 22px; }
 .bridge-tour--intro .bridge-tour__card h2 { font-size: clamp(27px, 7vw, 34px); }
 .bridge-tour--intro .bridge-tour__card p { font-size: 15px; }
+.bridge-tour-active { scroll-behavior: auto !important; }
 .bridge-tour-active .quick-create-backdrop:not(.is-continuing),
 .bridge-tour-active .quick-create-backdrop:not(.is-continuing) .quick-create-modal { animation: none !important; }
 .bridge-tour-active .quick-capture-wizard__step { transition: none !important; }

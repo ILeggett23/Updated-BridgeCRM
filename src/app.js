@@ -1,5 +1,5 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.33";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.33";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.34";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.34";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

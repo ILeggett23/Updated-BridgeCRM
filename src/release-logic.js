@@ -1,8 +1,8 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.33",
-    assetVersion: "v1.3.33",
+    version: "1.3.34",
+    assetVersion: "v1.3.34",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
