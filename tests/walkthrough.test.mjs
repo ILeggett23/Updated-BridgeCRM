@@ -19,8 +19,12 @@ test("walkthrough teaches the relationship loop in concise, stable moments", () 
   assert.equal(new Set(BRIDGE_WALKTHROUGH_STEPS.map(step => step.id)).size, BRIDGE_WALKTHROUGH_STEPS.length);
   const pipeline = BRIDGE_WALKTHROUGH_STEPS.find(step => step.id === "pipeline");
   assert.match(pipeline.description, /PQI, QI\/P, FUP, and LA/);
-  assert.match(pipeline.description, /CNA, Proposal, Follow-Up, Order Placed, and Active Customer/);
+  assert.match(pipeline.description, /separate Customer pipeline/);
   assert.equal(BRIDGE_WALKTHROUGH_STEPS.find(step => step.id === "relationship-loop").target, "");
+  for (const step of BRIDGE_WALKTHROUGH_STEPS) {
+    assert.ok(step.title.length <= 34, `${step.id} title should stay compact`);
+    assert.ok(step.description.length <= 130, `${step.id} description should stay concise`);
+  }
 });
 
 test("tour uses stable hooks, existing routing, and synced Settings persistence", () => {
@@ -29,7 +33,7 @@ test("tour uses stable hooks, existing routing, and synced Settings persistence"
   assert.match(app, /queueSave\("Walkthrough preference saved", \{ silent: true \}\)/);
   assert.match(app, /activateWalkthroughDestination/);
   assert.match(app, /navigateWalkthroughMain\("contacts", \{ mode: "pipeline", role: "Prospect" \}\)/);
-  for (const target of ["today-overview", "daily-goal", "capture-menu", "capture-context", "people-workspace", "pipeline-workspace", "followups-workspace", "insights-workspace", "walkthrough-replay"]) {
+  for (const target of ["today-overview", "daily-goal", "capture-menu", "capture-context", "people-overview", "pipeline-overview", "followups-overview", "insights-overview", "walkthrough-replay"]) {
     const source = target === "capture-menu" ? foundation : app;
     assert.ok(source.includes(`data-tour=\"${target}\"`), `missing stable tour target ${target}`);
   }
@@ -40,9 +44,21 @@ test("tour uses stable hooks, existing routing, and synced Settings persistence"
 test("tour preserves accessibility, responsive positioning, and cache availability", () => {
   assert.match(styles, /\.bridge-tour__spotlight/);
   assert.match(styles, /@media \(max-width: 767px\), \(max-height: 500px\)[\s\S]*\.bridge-tour__card/);
-  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.bridge-tour__scrim/);
-  assert.match(app, /setQuickCaptureStep\(form, 2/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.bridge-tour__card/);
+  assert.match(app, /setQuickCaptureStep\(form, 2, \{ direction: "forward", behavior: "auto" \}\)/);
   assert.match(walkthrough, /target\.scrollIntoView/);
   assert.match(serviceWorker, /new URL\("walkthrough\.js", ROOT\)\.href/);
   assert.match(devServer, /\["\/walkthrough\.js", \["\.\/src\/walkthrough\.js", "text\/javascript/);
+});
+
+test("tour avoids scroll-time repaint traps and serializes step transitions", () => {
+  assert.match(walkthrough, /if \(transitioning\) return/);
+  assert.match(walkthrough, /activationSequence/);
+  assert.match(walkthrough, /waitForTarget/);
+  assert.match(walkthrough, /requestAnimationFrame\(check\)/);
+  assert.match(walkthrough, /addEventListener\("scroll", schedulePosition, \{ passive: true \}\)/);
+  assert.doesNotMatch(styles, /bridge-tour[^}]*backdrop-filter/);
+  assert.doesNotMatch(styles, /bridge-tour__spotlight[^}]*transition:/);
+  assert.doesNotMatch(walkthrough, /setTimeout/);
+  assert.match(styles, /0 0 0 9999px/);
 });
