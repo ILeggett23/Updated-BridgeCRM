@@ -1,4 +1,4 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.29";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.30";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -1721,9 +1721,13 @@ function render() {
   if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
 }
 
+function sharedBrand() {
+  return `<div class="shared-brand"><img class="shared-brand-icon" src="./bridge-mark-transparent.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><span>Bridge CRM</span></div>`;
+}
+
 function renderSharedScorecard() {
   if (ui.sharedScorecardLoading) return `<main class="shared-scorecard-shell"><div class="shared-scorecard-loading">${LoadingSkeleton({ lines: 3, className: "shared-scorecard-skeleton" })}<strong>Opening shared scorecard</strong><span>Preparing this read-only relationship summary.</span></div></main>`;
-  if (ui.sharedScorecardError) return `<main class="shared-scorecard-shell">${SurfaceCard(`<div class="shared-brand"><span class="shared-brand-symbol" aria-hidden="true">${icons.bridge}</span><span>Bridge CRM</span></div><div class="shared-scorecard-head"><span class="ui-eyebrow">Private link</span><h1 class="ui-editorial-heading">Scorecard unavailable</h1><p>${escapeHTML(ui.sharedScorecardError)}</p></div><p class="shared-read-only">This link may have expired or been revoked.</p>`, { className: "shared-scorecard shared-scorecard--error", raised: true })}</main>`;
+  if (ui.sharedScorecardError) return `<main class="shared-scorecard-shell">${SurfaceCard(`${sharedBrand()}<div class="shared-scorecard-head"><span class="ui-eyebrow">Private link</span><h1 class="ui-editorial-heading">Scorecard unavailable</h1><p>${escapeHTML(ui.sharedScorecardError)}</p></div><p class="shared-read-only">This link may have expired or been revoked.</p>`, { className: "shared-scorecard shared-scorecard--error", raised: true })}</main>`;
   const scorecard = ui.sharedScorecard;
   const metrics = scorecard.metrics || {};
   const contacts = Array.isArray(scorecard.contacts) ? scorecard.contacts : [];
@@ -1732,7 +1736,7 @@ function renderSharedScorecard() {
   const contactDisclosure = scorecard.includeContacts && contacts.length
     ? `${SurfaceCard(`${SectionHeader("New relationships", { eyebrow: "Shared with consent", action: StatusBadge(String(contacts.length), "brand"), level: 2 })}<p class="shared-contact-disclosure">Only name, role, stage, and place are included.</p><button class="button subtle shared-contacts-button" id="toggleSharedContacts" type="button" aria-expanded="${ui.sharedScorecardContactsOpen}" aria-controls="sharedContactList">${icons.people}<span>${ui.sharedScorecardContactsOpen ? "Hide new contacts" : `View ${contacts.length} new contact${contacts.length === 1 ? "" : "s"}`}</span></button>${ui.sharedScorecardContactsOpen ? `<section class="shared-contact-list" id="sharedContactList" aria-label="Shared contacts">${contacts.map(sharedScorecardContact).join("")}</section>` : ""}`, { cream: true, className: "shared-contacts-surface" })}`
     : `<p class="shared-privacy-note">This scorecard was shared without contact details.</p>`;
-  return `<main class="shared-scorecard-shell">${SurfaceCard(`<div class="shared-brand"><span class="shared-brand-symbol" aria-hidden="true">${icons.bridge}</span><span>Bridge CRM</span></div><header class="shared-scorecard-head"><span class="ui-eyebrow">Shared by ${owner}</span><h1 class="ui-editorial-heading">${owner}'s Scorecard</h1><p>${escapeHTML(scorecard.periodLabel || "Today")}</p></header>${metricGrid}<p class="shared-summary">${escapeHTML(`${metrics.conversations || 0} conversation${Number(metrics.conversations) === 1 ? "" : "s"} in this period`)}</p>${contactDisclosure}<p class="shared-read-only">Read-only scorecard · Contact details are shown only when the sender opted in.</p>`, { className: "shared-scorecard", raised: true })}</main>`;
+  return `<main class="shared-scorecard-shell">${SurfaceCard(`${sharedBrand()}<header class="shared-scorecard-head"><span class="ui-eyebrow">Shared by ${owner}</span><h1 class="ui-editorial-heading">${owner}'s Scorecard</h1><p>${escapeHTML(scorecard.periodLabel || "Today")}</p></header>${metricGrid}<p class="shared-summary">${escapeHTML(`${metrics.conversations || 0} conversation${Number(metrics.conversations) === 1 ? "" : "s"} in this period`)}</p>${contactDisclosure}<p class="shared-read-only">Read-only scorecard · Contact details are shown only when the sender opted in.</p>`, { className: "shared-scorecard", raised: true })}</main>`;
 }
 
 function sharedScorecardContact(contact) {
@@ -3863,92 +3867,110 @@ function drawScorecardIcon(context, name, x, y, size, color) {
   context.restore();
 }
 
-function scorecardPreviewPNG(scorecard, { format = "preview" } = {}) {
+function scorecardBrandMark() {
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = `./bridge-mark-transparent.png?v=${encodeURIComponent(APP_RELEASE.version)}`;
+  });
+}
+
+function drawScorecardMetric(context, metric, { x, y, width, height, compact }) {
+  const { iconName, label, value } = metric;
+  const inset = compact ? 30 : 42;
+  const iconSize = compact ? 46 : 60;
+  const iconGlyph = compact ? 24 : 30;
+  const foreground = "#1b1913";
+  const secondary = "#4b463c";
+  const accent = "#0e6b5c";
+  context.fillStyle = "rgba(14,107,92,.11)";
+  drawRoundedRect(context, x + inset, y + inset, iconSize, iconSize, compact ? 16 : 20);
+  context.fill();
+  drawScorecardIcon(context, iconName, x + inset + (iconSize - iconGlyph) / 2, y + inset + (iconSize - iconGlyph) / 2, iconGlyph, accent);
+  context.fillStyle = foreground;
+  context.font = `${compact ? "760 52px" : "760 76px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText(String(value), x + inset, y + height - (compact ? 74 : 102));
+  context.fillStyle = secondary;
+  context.font = `${compact ? "600 23px" : "600 30px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const available = width - inset * 2;
+  if (context.measureText(label).width <= available) {
+    context.fillText(label, x + inset, y + height - (compact ? 34 : 52));
+    return;
+  }
+  const words = label.split(" ");
+  const breakAt = Math.max(1, Math.ceil(words.length / 2));
+  context.fillText(words.slice(0, breakAt).join(" "), x + inset, y + height - (compact ? 52 : 74));
+  context.fillText(words.slice(breakAt).join(" "), x + inset, y + height - (compact ? 25 : 38));
+}
+
+async function scorecardPreviewPNG(scorecard, { format = "preview" } = {}) {
   const isImage = format === "image";
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
   canvas.height = isImage ? 1200 : 630;
   const context = canvas.getContext("2d");
   if (!context) return "";
+  const brandMark = await scorecardBrandMark();
   const background = "#f5f2ec";
   const surface = "#ffffff";
   const foreground = "#1b1913";
   const secondary = "#4b463c";
   const line = "#e4dfd4";
-  const accent = "#0e6b5c";
-  const accentRGB = "14,107,92";
-  const iconSurface = `rgba(${accentRGB},.13)`;
+  const outer = isImage ? 64 : 54;
+  const headerHeight = isImage ? 206 : 164;
+  const panelTop = outer + headerHeight;
+  const panelHeight = canvas.height - panelTop - outer;
+  const panelWidth = canvas.width - outer * 2;
+  const compact = !isImage;
   context.fillStyle = background;
   context.fillRect(0, 0, canvas.width, canvas.height);
+  context.save();
+  context.shadowColor = "rgba(25,35,47,.07)";
+  context.shadowBlur = isImage ? 30 : 22;
+  context.shadowOffsetY = isImage ? 12 : 8;
+  context.fillStyle = surface;
+  drawRoundedRect(context, outer, panelTop, panelWidth, panelHeight, isImage ? 34 : 28);
+  context.fill();
+  context.restore();
+  context.strokeStyle = line;
+  context.lineWidth = 2;
+  drawRoundedRect(context, outer, panelTop, panelWidth, panelHeight, isImage ? 34 : 28);
+  context.stroke();
+  if (brandMark) context.drawImage(brandMark, outer, outer + 2, isImage ? 76 : 62, isImage ? 76 : 62);
   context.fillStyle = foreground;
-  context.font = `${isImage ? "760 54px" : "760 42px"} -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText("Bridge Scorecard", isImage ? 52 : 58, isImage ? 76 : 60);
+  context.font = `${isImage ? "600 58px" : "600 45px"} Newsreader, Georgia, serif`;
+  context.fillText("Bridge Scorecard", outer + (isImage ? 98 : 80), outer + (isImage ? 50 : 43));
   context.fillStyle = secondary;
-  context.font = `${isImage ? "500 30px" : "500 24px"} -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(scorecard.periodLabel, isImage ? 52 : 58, isImage ? 118 : 96);
+  context.font = `${isImage ? "600 25px" : "600 20px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText(scorecard.periodLabel, outer + (isImage ? 100 : 82), outer + (isImage ? 82 : 70));
+  context.fillStyle = "#0e6b5c";
+  context.font = `${isImage ? "700 17px" : "700 15px"} Inter Tight, -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText("RELATIONSHIP ACTIVITY", outer + (isImage ? 100 : 82), outer + (isImage ? 112 : 96));
   const cards = [
-    ["chart", "Conversations", scorecard.metrics.conversations],
-    ["contactCard", "Contacts", scorecard.metrics.contacts],
-    ["people", "Prospects", scorecard.metrics.prospects],
-    ["target", "Prospective Customers", scorecard.metrics.prospectiveCustomers]
+    { iconName: "chart", label: "Conversations", value: scorecard.metrics.conversations },
+    { iconName: "contactCard", label: "Contacts", value: scorecard.metrics.contacts },
+    { iconName: "people", label: "Prospects", value: scorecard.metrics.prospects },
+    { iconName: "target", label: "Prospective Customers", value: scorecard.metrics.prospectiveCustomers }
   ];
-  const outerX = isImage ? 52 : 58;
-  const columnGap = isImage ? 30 : 28;
-  const rowGap = isImage ? 30 : 20;
-  const cardWidth = (canvas.width - outerX * 2 - columnGap) / 2;
-  const cardTop = isImage ? 154 : 126;
-  const cardHeight = isImage ? 476 : 232;
-  const cardRadius = isImage ? 38 : 30;
-  const cardPadding = isImage ? 38 : 28;
-  const iconSize = isImage ? 108 : 70;
-  const iconGlyph = isImage ? 52 : 34;
-  cards.forEach(([iconName, label, value], index) => {
+  const cardWidth = panelWidth / 2;
+  const cardHeight = panelHeight / 2;
+  context.strokeStyle = line;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(outer + cardWidth, panelTop + (isImage ? 30 : 24)); context.lineTo(outer + cardWidth, panelTop + panelHeight - (isImage ? 30 : 24));
+  context.moveTo(outer + (isImage ? 30 : 24), panelTop + cardHeight); context.lineTo(outer + panelWidth - (isImage ? 30 : 24), panelTop + cardHeight);
+  context.stroke();
+  cards.forEach((metric, index) => {
     const column = index % 2;
     const row = Math.floor(index / 2);
-    const x = outerX + column * (cardWidth + columnGap);
-    const y = cardTop + row * (cardHeight + rowGap);
-    context.save();
-    context.shadowColor = "rgba(25,35,47,.07)";
-    context.shadowBlur = isImage ? 28 : 18;
-    context.shadowOffsetY = isImage ? 10 : 6;
-    context.fillStyle = surface;
-    drawRoundedRect(context, x, y, cardWidth, cardHeight, cardRadius);
-    context.fill();
-    context.restore();
-    context.strokeStyle = line;
-    context.lineWidth = 2;
-    drawRoundedRect(context, x, y, cardWidth, cardHeight, cardRadius);
-    context.stroke();
-    const iconX = x + cardPadding;
-    const iconY = y + cardPadding;
-    context.fillStyle = iconSurface;
-    drawRoundedRect(context, iconX, iconY, iconSize, iconSize, isImage ? 30 : 20);
-    context.fill();
-    drawScorecardIcon(
-      context,
-      iconName,
-      iconX + (iconSize - iconGlyph) / 2,
-      iconY + (iconSize - iconGlyph) / 2,
-      iconGlyph,
-      accent
-    );
-    context.fillStyle = foreground;
-    context.font = `${isImage ? "760 86px" : "760 54px"} -apple-system, BlinkMacSystemFont, sans-serif`;
-    context.fillText(String(value), x + cardPadding, y + (isImage ? 322 : 174));
-    context.fillStyle = secondary;
-    context.font = `${isImage ? "500 44px" : "500 27px"} -apple-system, BlinkMacSystemFont, sans-serif`;
-    if (label === "Prospective Customers" && isImage) {
-      context.fillText("Prospective", x + cardPadding, y + 392);
-      context.fillText("Customers", x + cardPadding, y + 446);
-    } else {
-      context.fillText(label, x + cardPadding, y + (isImage ? 406 : 212));
-    }
+    drawScorecardMetric(context, metric, { x: outer + column * cardWidth, y: panelTop + row * cardHeight, width: cardWidth, height: cardHeight, compact });
   });
   return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
 }
 
-function scorecardImageFile(scorecard) {
-  const base64 = scorecardPreviewPNG(scorecard, { format: "image" });
+async function scorecardImageFile(scorecard) {
+  const base64 = await scorecardPreviewPNG(scorecard, { format: "image" });
   if (!base64) throw new Error("Bridge could not prepare the scorecard image");
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -3962,7 +3984,7 @@ function scorecardImageFile(scorecard) {
 
 async function shareScorecardImage() {
   const scorecard = scorecardSnapshot({ includeContacts: false });
-  const file = scorecardImageFile(scorecard);
+  const file = await scorecardImageFile(scorecard);
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file], title: "Bridge Scorecard" });
     return true;
@@ -3982,7 +4004,7 @@ async function shareScorecardImage() {
 
 async function createScorecardLink() {
   const snapshot = scorecardSnapshot();
-  const previewPNG = scorecardPreviewPNG(snapshot);
+  const previewPNG = await scorecardPreviewPNG(snapshot);
   const options = {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },

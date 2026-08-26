@@ -73,7 +73,7 @@ test("What's New reuses Bridge surfaces, typography, accent, and compact geometr
 });
 
 test("Safari receives current shell assets before falling back to offline cache", () => {
-  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.29"\)/);
+  assert.match(page, /navigator\.serviceWorker\.register\("\.\/sw\.js\?v=1\.3\.30"\)/);
   assert.doesNotMatch(app, /serviceWorker\.register\(`/);
   assert.match(worker, /fetch\(event\.request, \{ cache: "no-store" \}\)/);
   assert.match(worker, /\.catch\(\(\) => caches\.match\(event\.request, \{ ignoreSearch: true \}\)\)/);
