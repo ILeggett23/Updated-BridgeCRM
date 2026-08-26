@@ -6,93 +6,19 @@ const STEP_STATUS = Object.freeze({
 });
 
 export const BRIDGE_WALKTHROUGH_STEPS = Object.freeze([
-  Object.freeze({
-    id: "today",
-    destination: "today",
-    target: '[data-tour="today-overview"]',
-    placement: "below",
-    title: "Start with the relationship in front of you",
-    description: "Bridge is for remembering people, not managing abstract deals. Today brings the next person or relationship signal into focus."
-  }),
-  Object.freeze({
-    id: "daily-goal",
-    destination: "today",
-    target: '[data-tour="daily-goal"]',
-    placement: "below",
-    title: "Let conversations build momentum",
-    description: "Counted conversations move your daily goal. Reaching it keeps a gentle streak going, without turning relationships into a scorecard."
-  }),
-  Object.freeze({
-    id: "capture",
-    destination: "today",
-    target: '[data-tour="capture-menu"]',
-    placement: "above",
-    title: "Capture the moment while it is fresh",
-    description: "After meeting someone, choose what happened: a conversation, call, text, meeting, follow-up, or a new person."
-  }),
-  Object.freeze({
-    id: "relationship-context",
-    destination: "capture-context",
-    target: '[data-tour="capture-context"]',
-    placement: "above",
-    title: "Save what future you will want to remember",
-    description: "The conversation records what happened. Add durable details to What I Know—goals, work, family, interests, or needs—so every next conversation has context."
-  }),
-  Object.freeze({
-    id: "people",
-    destination: "people",
-    target: '[data-tour="people-workspace"]',
-    placement: "below",
-    title: "Every relationship has a home",
-    description: "People is where everyone you meet lives. Open a person to revisit their context, activity timeline, pipeline position, and next action."
-  }),
-  Object.freeze({
-    id: "pipeline",
-    destination: "pipeline",
-    target: '[data-tour="pipeline-workspace"]',
-    placement: "below",
-    title: "Move a relationship only when the next stage is clear",
-    description: "Prospects move through PQI, QI/P, FUP, and LA. Customer relationships use CNA, Proposal, Follow-Up, Order Placed, and Active Customer. Bridge keeps those lanes distinct."
-  }),
-  Object.freeze({
-    id: "follow-ups",
-    destination: "followups",
-    target: '[data-tour="followups-workspace"]',
-    placement: "below",
-    title: "Turn a good conversation into a real next step",
-    description: "Give a follow-up a reason and a time. This queue keeps today, upcoming, and overdue promises visible until you complete or reschedule them."
-  }),
-  Object.freeze({
-    id: "insights",
-    destination: "insights",
-    target: '[data-tour="insights-workspace"]',
-    placement: "below",
-    title: "See the relationship work you are actually doing",
-    description: "Insights reflects the conversations, people, stage movement, follow-through, and places already recorded in Bridge."
-  }),
-  Object.freeze({
-    id: "replay",
-    destination: "settings",
-    target: '[data-tour="walkthrough-replay"]',
-    placement: "below",
-    title: "Come back whenever you need a reset",
-    description: "Replay this walkthrough from Settings at any time. Your people, conversations, goals, and follow-ups are never reset."
-  }),
-  Object.freeze({
-    id: "relationship-loop",
-    destination: "relationship-loop",
-    target: "",
-    placement: "center",
-    title: "Keep the relationship loop moving",
-    description: "Meet someone → capture the conversation → remember context → set the stage → choose a next step → follow through. Your next real move is simply to capture the next person you talk with."
-  })
+  Object.freeze({ id: "today", destination: "today", target: '[data-tour="today-overview"]', placement: "below", title: "Your day at a glance", description: "Today surfaces the relationship or follow-up that most needs your attention." }),
+  Object.freeze({ id: "daily-goal", destination: "today", target: '[data-tour="daily-goal"]', placement: "below", title: "Build conversation momentum", description: "Counted conversations move your daily goal. Meeting it contributes to your streak." }),
+  Object.freeze({ id: "capture", destination: "today", target: '[data-tour="capture-menu"]', placement: "above", title: "Capture what happened", description: "Use Capture to add a person, conversation, call, text, meeting, follow-up, or note." }),
+  Object.freeze({ id: "relationship-context", destination: "capture-context", target: '[data-tour="capture-context"]', placement: "above", title: "Remember useful context", description: "Add lasting details to What I Know so they are ready for your next conversation." }),
+  Object.freeze({ id: "people", destination: "people", target: '[data-tour="people-overview"]', placement: "below", title: "Find every relationship", description: "People keeps contact details, context, activity, pipeline position, and next actions together." }),
+  Object.freeze({ id: "pipeline", destination: "pipeline", target: '[data-tour="pipeline-overview"]', placement: "below", title: "Track clear stage movement", description: "Prospects move through PQI, QI/P, FUP, and LA. Switch tabs to manage the separate Customer pipeline." }),
+  Object.freeze({ id: "follow-ups", destination: "followups", target: '[data-tour="followups-overview"]', placement: "below", title: "Keep every promise visible", description: "Follow-Ups organizes overdue, today, upcoming, and completed actions so the next step stays clear." }),
+  Object.freeze({ id: "insights", destination: "insights", target: '[data-tour="insights-overview"]', placement: "below", title: "See relationship momentum", description: "Insights summarizes the conversations, follow-through, pipeline movement, and places already recorded." }),
+  Object.freeze({ id: "replay", destination: "settings", target: '[data-tour="walkthrough-replay"]', placement: "below", title: "Replay whenever you need it", description: "Restart this guide from Settings without changing your people, activity, goals, or follow-ups." }),
+  Object.freeze({ id: "relationship-loop", destination: "relationship-loop", target: "", placement: "center", title: "Keep the relationship moving", description: "Capture the conversation, remember the context, choose the stage, and follow through on the next step." })
 ]);
 
 const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
-
-function reducedMotion() {
-  return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-}
 
 function firstUsableStepIndex(stepId) {
   const index = BRIDGE_WALKTHROUGH_STEPS.findIndex(step => step.id === stepId);
@@ -116,19 +42,17 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
   let stepIndex = 0;
   let focusReturn = null;
   let focusRequested = false;
-  let missingTargetAttempts = 0;
-  let missingTargetTimer = 0;
   let positionFrame = 0;
-  let resizeBound = false;
+  let activationSequence = 0;
+  let transitioning = false;
+  let listenersBound = false;
 
   const currentStep = () => BRIDGE_WALKTHROUGH_STEPS[stepIndex] || BRIDGE_WALKTHROUGH_STEPS[0];
   const active = () => phase === "active";
 
-  function clearPendingPosition() {
+  function cancelPosition() {
     if (positionFrame) cancelAnimationFrame(positionFrame);
-    if (missingTargetTimer) clearTimeout(missingTargetTimer);
     positionFrame = 0;
-    missingTargetTimer = 0;
   }
 
   function persistProgress(status, step = null) {
@@ -142,6 +66,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
       phase = "active";
       stepIndex = firstUsableStepIndex(saved.stepId);
       focusRequested = true;
+      document.documentElement.classList.add("bridge-tour-active");
       return;
     }
     if (status === STEP_STATUS.unseen && isFreshWorkspace(getState())) {
@@ -152,33 +77,80 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
     phase = "hidden";
   }
 
+  function targetFor(step) {
+    if (!step?.target) return null;
+    try { return document.querySelector(step.target); }
+    catch { return null; }
+  }
+
+  function targetReady(step) {
+    if (!step.target) return true;
+    const target = targetFor(step);
+    if (!target || target.hidden) return false;
+    const rect = target.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function waitForTarget(step, sequence) {
+    if (!step.target) return Promise.resolve(true);
+    return new Promise(resolve => {
+      let framesRemaining = 24;
+      const check = () => {
+        if (!active() || sequence !== activationSequence) return resolve(false);
+        if (targetReady(step)) return resolve(true);
+        framesRemaining -= 1;
+        if (framesRemaining <= 0) return resolve(false);
+        requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    });
+  }
+
+  function setControlsBusy(root, busy) {
+    const card = root?.querySelector("[data-tour-card]");
+    card?.setAttribute("aria-busy", String(busy));
+    root?.querySelectorAll("[data-tour-back], [data-tour-next]").forEach(button => {
+      button.disabled = busy || (button.matches("[data-tour-back]") && stepIndex === 0);
+    });
+  }
+
+  async function showStep(nextIndex, { save = true } = {}) {
+    if (transitioning || phase === "hidden") return;
+    transitioning = true;
+    document.documentElement.classList.add("bridge-tour-active");
+    cancelPosition();
+    const sequence = ++activationSequence;
+    stepIndex = clamp(nextIndex, 0, BRIDGE_WALKTHROUGH_STEPS.length - 1);
+    const step = currentStep();
+    focusRequested = true;
+    if (save) persistProgress(STEP_STATUS.inProgress, step);
+    try {
+      await activate(step.destination);
+      const ready = await waitForTarget(step, sequence);
+      if (!active() || sequence !== activationSequence) return;
+      const root = document.querySelector("[data-bridge-walkthrough]");
+      if (ready) position(root, { reveal: true, allowScroll: true });
+      else renderFallback(root);
+      setControlsBusy(root, false);
+    } finally {
+      if (sequence === activationSequence) transitioning = false;
+    }
+  }
+
   function resume() {
-    if (!active()) return;
-    activate(currentStep().destination);
+    if (active()) showStep(stepIndex, { save: false });
   }
 
   function start(opener = document.activeElement) {
     focusReturn = opener instanceof HTMLElement ? opener : null;
     phase = "active";
+    document.documentElement.classList.add("bridge-tour-active");
     stepIndex = 0;
-    missingTargetAttempts = 0;
-    focusRequested = true;
-    persistProgress(STEP_STATUS.inProgress, currentStep());
-    activate(currentStep().destination);
+    showStep(0);
   }
 
   function restart(opener = document.activeElement) {
-    start(opener);
-  }
-
-  function go(nextIndex) {
-    if (!active()) return;
-    const next = clamp(nextIndex, 0, BRIDGE_WALKTHROUGH_STEPS.length - 1);
-    stepIndex = next;
-    missingTargetAttempts = 0;
-    focusRequested = true;
-    persistProgress(STEP_STATUS.inProgress, currentStep());
-    activate(currentStep().destination);
+    if (!transitioning) start(opener);
   }
 
   function restoreFocus() {
@@ -191,20 +163,18 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
 
   function leave(status) {
     if (phase === "hidden") return;
-    clearPendingPosition();
+    activationSequence += 1;
+    transitioning = false;
+    cancelPosition();
     phase = "hidden";
+    document.documentElement.classList.remove("bridge-tour-active");
     persistProgress(status);
     close?.({ status });
     restoreFocus();
   }
 
-  function finish() {
-    leave(STEP_STATUS.completed);
-  }
-
-  function skip() {
-    leave(STEP_STATUS.skipped);
-  }
+  function finish() { leave(STEP_STATUS.completed); }
+  function skip() { leave(STEP_STATUS.skipped); }
 
   function markup() {
     if (phase === "hidden") return "";
@@ -212,7 +182,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
       return `<div class="bridge-tour bridge-tour--intro" data-bridge-walkthrough>${cardMarkup({
         intro: true,
         title: "Welcome to BridgeCRM",
-        description: "A quick walkthrough will show how Bridge helps you keep track of people, conversations, and the next step that keeps each relationship moving.",
+        description: "Take a quick tour of the relationship workflow—from capture to follow-through.",
         controls: '<div class="bridge-tour__intro-actions"><button class="button subtle" type="button" data-tour-later>Maybe later</button><button class="button primary" type="button" data-tour-start>Start tour</button></div>'
       })}</div>`;
     }
@@ -220,8 +190,8 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
     const count = BRIDGE_WALKTHROUGH_STEPS.length;
     const last = stepIndex === count - 1;
     const progress = `<div class="bridge-tour__progress"><span>Bridge guide</span><span>${stepIndex + 1} of ${count}</span><i role="progressbar" aria-label="Walkthrough progress" aria-valuemin="1" aria-valuemax="${count}" aria-valuenow="${stepIndex + 1}"><b style="--tour-progress:${Math.round((stepIndex + 1) / count * 100)}%"></b></i></div>`;
-    const controls = `<div class="bridge-tour__actions"><button class="button subtle" type="button" data-tour-back ${stepIndex === 0 ? "disabled" : ""}>Back</button><button class="bridge-tour__skip" type="button" data-tour-skip>Skip tour</button><button class="button primary" type="button" data-tour-next>${last ? "Finish" : "Next"}</button></div>`;
-    return `<div class="bridge-tour" data-bridge-walkthrough><div class="bridge-tour__scrim" data-tour-scrim="top"></div><div class="bridge-tour__scrim" data-tour-scrim="right"></div><div class="bridge-tour__scrim" data-tour-scrim="bottom"></div><div class="bridge-tour__scrim" data-tour-scrim="left"></div><div class="bridge-tour__spotlight" data-tour-spotlight aria-hidden="true"></div>${cardMarkup({ title: step.title, description: step.description, progress, controls })}</div>`;
+    const controls = `<div class="bridge-tour__actions"><button class="button subtle" type="button" data-tour-back ${stepIndex === 0 || transitioning ? "disabled" : ""}>Back</button><button class="bridge-tour__skip" type="button" data-tour-skip>Skip</button><button class="button primary" type="button" data-tour-next ${transitioning ? "disabled" : ""}>${last ? "Finish" : "Next"}</button></div>`;
+    return `<div class="bridge-tour${transitioning ? " is-settling" : ""}" data-bridge-walkthrough><div class="bridge-tour__blocker" aria-hidden="true"></div><div class="bridge-tour__spotlight" data-tour-spotlight aria-hidden="true"></div>${cardMarkup({ title: step.title, description: step.description, progress, controls })}</div>`;
   }
 
   function bindKeyboard(card) {
@@ -246,133 +216,115 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
     });
   }
 
-  function targetFor(step) {
-    if (!step?.target) return null;
-    try { return document.querySelector(step.target); }
-    catch { return null; }
+  function viewportMetrics() {
+    const viewport = window.visualViewport;
+    return { left: viewport?.offsetLeft || 0, top: viewport?.offsetTop || 0, width: viewport?.width || window.innerWidth, height: viewport?.height || window.innerHeight };
   }
 
-  function setScrim(scrim, { top = 0, left = 0, width = 0, height = 0 } = {}) {
-    if (!scrim) return;
-    scrim.style.top = `${Math.max(0, top)}px`;
-    scrim.style.left = `${Math.max(0, left)}px`;
-    scrim.style.width = `${Math.max(0, width)}px`;
-    scrim.style.height = `${Math.max(0, height)}px`;
+  function requestFocus(card) {
+    if (!focusRequested) return;
+    focusRequested = false;
+    requestAnimationFrame(() => card?.focus({ preventScroll: true }));
   }
 
   function renderFallback(root) {
+    if (!root?.isConnected) return;
     root.classList.add("is-fallback", "is-positioned");
-    root.classList.remove("is-targeted");
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    setScrim(root.querySelector('[data-tour-scrim="top"]'), { width, height });
-    ["right", "bottom", "left"].forEach(name => setScrim(root.querySelector(`[data-tour-scrim="${name}"]`)));
+    root.classList.remove("is-targeted", "is-settling");
     const spotlight = root.querySelector("[data-tour-spotlight]");
     if (spotlight) spotlight.style.cssText = "";
     const card = root.querySelector("[data-tour-card]");
-    if (card) {
-      const maxTop = Math.max(16, height - card.offsetHeight - 16);
-      card.style.setProperty("--tour-card-left", `${clamp((width - card.offsetWidth) / 2, 16, width - card.offsetWidth - 16)}px`);
-      card.style.setProperty("--tour-card-top", `${clamp((height - card.offsetHeight) / 2, 16, maxTop)}px`);
-    }
+    if (!card) return;
+    const viewport = viewportMetrics();
+    const rootRect = root.getBoundingClientRect();
+    const edge = 12;
+    const left = viewport.left + clamp((viewport.width - card.offsetWidth) / 2, edge, viewport.width - card.offsetWidth - edge);
+    const top = viewport.top + clamp((viewport.height - card.offsetHeight) / 2, edge, viewport.height - card.offsetHeight - edge);
+    card.style.setProperty("--tour-card-left", `${left - rootRect.left}px`);
+    card.style.setProperty("--tour-card-top", `${top - rootRect.top}px`);
+    requestFocus(card);
   }
 
-  function recoverMissingTarget(root) {
-    if (missingTargetTimer || !active()) return;
-    if (missingTargetAttempts >= 2) {
-      renderFallback(root);
-      return;
-    }
-    missingTargetTimer = setTimeout(() => {
-      missingTargetTimer = 0;
-      if (!active()) return;
-      const target = targetFor(currentStep());
-      if (target) {
-        position(root);
-        return;
-      }
-      missingTargetAttempts += 1;
-      activate(currentStep().destination);
-    }, 160);
+  function placeCard(step, rect, card, viewport, safeBottom) {
+    const edge = 12;
+    const gap = 10;
+    const cardWidth = card.offsetWidth;
+    const cardHeight = card.offsetHeight;
+    const minLeft = viewport.left + edge;
+    const maxLeft = Math.max(minLeft, viewport.left + viewport.width - cardWidth - edge);
+    const minTop = viewport.top + edge;
+    const maxTop = Math.max(minTop, viewport.top + viewport.height - cardHeight - safeBottom);
+    const centeredLeft = clamp(rect.left + rect.width / 2 - cardWidth / 2, minLeft, maxLeft);
+    const candidates = {
+      below: { left: centeredLeft, top: rect.bottom + gap, fits: rect.bottom + gap + cardHeight <= viewport.top + viewport.height - safeBottom },
+      above: { left: centeredLeft, top: rect.top - cardHeight - gap, fits: rect.top - cardHeight - gap >= minTop },
+      right: { left: rect.right + gap, top: clamp(rect.top + rect.height / 2 - cardHeight / 2, minTop, maxTop), fits: rect.right + gap + cardWidth <= viewport.left + viewport.width - edge },
+      left: { left: rect.left - cardWidth - gap, top: clamp(rect.top + rect.height / 2 - cardHeight / 2, minTop, maxTop), fits: rect.left - cardWidth - gap >= minLeft }
+    };
+    const order = [step.placement, step.placement === "above" ? "below" : "above", "right", "left"].filter((value, index, values) => value && values.indexOf(value) === index);
+    const selected = order.map(name => candidates[name]).find(candidate => candidate?.fits) || candidates[step.placement] || candidates.below;
+    return { left: clamp(selected.left, minLeft, maxLeft), top: clamp(selected.top, minTop, maxTop) };
   }
 
-  function position(root) {
-    if (!root?.isConnected || phase !== "active") return;
+  function position(root, { reveal = false, allowScroll = false } = {}) {
+    if (!root?.isConnected || !active()) return;
     const step = currentStep();
     const card = root.querySelector("[data-tour-card]");
     const target = targetFor(step);
     if (!card || !target) {
       renderFallback(root);
-      recoverMissingTarget(root);
       return;
     }
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const viewport = viewportMetrics();
+    const rootRect = root.getBoundingClientRect();
+    const mobile = viewport.width <= 767;
+    const safeBottom = mobile ? 82 : 12;
     let rect = target.getBoundingClientRect();
+    const viewTop = viewport.top + 8;
+    const viewBottom = viewport.top + viewport.height - safeBottom;
+    if (allowScroll && (rect.top < viewTop || rect.bottom > viewBottom)) {
+      target.scrollIntoView({ block: rect.bottom > viewBottom ? "center" : "nearest", inline: "nearest", behavior: "auto" });
+      rect = target.getBoundingClientRect();
+    }
     if (!rect.width || !rect.height) {
       renderFallback(root);
-      recoverMissingTarget(root);
       return;
     }
-    const mobile = viewportWidth <= 767;
-    const safeTop = 12;
-    const safeBottom = mobile ? 88 : 16;
-    const needsTopScroll = rect.top < safeTop && window.scrollY > 0;
-    const needsBottomScroll = rect.bottom > viewportHeight - safeBottom;
-    if (needsTopScroll || needsBottomScroll) {
-      target.scrollIntoView({ block: needsTopScroll ? "start" : "center", inline: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
-      if (!positionFrame) positionFrame = requestAnimationFrame(() => {
-        positionFrame = 0;
-        setTimeout(() => position(root), reducedMotion() ? 0 : 150);
-      });
-      return;
-    }
-    missingTargetAttempts = 0;
-    root.classList.add("is-targeted", "is-positioned");
-    root.classList.remove("is-fallback");
-    const padding = 8;
-    const cutLeft = clamp(rect.left - padding, 4, viewportWidth);
-    const cutTop = clamp(rect.top - padding, 4, viewportHeight);
-    const cutRight = clamp(rect.right + padding, 0, viewportWidth - 4);
-    const cutBottom = clamp(rect.bottom + padding, 0, viewportHeight - 4);
-    setScrim(root.querySelector('[data-tour-scrim="top"]'), { width: viewportWidth, height: cutTop });
-    setScrim(root.querySelector('[data-tour-scrim="bottom"]'), { top: cutBottom, width: viewportWidth, height: viewportHeight - cutBottom });
-    setScrim(root.querySelector('[data-tour-scrim="left"]'), { top: cutTop, width: cutLeft, height: cutBottom - cutTop });
-    setScrim(root.querySelector('[data-tour-scrim="right"]'), { top: cutTop, left: cutRight, width: viewportWidth - cutRight, height: cutBottom - cutTop });
+    const padding = 6;
+    const left = clamp(rect.left - padding, viewport.left + 2, viewport.left + viewport.width - 2);
+    const top = clamp(rect.top - padding, viewport.top + 2, viewport.top + viewport.height - 2);
+    const right = clamp(rect.right + padding, viewport.left + 2, viewport.left + viewport.width - 2);
+    const bottom = clamp(rect.bottom + padding, viewport.top + 2, viewport.top + viewport.height - 2);
     const spotlight = root.querySelector("[data-tour-spotlight]");
     if (spotlight) {
-      spotlight.style.left = `${cutLeft}px`;
-      spotlight.style.top = `${cutTop}px`;
-      spotlight.style.width = `${Math.max(1, cutRight - cutLeft)}px`;
-      spotlight.style.height = `${Math.max(1, cutBottom - cutTop)}px`;
+      spotlight.style.transform = `translate3d(${left - rootRect.left}px, ${top - rootRect.top}px, 0)`;
+      spotlight.style.width = `${Math.max(1, right - left)}px`;
+      spotlight.style.height = `${Math.max(1, bottom - top)}px`;
     }
-    const cardWidth = card.offsetWidth;
-    const cardHeight = card.offsetHeight;
-    const gap = 14;
-    const maxLeft = Math.max(16, viewportWidth - cardWidth - 16);
-    const maxTop = Math.max(safeTop, viewportHeight - cardHeight - safeBottom);
-    const centeredLeft = clamp(rect.left + rect.width / 2 - cardWidth / 2, 16, maxLeft);
-    const below = rect.bottom + gap;
-    const above = rect.top - cardHeight - gap;
-    let left = centeredLeft;
-    let top = below;
-    if (!mobile && step.placement === "right" && rect.right + gap + cardWidth <= viewportWidth - 16) {
-      left = rect.right + gap;
-      top = clamp(rect.top + rect.height / 2 - cardHeight / 2, safeTop, maxTop);
-    } else if (!mobile && step.placement === "left" && rect.left - gap - cardWidth >= 16) {
-      left = rect.left - gap - cardWidth;
-      top = clamp(rect.top + rect.height / 2 - cardHeight / 2, safeTop, maxTop);
-    } else if (below + cardHeight > viewportHeight - safeBottom && above >= safeTop) {
-      top = above;
-    } else if (below + cardHeight > viewportHeight - safeBottom) {
-      top = clamp(viewportHeight - cardHeight - safeBottom, safeTop, maxTop);
-    }
-    card.style.setProperty("--tour-card-left", `${left}px`);
-    card.style.setProperty("--tour-card-top", `${clamp(top, safeTop, maxTop)}px`);
-    if (focusRequested) {
-      focusRequested = false;
-      requestAnimationFrame(() => card.focus({ preventScroll: true }));
-    }
+    const cardPosition = placeCard(step, rect, card, viewport, safeBottom);
+    card.style.setProperty("--tour-card-left", `${cardPosition.left - rootRect.left}px`);
+    card.style.setProperty("--tour-card-top", `${cardPosition.top - rootRect.top}px`);
+    root.classList.add("is-targeted");
+    root.classList.remove("is-fallback", "is-settling");
+    if (reveal) root.classList.add("is-positioned");
+    requestFocus(card);
+  }
+
+  function schedulePosition() {
+    if (!active() || positionFrame || transitioning) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = 0;
+      position(document.querySelector("[data-bridge-walkthrough]"), { reveal: true });
+    });
+  }
+
+  function bindGlobalListeners() {
+    if (listenersBound) return;
+    listenersBound = true;
+    window.addEventListener("resize", schedulePosition, { passive: true });
+    window.addEventListener("scroll", schedulePosition, { passive: true });
+    window.visualViewport?.addEventListener("resize", schedulePosition, { passive: true });
+    window.visualViewport?.addEventListener("scroll", schedulePosition, { passive: true });
   }
 
   function bind() {
@@ -381,46 +333,23 @@ export function createBridgeWalkthrough({ getState, persist, activate, close } =
     const card = root.querySelector("[data-tour-card]");
     root.querySelector("[data-tour-start]")?.addEventListener("click", event => start(event.currentTarget));
     root.querySelector("[data-tour-later]")?.addEventListener("click", skip);
-    root.querySelector("[data-tour-back]")?.addEventListener("click", () => go(stepIndex - 1));
+    root.querySelector("[data-tour-back]")?.addEventListener("click", () => showStep(stepIndex - 1));
     root.querySelector("[data-tour-skip]")?.addEventListener("click", skip);
     root.querySelector("[data-tour-next]")?.addEventListener("click", () => {
+      if (transitioning) return;
       if (stepIndex === BRIDGE_WALKTHROUGH_STEPS.length - 1) finish();
-      else go(stepIndex + 1);
+      else showStep(stepIndex + 1);
     });
     bindKeyboard(card);
-    if (!resizeBound) {
-      resizeBound = true;
-      const refresh = () => {
-        if (!active()) return;
-        const activeRoot = document.querySelector("[data-bridge-walkthrough]");
-        if (!activeRoot || positionFrame) return;
-        positionFrame = requestAnimationFrame(() => { positionFrame = 0; position(activeRoot); });
-      };
-      window.addEventListener("resize", refresh, { passive: true });
-      window.addEventListener("scroll", refresh, { passive: true });
-      window.visualViewport?.addEventListener("resize", refresh, { passive: true });
-      window.visualViewport?.addEventListener("scroll", refresh, { passive: true });
-    }
+    bindGlobalListeners();
+    setControlsBusy(root, transitioning);
     requestAnimationFrame(() => {
       if (phase === "intro" && focusRequested) {
         focusRequested = false;
         card?.focus({ preventScroll: true });
-      } else if (active()) position(root);
+      } else if (active() && !transitioning) position(root, { reveal: true });
     });
-    if (active()) setTimeout(() => {
-      const activeRoot = document.querySelector("[data-bridge-walkthrough]");
-      if (activeRoot && activeRoot.isConnected) position(activeRoot);
-    }, 80);
   }
 
-  return Object.freeze({
-    active,
-    bind,
-    finish,
-    hydrate,
-    markup,
-    restart,
-    resume,
-    skip
-  });
+  return Object.freeze({ active, bind, finish, hydrate, markup, restart, resume, skip });
 }

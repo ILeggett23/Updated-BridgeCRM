@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.32",
-    assetVersion: "v1.3.32",
+    version: "1.3.33",
+    assetVersion: "v1.3.33",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "bridge",
-        title: "A guided relationship workflow",
-        description: "New to Bridge? Take the walkthrough to see how people, conversations, context, stages, and follow-ups fit together."
+        title: "A smoother Bridge guide",
+        description: "The walkthrough now uses compact guidance, precise highlights, and faster transitions across every destination."
       }),
       Object.freeze({
         icon: "people",
