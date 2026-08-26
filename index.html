@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Opening Bridge CRM</title>
+    <script>
+      (() => {
+        const destination = new URL("./src/", window.location.href);
+        destination.search = window.location.search;
+        destination.hash = window.location.hash;
+        window.location.replace(destination.href);
+      })();
+    </script>
+  </head>
+  <body>
+    <p><a href="./src/">Open Bridge CRM</a></p>
+  </body>
+</html>
