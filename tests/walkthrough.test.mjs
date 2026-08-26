@@ -68,10 +68,13 @@ test("guide locks and restores document scroll while keeping target placement de
   assert.match(app, /bringIntoView: \(target, restoreY\) => positionLockedGuideTarget\(target, restoreY\)/);
   assert.match(app, /lockedDocumentScrollY = nextY/);
   assert.match(walkthrough, /originScrollY = window\.scrollY/);
+  assert.match(walkthrough, /if \(originScrollY === null\) originScrollY = window\.scrollY/);
   assert.match(walkthrough, /bringIntoView\(null, originScrollY\)/);
   assert.match(walkthrough, /addEventListener\("wheel", stopScroll, \{ passive:false \}\)/);
   assert.match(walkthrough, /addEventListener\("touchmove", stopScroll, \{ passive:false \}\)/);
   assert.match(styles, /body\.bridge-guide-active \{[^}]*overflow: hidden;[^}]*touch-action: none;[^}]*overscroll-behavior: none;/);
+  assert.match(walkthrough, /saved\.status === GUIDE_STATUS\.unseen && isFreshWorkspace\(getState\(\)\)/);
+  assert.match(walkthrough, /document\.body\.classList\.add\("bridge-guide-active"\)/);
 });
 
 test("editorial panel removes the chart tile and supports safe mobile geometry", () => {
