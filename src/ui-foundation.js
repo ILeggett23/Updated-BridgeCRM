@@ -32,7 +32,7 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
     const destinations = [
       { label: "Today", icon: "home", active: ui.page === "dashboard", attributes: 'data-page="dashboard"' },
       { label: "People", icon: "people", active: ui.page === "contacts" && ui.contactMode !== "pipeline", attributes: "data-open-people" },
-      { label: "Capture", icon: "plus", active: false, capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}"` },
+      { label: "Capture", icon: "plus", active: false, capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}" data-tour="capture-menu"` },
       { label: "Pipeline", icon: "network", active: ui.page === "contacts" && ui.contactMode === "pipeline", attributes: "data-open-pipeline" },
       { label: "Insights", icon: "chart", active: ui.page === "analytics", attributes: 'data-page="analytics"' }
     ];

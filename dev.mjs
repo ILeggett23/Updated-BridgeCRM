@@ -9,6 +9,7 @@ const emptyState = { contacts: [], places: [], settings: {}, meta: { version: 1 
 const staticFiles = new Map([
   ["/styles.css", ["./src/styles.css", "text/css; charset=utf-8"]],
   ["/ui-foundation.js", ["./src/ui-foundation.js", "text/javascript; charset=utf-8"]],
+  ["/walkthrough.js", ["./src/walkthrough.js", "text/javascript; charset=utf-8"]],
   ["/contact-logic.js", ["./src/contact-logic.js", "text/javascript; charset=utf-8"]],
   ["/engagement-logic.js", ["./src/engagement-logic.js", "text/javascript; charset=utf-8"]],
   ["/communication-logic.js", ["./src/communication-logic.js", "text/javascript; charset=utf-8"]],

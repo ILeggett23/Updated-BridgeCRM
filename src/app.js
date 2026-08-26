@@ -1,4 +1,5 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.31";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.32";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.32";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -200,6 +201,25 @@ const defaultState = () => ({
 });
 
 let state = defaultState();
+const walkthrough = createBridgeWalkthrough({
+  getState: () => state,
+  persist: ({ status, stepId }) => {
+    const previous = state.settings?.walkthrough || {};
+    const timestamp = nowISO();
+    state.settings.walkthrough = {
+      ...previous,
+      status,
+      stepId,
+      startedAt: status === "in-progress" ? (previous.startedAt || timestamp) : previous.startedAt || null,
+      updatedAt: timestamp,
+      skippedAt: status === "skipped" ? timestamp : previous.skippedAt || null,
+      completedAt: status === "completed" ? timestamp : previous.completedAt || null
+    };
+    queueSave("Walkthrough preference saved", { silent: true });
+  },
+  activate: destination => activateWalkthroughDestination(destination),
+  close: () => closeWalkthroughSurface()
+});
 let ui = {
   page: "dashboard",
   contactMode: "list",
@@ -778,6 +798,7 @@ function finishStateHydration() {
   syncAchievements(false);
   applyFixedAppearance();
   stateHydrated = true;
+  walkthrough.hydrate();
   const pendingURL = pendingNotificationNavigationURL;
   let consumedNotification = false;
   if (!pendingURL || !blockingModalOpen()) {
@@ -786,6 +807,7 @@ function finishStateHydration() {
   }
   if (!consumedNotification) applyPresentationRoute(location.href, { renderNow:false, direction:"forward" });
   render();
+  walkthrough.resume();
   if(ui.routedScreen)requestAnimationFrame(focusPresentationEntry);
   refreshPushSubscriptionState().catch(() => {});
   startReminderChecks();
@@ -940,7 +962,7 @@ async function loadSharedScorecard(token) {
   }
 }
 
-function queueSave(message = "Saved") {
+function queueSave(message = "Saved", { silent = false } = {}) {
   const achievementResult = syncAchievements(false);
   if (achievementResult.newlyUnlocked.length) {
     const achievement = ACHIEVEMENTS.find(item => item.id === achievementResult.newlyUnlocked[0]);
@@ -960,7 +982,7 @@ function queueSave(message = "Saved") {
       if (pushSubscriptionState === "active") {
         await syncHostedReminderSchedule().catch(() => {});
       }
-      showToast(message,{tone:"success"});
+      if (!silent) showToast(message,{tone:"success"});
     }, 220);
     return;
   }
@@ -972,15 +994,80 @@ function queueSave(message = "Saved") {
       await syncHostedReminderSchedule().catch(() => {});
     }
     if (!cloudStateAvailable) {
-      showToast(message,{tone:"success"});
+      if (!silent) showToast(message,{tone:"success"});
       return;
     }
     try {
       const response = await fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state) });
       if (!response.ok) throw new Error();
-      showToast(message,{tone:"success"});
-    } catch { showToast("Saved on this device; cloud sync will retry later"); }
+      if (!silent) showToast(message,{tone:"success"});
+    } catch { if (!silent) showToast("Saved on this device; cloud sync will retry later"); }
   }, 220);
+}
+
+function closeWalkthroughCapture() {
+  if (!ui.quickCreateOpen) return false;
+  ui.quickCreateOpen = false;
+  ui.quickCreateMode = null;
+  ui.quickCreateContactId = "";
+  return true;
+}
+
+function navigateWalkthroughMain(page, { mode = page === "contacts" ? "list" : ui.contactMode, role = ui.pipelineRole } = {}) {
+  const moved = navigateMain(page, { mode, role, replace: true, opener: document.activeElement });
+  if (!moved) render();
+}
+
+function activateWalkthroughDestination(destination) {
+  if (destination === "capture-menu") {
+    ui.quickCreateOpen = true;
+    ui.quickCreateMode = null;
+    ui.quickCreateContactId = "";
+    render();
+    return;
+  }
+  if (destination === "capture-context") {
+    ui.quickCreateOpen = true;
+    ui.quickCreateMode = "conversation";
+    ui.quickCreateContactId = "";
+    render();
+    requestAnimationFrame(() => {
+      const form = $("#quickConversationForm");
+      if (form) setQuickCaptureStep(form, 2, { direction: "forward" });
+    });
+    return;
+  }
+  closeWalkthroughCapture();
+  if (destination === "people") {
+    navigateWalkthroughMain("contacts", { mode: "list" });
+    return;
+  }
+  if (destination === "pipeline") {
+    navigateWalkthroughMain("contacts", { mode: "pipeline", role: "Prospect" });
+    return;
+  }
+  if (destination === "followups") {
+    navigateWalkthroughMain("followups");
+    return;
+  }
+  if (destination === "insights") {
+    navigateWalkthroughMain("analytics");
+    return;
+  }
+  if (destination === "settings") {
+    if (ui.routedScreen === "settings" && ui.routedSection === "root") {
+      render();
+      return;
+    }
+    navigatePresentation("settings", { section: "root" }, { replace: true, opener: document.activeElement });
+    return;
+  }
+  navigateWalkthroughMain("dashboard", { mode: "list" });
+}
+
+function closeWalkthroughSurface() {
+  closeWalkthroughCapture();
+  render();
 }
 
 async function requestPersistentStorage() {
@@ -1692,7 +1779,7 @@ function render() {
   ui.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey?ui.routeDirection:"";
   const transientModalOpen=Boolean(ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
   syncDocumentScrollLock(transientModalOpen);
-  app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}`;
+  app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}${walkthrough.markup()}`;
   lastRenderedPresentationKey=nextPresentationKey;
   ui.routeEntryMotion="";
   lastRenderedNavSelection=nextNavSelection;
@@ -1710,6 +1797,7 @@ function render() {
   if (ui.releaseNotesOpen) bindReleaseNotesEvents();
   if (ui.accountMigrationOpen) bindAccountMigrationEvents();
   if (ui.accountAction) bindAccountActionEvents();
+  walkthrough.bind();
   const navIndicator=$('.nav-selection-indicator');
   if(navIndicator&&previousNavSelection!==null&&previousNavSelection!==nextNavSelection&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
     const from=previousNavSelection;const to=nextNavSelection;
@@ -2184,7 +2272,7 @@ function quickCaptureConversationForm(mode,contacts) {
   const meeting=mode==="meeting";
   const steps=["person","place","learned","next"];
   const person=`${quickCapturePersonPicker(contacts,{allowNew:true})}<div class="quick-capture-new-person-fields" data-new-person-fields hidden>${quickCaptureAdvanced(`${field("Phone number",'<input name="phoneNumber" type="tel" autocomplete="tel" placeholder="Optional">')}${field("Email",'<input name="email" type="email" autocomplete="email" inputmode="email" placeholder="Optional">')}${field("Role",'<select name="role" data-capture-role><option>Prospect</option><option>Customer</option><option>Team</option></select>')}<div data-capture-fit>${field("Interest",`<select name="interestLevel">${INTERESTS.map(level=>`<option ${level==="Unsure"?"selected":""}>${level}</option>`).join("")}</select>`)}</div><div data-capture-fit>${field("Judgment",'<select name="judgement"><option>Good Fit</option><option>Not Good Fit</option></select>')}</div>${field("Conversation type",`<select name="conversationType">${CONVERSATION_TYPES.map(type=>`<option>${type}</option>`).join("")}</select>`)}`,"Add person details")}</div>`;
-  const learned=`${field(meeting?"What did you discuss?":"What did you learn?",`<textarea name="notes" required placeholder="${meeting?"Key points from the meeting":"A useful detail, need, goal, or next step"}"></textarea>`)}${field("Add to What I Know",'<textarea name="personalInfo" placeholder="Optional relationship context"></textarea>')}`;
+  const learned=`${field(meeting?"What did you discuss?":"What did you learn?",`<textarea name="notes" required placeholder="${meeting?"Key points from the meeting":"A useful detail, need, goal, or next step"}"></textarea>`)}${field("Add to What I Know",'<textarea name="personalInfo" data-tour="capture-context" placeholder="Optional relationship context"></textarea>')}`;
   const next=`${quickCaptureNextAction()}${quickCaptureAdvanced(`${field("Date and time",`<input name="conversationDate" type="datetime-local" value="${dateTimeLocalValue(new Date())}" required>`)}${quickCaptureTrackingFields()}`,"Date, stage, and activity details")}`;
   return `<form id="quickConversationForm" class="quick-create-form quick-capture-composer quick-capture-wizard" data-capture-kind="${mode}" data-capture-steps="${steps.join(",")}" data-capture-step-index="0">${quickCaptureErrorState()}${quickCaptureWizardProgress(steps)}${quickCaptureWizardStep("person",meeting?"Who was in the meeting?":"Who was it?",person,{first:true})}${quickCaptureWizardStep("place","Where?",quickCapturePlacePicker())}${quickCaptureWizardStep("learned",meeting?"What did you discuss?":"What did you learn?",learned)}${quickCaptureWizardStep("next","What's next?",next,{last:true,saveLabel:meeting?"Save meeting":"Save conversation"})}</form>`;
 }
@@ -2461,8 +2549,8 @@ function renderDashboard() {
   const next = attention[0] || null;
   const recent = recentlyMetContacts(3);
   const momentum = todayMomentum(now);
-  return `<section class="today-home" aria-label="Today">
-    <header class="today-home__header">
+  return `<section class="today-home" aria-label="Today" data-tour="today-home">
+    <header class="today-home__header" data-tour="today-overview">
       <div class="today-home__identity"><img class="today-home__brand-mark" src="./bridge-mark-transparent.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1>${greeting}</h1></div></div>
       ${IconButton("gear", "Settings", { attributes:'id="settingsButton"', className:"today-home__settings" })}
     </header>
@@ -2483,7 +2571,7 @@ function todayGoalProgress(dailyGoal) {
     ? `<div class="today-goal__segments" aria-hidden="true">${Array.from({ length:goal }, (_, index) => `<span class="${index < Math.min(goal, Math.floor(completed)) ? "is-complete" : ""}"></span>`).join("")}</div>`
     : `<div class="today-goal__track" aria-hidden="true"><span style="width:${percentage}%"></span></div>`;
   const progressText = completed >= goal ? "Goal reached" : `${Math.round(percentage)}% complete`;
-  return `<section class="today-goal" aria-label="Daily conversation progress"><div class="today-goal__visual" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${completed}" aria-valuetext="${escapeHTML(`${completed} of ${goal} conversations; ${progressText}`)}">${visual}</div><strong><span>${escapeHTML(`${completed} / ${goal}`)}</span><small>conversations today</small></strong><button class="today-goal__streak" data-open-goals type="button" aria-label="Open goals and streak; ${dailyGoal.goalStreak} day streak">${icons.fire}<span>${dailyGoal.goalStreak}</span></button></section>`;
+  return `<section class="today-goal" aria-label="Daily conversation progress" data-tour="daily-goal"><div class="today-goal__visual" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${completed}" aria-valuetext="${escapeHTML(`${completed} of ${goal} conversations; ${progressText}`)}">${visual}</div><strong><span>${escapeHTML(`${completed} / ${goal}`)}</span><small>conversations today</small></strong><button class="today-goal__streak" data-open-goals type="button" aria-label="Open goals and streak; ${dailyGoal.goalStreak} day streak">${icons.fire}<span>${dailyGoal.goalStreak}</span></button></section>`;
 }
 function todayRelativeTime(value, now = new Date()) {
   const days = calendarDaysBetween(now, value);
@@ -2602,7 +2690,7 @@ function renderContacts() {
   if (ui.contactMode !== "list") return renderContactWorkspace(filtered, connectionState);
   const people = peopleVisibleContacts(filtered);
   const activeContacts = state.contacts.filter(contact => !contact.archivedAt && !contact.isFilteredOut);
-  return `<section class="people-home" aria-label="People">
+  return `<section class="people-home" aria-label="People" data-tour="people-workspace">
     <header class="people-home__header"><h1 class="primary-page-title">People</h1><button class="people-home__places" type="button" data-people-contact-mode="places" aria-label="Browse places">${icons.location}</button></header>
     ${SearchField({ id:"contactSearch", value:ui.search, placeholder:"Search people", label:"Search people", className:"people-home__search" })}
     <div class="people-home__filters" role="group" aria-label="Quick people filters">${["All","Recent","Priority","Prospects","Customers"].map(label => Chip(label, { active:ui.peopleQuick===label, className:"people-home__quick-filter", attributes:`data-people-quick="${label}"` })).join("")}${peopleFiltersTrigger()}</div>
@@ -2744,7 +2832,7 @@ function renderCustomerPipeline(contacts,now=new Date()) {
 function renderPipeline(connectionState="") {
   const prospectContacts=activePipelineContacts("Prospect"),customerContacts=activePipelineContacts("Customer");const now=new Date();const selectedContact=state.contacts.find(contact=>String(contact.id)===String(ui.pipelineContactId));const selectedCustomerContact=state.contacts.find(contact=>String(contact.id)===String(ui.customerPipelineContactId));
   const tabs=Tabs([{label:"Prospect",value:"Prospect",active:ui.pipelineRole==="Prospect",attributes:'data-pipeline-role="Prospect"'},{label:"Customer",value:"Customer",active:ui.pipelineRole==="Customer",attributes:'data-pipeline-role="Customer"'}],{label:"Pipeline type",className:"pipeline-home__tabs",idPrefix:"pipeline-role"});
-  return `<section class="contacts-route pipeline-home" aria-label="Pipeline"><header class="pipeline-home__header"><h1 class="primary-page-title">Pipeline</h1></header>${tabs}${connectionState}<div id="pipeline-role-panel-${escapeHTML(ui.pipelineRole)}" role="tabpanel" aria-labelledby="pipeline-role-tab-${escapeHTML(ui.pipelineRole)}">${ui.pipelineRole==="Prospect"?renderProspectPipeline(prospectContacts,now):renderCustomerPipeline(customerContacts,now)}</div>${ui.pipelineStageDetail?prospectStageDetailSheet(ui.pipelineStageDetail,prospectContacts,now):""}${selectedContact?prospectTransitionSheet(selectedContact):""}${ui.customerPipelineStageDetail?customerStageDetailSheet(ui.customerPipelineStageDetail,customerContacts,now):""}${selectedCustomerContact?customerTransitionSheet(selectedCustomerContact):""}</section>`;
+  return `<section class="contacts-route pipeline-home" aria-label="Pipeline" data-tour="pipeline-workspace"><header class="pipeline-home__header"><h1 class="primary-page-title">Pipeline</h1></header>${tabs}${connectionState}<div id="pipeline-role-panel-${escapeHTML(ui.pipelineRole)}" role="tabpanel" aria-labelledby="pipeline-role-tab-${escapeHTML(ui.pipelineRole)}">${ui.pipelineRole==="Prospect"?renderProspectPipeline(prospectContacts,now):renderCustomerPipeline(customerContacts,now)}</div>${ui.pipelineStageDetail?prospectStageDetailSheet(ui.pipelineStageDetail,prospectContacts,now):""}${selectedContact?prospectTransitionSheet(selectedContact):""}${ui.customerPipelineStageDetail?customerStageDetailSheet(ui.customerPipelineStageDetail,customerContacts,now):""}${selectedCustomerContact?customerTransitionSheet(selectedCustomerContact):""}</section>`;
 }
 function placeMatchesContact(place,contact){return String(contact?.placeId||"")===String(place?.id||"")||(!contact?.placeId&&String(contact?.placeName||"").trim().toLowerCase()===String(place?.name||"").trim().toLowerCase());}
 function placeActivityRecords(contacts=[]){return contacts.flatMap(contact=>(contact.conversations||[]).map(log=>({contact,log,at:log.conversationDate||log.createdAt}))).filter(item=>item.at).sort((left,right)=>new Date(right.at)-new Date(left.at));}
@@ -2867,7 +2955,7 @@ function renderFollowUps() {
   const queues={today:["Today",dueToday,"The relationships to move forward today."],upcoming:["Upcoming",upcoming,"Keep the next step visible before it becomes urgent."],overdue:["Overdue",overdue,"Needs your attention before it slips further."]};
   const selectedQueue=queues[selectedKind]||queues.today;
   const summary=`${completedItems.length} completed · ${openItems.length} still open`;
-  return `<section class="followups-home" aria-label="Follow-Ups"><header class="followups-home__header"><span class="ui-eyebrow">Action center</span><h1>Follow-ups</h1>${primaryControls}<p class="followups-home__summary">${selectedKind==="completed"?"Completed follow-ups remain in relationship history.":summary}</p></header>${offlineNote}${selectedKind==="completed"?`<div class="followups-home__queue followups-home__queue--completed">${followUpQueueSection("Completed",completedItems,{kind:"completed",completed:true})}<button type="button" class="followups-history-toggle" data-action-view="${overdue.length?"overdue":dueToday.length?"today":"upcoming"}">Back to open follow-ups</button></div>`:`<div class="followups-home__queue" aria-label="${escapeHTML(selectedQueue[0])} follow-ups">${followUpQueueSection(selectedQueue[0],selectedQueue[1],{kind:selectedKind,description:selectedQueue[2]})}${completedItems.length?`<button type="button" class="followups-history-toggle" data-action-view="completed">View completed history <span>${completedItems.length}</span></button>`:""}</div>`}</section>`;
+  return `<section class="followups-home" aria-label="Follow-Ups" data-tour="followups-workspace"><header class="followups-home__header"><span class="ui-eyebrow">Action center</span><h1>Follow-ups</h1>${primaryControls}<p class="followups-home__summary">${selectedKind==="completed"?"Completed follow-ups remain in relationship history.":summary}</p></header>${offlineNote}${selectedKind==="completed"?`<div class="followups-home__queue followups-home__queue--completed">${followUpQueueSection("Completed",completedItems,{kind:"completed",completed:true})}<button type="button" class="followups-history-toggle" data-action-view="${overdue.length?"overdue":dueToday.length?"today":"upcoming"}">Back to open follow-ups</button></div>`:`<div class="followups-home__queue" aria-label="${escapeHTML(selectedQueue[0])} follow-ups">${followUpQueueSection(selectedQueue[0],selectedQueue[1],{kind:selectedKind,description:selectedQueue[2]})}${completedItems.length?`<button type="button" class="followups-history-toggle" data-action-view="completed">View completed history <span>${completedItems.length}</span></button>`:""}</div>`}</section>`;
 }
 function followUpsLoading(){return `<section class="followups-home" aria-label="Follow-Ups" aria-busy="true"><header class="followups-home__header"><span class="ui-eyebrow">Action center</span><h1>Follow-ups</h1><p class="followups-home__summary">Loading your relationship queue.</p></header><div class="followups-home__loading">${LoadingSkeleton({lines:4})}<span class="sr-only">Loading follow-ups.</span></div></section>`;}
 function followUpEmptyState(kind){const copy={overdue:["Nothing overdue","You are current. Keep capturing conversations and Bridge will tell you when someone needs you."],today:["Nothing due today","You are current. Keep capturing conversations and Bridge will tell you when someone needs you."],upcoming:["Nothing scheduled ahead","When you capture a conversation, choose Follow up and it will appear here with the reason attached."],completed:["No completed follow-ups yet","Completed follow-ups will remain available in relationship history."]}[kind]||["No follow-ups","Schedule a next step from a relationship to keep it visible here."];return `<section class="followups-empty" aria-label="${escapeHTML(copy[0])}"><span aria-hidden="true">${icons.circleCheck}</span><div><h2>${escapeHTML(copy[0])}</h2><p>${escapeHTML(copy[1])}</p></div></section>`;}
@@ -3029,7 +3117,7 @@ function renderAnalytics() {
   const summary=`${analyticsCountLabel(model.conversations.length,"conversation")}, ${analyticsCountLabel(model.newPeople.length,"new person","new people")}, ${analyticsCountLabel(model.pipelineEvents.length,"pipeline movement")}.`;
   const followUpSummary=model.followUps.length?`${model.completedFollowUps.length} of ${model.followUps.length} follow-ups completed.`:"No follow-ups recorded in this period.";
   const placeSummary=busiest?` Your busiest place was ${escapeHTML(busiest.place.name)}.`:"";
-  return `<section class="analytics-workspace insights-home" aria-label="Insights">${pageHead("Insights", "Relationship activity and momentum from your existing Bridge data.", IconButton("share","Share scorecard",{attributes:'id="shareScorecard"'}), "primary-page-title")}<section class="insights-hero" aria-labelledby="insights-period-summary"><span>${escapeHTML(analyticsPeriodEyebrow())}</span>${periodActivity?`<h2 id="insights-period-summary">${summary}</h2><p>${followUpSummary}${placeSummary}</p>`:`<div id="insights-period-summary">${emptyInline("No activity in this period","Open Detailed analytics to choose another period, or log a conversation to begin your Insights history.")}</div>`}</section>${insightsConversationChart(model)}${insightsPipelineIntelligence(model)}<section class="insights-section insights-pipeline-snapshot" aria-labelledby="insights-pipeline-snapshot"><h2 id="insights-pipeline-snapshot">Pipeline activity</h2><p class="insights-section__description">Current stage distribution uses Bridge’s exact Prospect and Customer stages.</p>${insightsStageSnapshot("Prospect",model)}${insightsStageSnapshot("Customer",model)}</section>${insightsFollowUpEffectiveness(model)}${insightsPlaces(model)}${insightsDetailedAnalytics(model,scorecard,previousScorecard)}</section>`;
+  return `<section class="analytics-workspace insights-home" aria-label="Insights" data-tour="insights-workspace">${pageHead("Insights", "Relationship activity and momentum from your existing Bridge data.", IconButton("share","Share scorecard",{attributes:'id="shareScorecard"'}), "primary-page-title")}<section class="insights-hero" aria-labelledby="insights-period-summary"><span>${escapeHTML(analyticsPeriodEyebrow())}</span>${periodActivity?`<h2 id="insights-period-summary">${summary}</h2><p>${followUpSummary}${placeSummary}</p>`:`<div id="insights-period-summary">${emptyInline("No activity in this period","Open Detailed analytics to choose another period, or log a conversation to begin your Insights history.")}</div>`}</section>${insightsConversationChart(model)}${insightsPipelineIntelligence(model)}<section class="insights-section insights-pipeline-snapshot" aria-labelledby="insights-pipeline-snapshot"><h2 id="insights-pipeline-snapshot">Pipeline activity</h2><p class="insights-section__description">Current stage distribution uses Bridge’s exact Prospect and Customer stages.</p>${insightsStageSnapshot("Prospect",model)}${insightsStageSnapshot("Customer",model)}</section>${insightsFollowUpEffectiveness(model)}${insightsPlaces(model)}${insightsDetailedAnalytics(model,scorecard,previousScorecard)}</section>`;
 }
 function metricBar(label,value,max){return `<div><div class="metric-label"><span>${escapeHTML(String(label))}</span><strong>${value}</strong></div>${ProgressBar(value,{label:`${String(label)} activity`,max})}</div>`;}
 
@@ -3157,6 +3245,9 @@ async function refreshAccountPanelData() {
 function settingsNavigationRow(title,detail,section,iconName="gear",meta=""){
   return `<button class="settings-nav-row" type="button" data-settings-section-open="${escapeHTML(section)}"><span class="settings-nav-row__copy"><strong>${escapeHTML(title)}</strong>${detail?`<small>${escapeHTML(detail)}</small>`:""}</span><span class="settings-nav-row__chevron" aria-hidden="true">${icons.chevronRight}</span></button>`;
 }
+function settingsActionRow(title,detail,attributes=""){
+  return `<button class="settings-nav-row" type="button" ${attributes}><span class="settings-nav-row__copy"><strong>${escapeHTML(title)}</strong>${detail?`<small>${escapeHTML(detail)}</small>`:""}</span><span class="settings-nav-row__chevron" aria-hidden="true">${icons.chevronRight}</span></button>`;
+}
 function settingsNavigationGroup(title,content){return `<section class="settings-nav-group"><h2>${escapeHTML(title)}</h2><div class="settings-nav-group__rows">${content}</div></section>`;}
 function settingsCapabilityNote(title,detail,tone="neutral"){return `<section class="settings-capability settings-capability--${escapeHTML(tone)}"><span class="status-dot ${tone==="success"?"granted":"default"}" aria-hidden="true"></span><div><strong>${escapeHTML(title)}</strong><small>${escapeHTML(detail)}</small></div></section>`;}
 function settingsRootContent(s,metrics){
@@ -3175,6 +3266,7 @@ function settingsRootContent(s,metrics){
     settingsNavigationGroup("Relationships",`${settingsNavigationRow("Workflow","Default follow-up and week layout","preferences")}${settingsNavigationRow("Relationship health","Visibility, cadence, and scoring","health")}${settingsNavigationRow("Archive","Inactive-contact behavior","archive")}`),
     settingsNavigationGroup("Data",`${settingsNavigationRow("Data & sync",accountModeActive()?accountSyncLabel():"Saved on this device","data")}${settingsNavigationRow("Backup & export","Local and cloud backup tools","backup")}`),
     settingsNavigationGroup("Privacy & sharing",settingsNavigationRow("Scorecards and sharing","Link privacy and deletion behavior","privacy")),
+    settingsNavigationGroup("Getting started",settingsActionRow("Replay app walkthrough","See the people, conversation, and follow-up workflow again",'data-replay-walkthrough data-tour="walkthrough-replay"')),
     settingsNavigationGroup("About Bridge",settingsNavigationRow("About & support",`Version ${APP_RELEASE.version}`,"about"))
   ];
   return `<div class="settings-root">${groups.join("")}</div>`;
@@ -4231,6 +4323,7 @@ function showSignedOutAccount(message) {
 
 function bindSettingsEvents(){
   if(accountModeActive()&&!ui.accountPanelLoaded&&["root","profile","account","sessions","data","backup"].includes(ui.routedSection||"root"))refreshAccountPanelData().catch(()=>{});
+  $$('[data-replay-walkthrough]').forEach(button=>button.addEventListener('click',()=>walkthrough.restart(button)));
   $('#openReleaseNotes')?.addEventListener('click',()=>{releaseFocusReturn=document.activeElement;ui.settingsOpen=false;ui.releaseNotesReturnToSettings=true;ui.releaseNotesOpen=true;render();});
   $('#syncAccountNow')?.addEventListener('click',async()=>{
     if(ui.accountBusy)return;
