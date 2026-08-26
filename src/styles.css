@@ -3649,58 +3649,44 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .relationship-profile-screen.is-profile-collapsed .profile-collapse-header [data-profile-compact-title] { opacity: 1; visibility: visible; transform: translateY(0); transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) { .profile-collapse-header [data-profile-compact-title], .profile-collapse-header__identity > span { transition: none; } }
 
-/* First-time relationship walkthrough. It is deliberately built from the
-   existing Bridge tokens so it reads as part of the product, not a plugin. */
-.bridge-tour { position: fixed; z-index: 500; inset: 0; pointer-events: none; color: var(--color-text-primary); }
-.bridge-tour__blocker { position: fixed; z-index: 0; inset: 0; pointer-events: auto; }
-.bridge-tour__spotlight { position: fixed; z-index: 1; top: 0; left: 0; width: 1px; height: 1px; border: 2px solid var(--color-brand); border-radius: calc(var(--radius-md) + 3px); box-shadow: 0 0 0 2px rgba(255, 255, 255, .88), 0 0 0 9999px rgba(27, 25, 19, .58); pointer-events: none; will-change: transform; }
-.bridge-tour__card { --tour-card-left: 12px; --tour-card-top: 12px; position: fixed; z-index: 2; top: var(--tour-card-top); left: var(--tour-card-left); width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); display: grid; gap: 10px; padding: 16px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text-primary); background: var(--color-surface); box-shadow: 0 14px 32px rgba(27, 25, 19, .22); opacity: 0; pointer-events: auto; transform: translateY(4px) scale(.99); transition: opacity var(--motion-fast), transform var(--motion-fast); }
-.bridge-tour.is-positioned .bridge-tour__card, .bridge-tour--intro .bridge-tour__card { opacity: 1; transform: translateY(0) scale(1); }
-.bridge-tour__card:focus-visible { box-shadow: var(--shadow-raised), var(--focus-ring); outline: 0; }
-.bridge-tour__mark { width: 32px; height: 25px; display: flex; align-items: end; gap: 3px; padding: 5px 6px; border-radius: var(--radius-sm); background: var(--surface-brand-subtle); }
-.bridge-tour__mark i { display: block; width: 5px; border-radius: var(--radius-pill) var(--radius-pill) 2px 2px; background: var(--color-brand); }
-.bridge-tour__mark i:nth-child(1) { height: 8px; }
-.bridge-tour__mark i:nth-child(2) { height: 14px; }
-.bridge-tour__mark i:nth-child(3) { height: 10px; }
-.bridge-tour__card h2 { margin: 0; font-family: var(--font-editorial); font-size: 22px; font-weight: var(--font-weight-medium); line-height: 1.08; letter-spacing: -.02em; }
-.bridge-tour__card p { margin: 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.4; }
-.bridge-tour__progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--space-3); align-items: center; color: var(--color-text-tertiary); font-size: var(--type-caption); font-weight: var(--font-weight-semibold); letter-spacing: .07em; text-transform: uppercase; }
-.bridge-tour__progress > span:last-of-type { color: var(--color-text-secondary); letter-spacing: .02em; }
-.bridge-tour__progress i { grid-column: 1 / -1; width: 100%; height: 4px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-surface-soft); }
-.bridge-tour__progress b { display: block; width: var(--tour-progress); height: 100%; border-radius: inherit; background: var(--color-brand); transition: width var(--motion-standard); }
-.bridge-tour__actions, .bridge-tour__intro-actions { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; }
-.bridge-tour__intro-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.bridge-tour__actions .button { min-width: 66px; min-height: 40px; padding-inline: 12px; }
-.bridge-tour__skip { justify-self: center; min-height: 40px; padding: 0 6px; color: var(--color-text-secondary); background: transparent; font-size: 13px; font-weight: var(--font-weight-medium); text-decoration: underline; text-decoration-color: var(--color-border-strong); text-underline-offset: 3px; }
-.bridge-tour__skip:hover { color: var(--color-text-primary); }
-.bridge-tour--intro { z-index: 510; display: grid; place-items: center; padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left)); background: rgba(27, 25, 19, .56); pointer-events: auto; }
-.bridge-tour--intro .bridge-tour__card { position: relative; top: auto; left: auto; width: min(380px, 100%); max-height: calc(100dvh - 32px); padding: 22px; }
-.bridge-tour--intro .bridge-tour__card h2 { font-size: clamp(27px, 7vw, 34px); }
-.bridge-tour--intro .bridge-tour__card p { font-size: 15px; }
-.bridge-tour-active { scroll-behavior: auto !important; }
-.bridge-tour-active .quick-create-backdrop:not(.is-continuing),
-.bridge-tour-active .quick-create-backdrop:not(.is-continuing) .quick-create-modal { animation: none !important; }
-.bridge-tour-active .quick-capture-wizard__step { transition: none !important; }
+/* Interactive Bridge Guide. Explicit layers keep the panel above sheets while
+   four static scrims leave only the current production target interactive. */
+body.bridge-guide-active { width: 100%; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+.bridge-guide { position: fixed; z-index: 900; inset: 0; color: var(--color-text-primary); pointer-events: none; isolation: isolate; }
+.bridge-guide__scrim { position: fixed; z-index: 0; display: block; background: rgba(27, 25, 19, .62); pointer-events: auto; }
+.bridge-guide__spotlight { position: fixed; z-index: 1; top: 0; left: 0; width: 1px; height: 1px; border: 2px solid var(--color-brand); box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 8px 22px rgba(14,107,92,.18); pointer-events: none; }
+.bridge-guide-target:focus-visible { outline: 3px solid rgba(14,107,92,.35); outline-offset: 4px; }
+.bridge-guide__panel { --guide-left: 12px; --guide-top: 12px; position: fixed; z-index: 2; top: var(--guide-top); left: var(--guide-left); width: min(350px, calc(100vw - 24px)); display: grid; gap: 10px; padding: 16px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text-primary); background: var(--color-surface); box-shadow: 0 16px 38px rgba(27,25,19,.24); opacity: 0; pointer-events: auto; transform: translateY(4px); transition: opacity var(--motion-fast), transform var(--motion-fast); }
+.bridge-guide.is-positioned .bridge-guide__panel, .bridge-guide--intro .bridge-guide__panel { opacity: 1; transform: translateY(0); }
+.bridge-guide__panel:focus-visible { outline: 0; box-shadow: 0 16px 38px rgba(27,25,19,.24), var(--focus-ring); }
+.bridge-guide__header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--color-text-tertiary); font-family: var(--font-sans); font-size: 11px; font-weight: var(--font-weight-semibold); letter-spacing: .075em; text-transform: uppercase; }
+.bridge-guide__header strong { color: var(--color-text-secondary); }
+.bridge-guide__header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bridge-guide__rule { height: 1px; background: var(--color-border); }
+.bridge-guide__panel h2 { margin: 0; font-family: var(--font-editorial); font-size: 23px; font-weight: var(--font-weight-medium); line-height: 1.08; letter-spacing: -.022em; }
+.bridge-guide__panel p { margin: 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.4; }
+.bridge-guide__instruction { padding: 9px 10px; color: var(--color-brand-strong) !important; border-left: 2px solid var(--color-brand); background: var(--surface-brand-subtle); font-weight: var(--font-weight-semibold); }
+.bridge-guide__actions { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 6px; align-items: center; }
+.bridge-guide__actions .button { min-width: 66px; min-height: 40px; padding-inline: 12px; }
+.bridge-guide__skip { justify-self: center; min-height: 40px; padding: 0 7px; color: var(--color-text-secondary); background: transparent; font-size: 12px; font-weight: var(--font-weight-medium); text-decoration: underline; text-decoration-color: var(--color-border-strong); text-underline-offset: 3px; }
+.bridge-guide--intro { z-index: 910; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: rgba(27,25,19,.62); pointer-events: auto; }
+.bridge-guide--intro .bridge-guide__panel { position: relative; top: auto; left: auto; width: min(390px,100%); padding: 22px; }
+.bridge-guide--intro .bridge-guide__panel h2 { font-size: clamp(28px,7vw,36px); }
+.bridge-guide__intro-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bridge-guide-active .quick-create-backdrop:not(.is-continuing),
+.bridge-guide-active .quick-create-backdrop:not(.is-continuing) .quick-create-modal { animation: none !important; }
+.bridge-guide-active .quick-capture-wizard__step { transition: none !important; }
 
-@media (max-width: 767px), (max-height: 500px) {
-  .bridge-tour__card { width: min(100% - 20px, 340px); max-height: calc(100dvh - 20px - var(--safe-bottom)); padding: 14px; }
-  .bridge-tour__card h2 { font-size: 21px; }
-  .bridge-tour__card p { font-size: 14px; line-height: 1.42; }
-  .bridge-tour__actions { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .bridge-tour__skip { font-size: 12px; white-space: nowrap; }
-  .bridge-tour__actions .button { min-width: 64px; }
-}
-
-@media (max-width: 359px) {
-  .bridge-tour__card { width: calc(100% - 16px); padding: 12px; }
-  .bridge-tour__card h2 { font-size: 20px; }
-  .bridge-tour__actions { gap: 4px; }
-  .bridge-tour__actions .button { min-width: 58px; padding-inline: 9px; }
-  .bridge-tour__skip { font-size: 11px; }
+@media (max-width: 359px), (max-height: 520px) {
+  .bridge-guide__panel { width: calc(100vw - 16px); gap: 8px; padding: 12px; }
+  .bridge-guide__panel h2 { font-size: 20px; }
+  .bridge-guide__panel p { font-size: 13px; line-height: 1.35; }
+  .bridge-guide__actions .button { min-width: 58px; padding-inline: 9px; }
+  .bridge-guide__skip { font-size: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bridge-tour__card, .bridge-tour__progress b { transition: none !important; }
+  .bridge-guide__panel { transition: none !important; }
 }
 .people-search-screen__header { position: sticky; top: 0; z-index: 30; min-height: calc(var(--safe-top) + 61px); padding: calc(var(--safe-top) + 10px) max(var(--space-5),var(--safe-right)) 3px max(12px,var(--safe-left)); display: grid; grid-template-columns: 36px minmax(0,1fr); align-items: center; gap: 8px; background: color-mix(in srgb,var(--color-page) 95%,transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 .people-search-screen__back { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; color: var(--color-text-secondary); border: 0; border-radius: 50%; background: transparent; box-shadow: none; }

@@ -30,11 +30,11 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
     if (ui.quickCreateOpen) return "";
     const selection = navSelectionIndex();
     const destinations = [
-      { label: "Today", icon: "home", active: ui.page === "dashboard", attributes: 'data-page="dashboard"' },
-      { label: "People", icon: "people", active: ui.page === "contacts" && ui.contactMode !== "pipeline", attributes: "data-open-people" },
-      { label: "Capture", icon: "plus", active: false, capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}" data-tour="capture-menu"` },
-      { label: "Pipeline", icon: "network", active: ui.page === "contacts" && ui.contactMode === "pipeline", attributes: "data-open-pipeline" },
-      { label: "Insights", icon: "chart", active: ui.page === "analytics", attributes: 'data-page="analytics"' }
+      { label: "Today", icon: "home", active: ui.page === "dashboard", attributes: 'data-page="dashboard" data-guide-target="nav-today"' },
+      { label: "People", icon: "people", active: ui.page === "contacts" && ui.contactMode !== "pipeline", attributes: 'data-open-people data-guide-target="nav-people"' },
+      { label: "Capture", icon: "plus", active: false, capture: true, attributes: `id="quickCreateButton" aria-haspopup="dialog" aria-expanded="${Boolean(ui.quickCreateOpen)}" data-guide-target="capture-button"` },
+      { label: "Pipeline", icon: "network", active: ui.page === "contacts" && ui.contactMode === "pipeline", attributes: 'data-open-pipeline data-guide-target="nav-pipeline"' },
+      { label: "Insights", icon: "chart", active: ui.page === "analytics", attributes: 'data-page="analytics" data-guide-target="nav-insights"' }
     ];
     const buttons = destinations.map(destination => {
       const current = destination.active ? ' aria-current="page"' : "";
@@ -42,7 +42,7 @@ export function createBridgeFrontendFoundation({ escapeHTML, initials, icons, ge
       const label = destination.capture ? "Capture what happened" : destination.label;
       return `<button type="button" class="nav-button${captureClass}${destination.active ? " active" : ""}" ${destination.attributes} aria-label="${escapeHTML(label)}"${current}>${icons[destination.icon]}<span>${escapeHTML(destination.label)}</span></button>`;
     }).join("");
-    return `<nav class="nav bridge-pattern-nav" aria-label="Primary navigation">${buttons}<span class="nav-selection-indicator" aria-hidden="true" style="--nav-selection-index:${Math.max(0, selection)};--nav-selection-visible:${selection < 0 ? 0 : 1}"></span></nav>`;
+    return `<nav class="nav bridge-pattern-nav" aria-label="Primary navigation" data-guide-target="primary-navigation">${buttons}<span class="nav-selection-indicator" aria-hidden="true" style="--nav-selection-index:${Math.max(0, selection)};--nav-selection-visible:${selection < 0 ? 0 : 1}"></span></nav>`;
   }
 
   function AppShell(content, { pageClass = "", inert = false } = {}) {
