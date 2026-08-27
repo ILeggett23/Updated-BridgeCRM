@@ -1,5 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.37";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.37";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.39";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.39";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.39";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -201,12 +202,47 @@ const defaultState = () => ({
 });
 
 let state = defaultState();
+let tutorialSession = null;
+
+const bridgeGuideTutorialActive = () => Boolean(tutorialSession);
+const bridgeGuidePreferenceState = () => tutorialSession?.realState || state;
+
+function beginBridgeGuideTutorialSession() {
+  if (tutorialSession) return;
+  const realState = state;
+  tutorialSession = {
+    realState,
+    capturePhase:"prepare-tutorial-person",
+    conversationDate:nowISO(),
+    followUpDate:new Date(Date.now() + 2 * 86400000).toISOString(),
+    ...BRIDGE_GUIDE_CAPTURE_CONTENT
+  };
+  state = normalizeState(createBridgeGuideFixture({ baseState:defaultState(), allStages:ALL_STAGES, walkthroughPreference:realState?.settings?.walkthrough || {} }));
+  ui.quickCreateOpen = false;
+  ui.quickCreateMode = null;
+  ui.quickCreateContactId = "";
+  ui.quickCreateStep = 0;
+  render();
+}
+
+function endBridgeGuideTutorialSession() {
+  if (!tutorialSession) return;
+  state = tutorialSession.realState;
+  tutorialSession = null;
+  ui.quickCreateOpen = false;
+  ui.quickCreateMode = null;
+  ui.quickCreateContactId = "";
+  ui.quickCreateStep = 0;
+  applyFixedAppearance();
+}
+
 const walkthrough = createBridgeWalkthrough({
   getState: () => state,
   persist: ({ version, status, stepId, chapter }) => {
-    const previous = state.settings?.walkthrough || {};
+    const preferenceState = bridgeGuidePreferenceState();
+    const previous = preferenceState.settings?.walkthrough || {};
     const timestamp = nowISO();
-    state.settings.walkthrough = {
+    preferenceState.settings.walkthrough = {
       ...previous,
       version,
       status,
@@ -217,12 +253,13 @@ const walkthrough = createBridgeWalkthrough({
       skippedAt: status === "skipped" ? timestamp : previous.skippedAt || null,
       completedAt: status === "completed" ? timestamp : previous.completedAt || null
     };
-    queueSave("Walkthrough preference saved", { silent: true });
+    queueStateSnapshot(preferenceState, "Walkthrough preference saved", { silent:true, syncReminders:false });
   },
-  activate: (destination, beforeEnter) => activateWalkthroughDestination(destination, beforeEnter),
+  activate: (destination, beforeEnter, guideStep) => activateWalkthroughDestination(destination, beforeEnter, guideStep),
   close: () => closeWalkthroughSurface(),
   lockScroll: shouldLock => syncDocumentScrollLock(shouldLock),
-  bringIntoView: (target, restoreY) => positionLockedGuideTarget(target, restoreY)
+  bringIntoView: (target, restoreY) => positionLockedGuideTarget(target, restoreY),
+  startSession: () => beginBridgeGuideTutorialSession()
 });
 let ui = {
   page: "dashboard",
@@ -283,6 +320,7 @@ let ui = {
   quickCreateOpen: false,
   quickCreateMode: null,
   quickCreateContactId: "",
+  quickCreateStep: 0,
   scorecardShareOpen: false,
   scorecardIncludeContacts: false,
   scorecardShareBusy: false,
@@ -462,7 +500,7 @@ function applyPresentationRoute(url = location.href, { renderNow = false, direct
   const legacyContact = String(target.searchParams.get("contact") || "");
   const requestedScreen = String(target.searchParams.get("screen") || (legacyContact ? "person" : ""));
   if (!PRESENTATION_SCREENS.includes(requestedScreen)) {
-    if (requestedPage === "add") { ui.quickCreateOpen = true; ui.quickCreateMode = null; ui.quickCreateContactId = ""; }
+    if (requestedPage === "add") { ui.quickCreateOpen = true; ui.quickCreateMode = null; ui.quickCreateContactId = ""; ui.quickCreateStep = 0; }
     if (renderNow) render();
     return false;
   }
@@ -621,6 +659,7 @@ function consumeNotificationNavigation(url, { renderNow = true } = {}) {
     ui.quickCreateOpen = true;
     ui.quickCreateMode = null;
     ui.quickCreateContactId = "";
+    ui.quickCreateStep = 0;
   } else {
     ui.page = ["dashboard", "contacts", "followups", "analytics"].includes(requestedPage) ? requestedPage : "followups";
   }
@@ -745,6 +784,7 @@ function normalizeState(raw) {
     }) : [];
     return {
       id: contact.id || uid(), fullName: contact.fullName || "Unnamed Contact", phoneNumber: contact.phoneNumber || "", email: String(contact.email || "").trim(), role,
+      source: contact.source === "tutorial" ? "tutorial" : "", isTutorialRecord: Boolean(contact.isTutorialRecord),
       capturedPhoneNumber: phoneCapturedAt ? inferredCapturedPhone : "", phoneCapturedAt,
       judgement: ["Good Fit", "Not Good Fit"].includes(contact.judgement || contact.category) ? (contact.judgement || contact.category) : "Good Fit",
       interestLevel: INTERESTS.includes(contact.interestLevel) ? contact.interestLevel : "Unsure", conversationType: CONVERSATION_TYPES.includes(contact.conversationType) ? contact.conversationType : "Prospecting",
@@ -847,6 +887,12 @@ function handleAccountStatus(status) {
     return;
   }
   if (status?.stateData && accountContext.authenticated) {
+    if (tutorialSession) {
+      const walkthroughPreference = tutorialSession.realState.settings?.walkthrough;
+      tutorialSession.realState = normalizeState(status.stateData);
+      if (walkthroughPreference) tutorialSession.realState.settings.walkthrough = walkthroughPreference;
+      return;
+    }
     state = normalizeState(status.stateData);
     syncAchievements(false);
     applyFixedAppearance();
@@ -964,15 +1010,9 @@ async function loadSharedScorecard(token) {
   }
 }
 
-function queueSave(message = "Saved", { silent = false } = {}) {
-  const achievementResult = syncAchievements(false);
-  if (achievementResult.newlyUnlocked.length) {
-    const achievement = ACHIEVEMENTS.find(item => item.id === achievementResult.newlyUnlocked[0]);
-    if (achievement) message = `Achievement unlocked: ${achievement.name}`;
-  }
-  refreshAnalyticsHistory(new Date());
-  state.meta.updatedAt = nowISO();
-  const snapshot = JSON.stringify(state);
+function queueStateSnapshot(snapshotState, message = "Saved", { silent = false, syncReminders = true } = {}) {
+  snapshotState.meta.updatedAt = nowISO();
+  const snapshot = JSON.stringify(snapshotState);
   clearTimeout(ui.saveTimer);
 
   if (accountContext.mode === "account" && accountContext.authenticated && accountClient) {
@@ -981,18 +1021,18 @@ function queueSave(message = "Saved", { silent = false } = {}) {
       showToast("Saved offline; Bridge will retry after you sign in or reconnect");
     });
     ui.saveTimer = setTimeout(async () => {
-      if (pushSubscriptionState === "active") {
+      if (syncReminders && pushSubscriptionState === "active") {
         await syncHostedReminderSchedule().catch(() => {});
       }
       if (!silent) showToast(message,{tone:"success"});
     }, 220);
-    return;
+    return true;
   }
 
   localCache.set(snapshot);
   durableCache.set(snapshot);
   ui.saveTimer = setTimeout(async () => {
-    if (pushSubscriptionState === "active") {
+    if (syncReminders && pushSubscriptionState === "active") {
       await syncHostedReminderSchedule().catch(() => {});
     }
     if (!cloudStateAvailable) {
@@ -1000,11 +1040,26 @@ function queueSave(message = "Saved", { silent = false } = {}) {
       return;
     }
     try {
-      const response = await fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state) });
+      const response = await fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: snapshot });
       if (!response.ok) throw new Error();
       if (!silent) showToast(message,{tone:"success"});
     } catch { if (!silent) showToast("Saved on this device; cloud sync will retry later"); }
   }, 220);
+  return true;
+}
+
+function queueSave(message = "Saved", { silent = false } = {}) {
+  if (bridgeGuideTutorialActive()) {
+    console.warn("[Bridge Guide] Blocked a production persistence attempt during the tutorial sandbox.");
+    return false;
+  }
+  const achievementResult = syncAchievements(false);
+  if (achievementResult.newlyUnlocked.length) {
+    const achievement = ACHIEVEMENTS.find(item => item.id === achievementResult.newlyUnlocked[0]);
+    if (achievement) message = `Achievement unlocked: ${achievement.name}`;
+  }
+  refreshAnalyticsHistory(new Date());
+  return queueStateSnapshot(state, message, { silent, syncReminders:true });
 }
 
 function closeWalkthroughCapture() {
@@ -1012,6 +1067,7 @@ function closeWalkthroughCapture() {
   ui.quickCreateOpen = false;
   ui.quickCreateMode = null;
   ui.quickCreateContactId = "";
+  ui.quickCreateStep = 0;
   return true;
 }
 
@@ -1021,29 +1077,82 @@ function navigateWalkthroughMain(page, { mode = page === "contacts" ? "list" : u
   if (!moved && forceRender) render();
 }
 
-async function activateWalkthroughDestination(destination, beforeEnter = null) {
+function applyBridgeGuideBeforeEnter(action) {
+  if (!tutorialSession || typeof action !== "string") return;
+  tutorialSession.capturePhase = action;
+  ui.quickCreateContactId = action === "prepare-tutorial-person" ? "" : BRIDGE_GUIDE_CONTACT_ID;
+}
+
+function setTutorialFormValue(form, name, value) {
+  const control = form?.elements?.namedItem(name);
+  if (!control || typeof control.value === "undefined") return;
+  control.value = value;
+}
+
+function applyBridgeGuideCaptureFixture(form) {
+  if (!tutorialSession || form?.id !== "quickConversationForm") return;
+  const phase = tutorialSession.capturePhase;
+  const phases = ["prepare-tutorial-person", "select-tutorial-contact", "seed-tutorial-notes", "seed-tutorial-context", "prepare-tutorial-next-action", "expand-tutorial-tracking", "complete-tutorial-capture"];
+  const atLeast = value => phases.indexOf(phase) >= phases.indexOf(value);
+  if (atLeast("select-tutorial-contact")) {
+    ui.quickCreateContactId = BRIDGE_GUIDE_CONTACT_ID;
+    setTutorialFormValue(form, "contactId", BRIDGE_GUIDE_CONTACT_ID);
+  } else {
+    ui.quickCreateContactId = "";
+    setTutorialFormValue(form, "contactId", "");
+  }
+  setTutorialFormValue(form, "notes", atLeast("seed-tutorial-notes") ? tutorialSession.notes : "");
+  setTutorialFormValue(form, "personalInfo", atLeast("seed-tutorial-context") ? tutorialSession.context : "");
+  setTutorialFormValue(form, "conversationDate", dateTimeLocalValue(new Date(tutorialSession.conversationDate)));
+  const scheduled = atLeast("prepare-tutorial-next-action");
+  form.querySelectorAll('[name="nextAction"]').forEach(input => { input.checked = input.value === (scheduled ? "followUp" : "none"); });
+  form.querySelectorAll("[data-next-action-detail]").forEach(section => { section.hidden = section.dataset.nextActionDetail !== (scheduled ? "followUp" : "none"); });
+  if (scheduled) {
+    setTutorialFormValue(form, "followUpDate", dateTimeLocalValue(new Date(tutorialSession.followUpDate)));
+    setTutorialFormValue(form, "followUpNote", tutorialSession.followUpNote);
+  } else {
+    setTutorialFormValue(form, "followUpDate", "");
+    setTutorialFormValue(form, "followUpNote", "");
+  }
+  const tracking = atLeast("expand-tutorial-tracking");
+  const advanced = $("[data-guide-target='capture-tracking'] details", form);
+  if (advanced) advanced.open = tracking;
+  const msa = form.elements.namedItem(stageInputName("MSA"));
+  const dtm = form.elements.namedItem(stageInputName("DTM"));
+  if (msa) msa.checked = tracking;
+  if (dtm) dtm.checked = false;
+  setTutorialFormValue(form, "pipelineStage", tracking ? "QI/P" : "");
+  syncQuickCapturePickerState(form);
+  syncQuickCaptureStepAction(form);
+}
+
+async function activateWalkthroughDestination(destination, beforeEnter = null, guideStep = null) {
   if (typeof beforeEnter === "function") await beforeEnter();
+  else applyBridgeGuideBeforeEnter(beforeEnter);
   if (destination === "capture-menu") {
     if (ui.quickCreateOpen && ui.quickCreateMode === null && $("[data-guide-target='capture-types']")) return;
     ui.quickCreateOpen = true;
     ui.quickCreateMode = null;
     ui.quickCreateContactId = "";
+    ui.quickCreateStep = 0;
     render();
     return;
   }
   if (["capture-conversation", "capture-place", "capture-learned", "capture-next"].includes(destination)) {
-    const captureStep = destination === "capture-place" ? 1 : destination === "capture-learned" ? 2 : destination === "capture-next" ? 3 : 0;
-    let form = $("#quickConversationForm");
+    const captureStep = Number.isInteger(guideStep?.captureStep) ? guideStep.captureStep : destination === "capture-place" ? 1 : destination === "capture-learned" ? 2 : destination === "capture-next" ? 3 : 0;
+    ui.quickCreateStep = captureStep;
+    const form = $("#quickConversationForm");
     if (!ui.quickCreateOpen || ui.quickCreateMode !== "conversation" || !form) {
       ui.quickCreateOpen = true;
       ui.quickCreateMode = "conversation";
       ui.quickCreateContactId = "";
       render();
-      form = $("#quickConversationForm");
     }
     return new Promise(resolve => requestAnimationFrame(() => {
-      const currentStep = Number(form?.dataset.captureStepIndex) || 0;
-      if (form && currentStep !== captureStep) setQuickCaptureStep(form, captureStep, { direction: captureStep < currentStep ? "back" : "forward", behavior: "auto" });
+      const liveForm = $("#quickConversationForm");
+      const currentStep = Number(liveForm?.dataset.captureStepIndex) || 0;
+      if (liveForm && currentStep !== captureStep) setQuickCaptureStep(liveForm, captureStep, { direction: captureStep < currentStep ? "back" : "forward", behavior: "auto", restore: true });
+      applyBridgeGuideCaptureFixture(liveForm);
       requestAnimationFrame(resolve);
     }));
   }
@@ -1083,6 +1192,7 @@ async function activateWalkthroughDestination(destination, beforeEnter = null) {
 
 function closeWalkthroughSurface() {
   closeWalkthroughCapture();
+  endBridgeGuideTutorialSession();
   render();
 }
 
@@ -1173,6 +1283,7 @@ async function registerHostedSubscription(subscription) {
 }
 
 async function syncHostedReminderSchedule() {
+  if (bridgeGuideTutorialActive()) return false;
   const subscription = await currentPushSubscription();
   let token = pushDeviceToken();
   if (!subscription) return false;
@@ -1241,6 +1352,7 @@ async function disableBackgroundPush() {
 }
 
 async function persistStateSilently() {
+  if (bridgeGuideTutorialActive()) return false;
   refreshAnalyticsHistory(new Date());
   state.meta.updatedAt = nowISO();
   const snapshot = JSON.stringify(state);
@@ -1266,6 +1378,7 @@ async function sendBridgeNotification(title, options) {
 }
 
 async function checkReminders() {
+  if (bridgeGuideTutorialActive()) return;
   if (document.visibilityState === "hidden" || notificationPermission() !== "granted") return;
   const events = dueReminderEvents(state, new Date());
   if (!events.length) return;
@@ -1317,7 +1430,7 @@ window.addEventListener("beforeunload", event => {
   event.returnValue = "";
 });
 window.addEventListener("pagehide", () => {
-  if (sharedScorecardToken || !stateHydrated) return;
+  if (sharedScorecardToken || !stateHydrated || bridgeGuideTutorialActive()) return;
   if (accountModeActive()) return;
   refreshAnalyticsHistory(new Date());
   const snapshot = JSON.stringify(state);
@@ -2288,7 +2401,7 @@ function quickCapturePersonPicker(contacts,{allowNew=false}={}) {
   const selectedId=String(ui.quickCreateContactId||"");
   const recent=quickCaptureRecentContacts(contacts);
   const recentIds=new Set(recent.map(contact=>String(contact.id)));const ordered=[...recent,...contacts.filter(contact=>!recentIds.has(String(contact.id)))];
-  return `<div class="quick-capture-picker" data-capture-person-picker data-guide-target="capture-person"><input type="hidden" name="contactId" value="${escapeHTML(selectedId)}"><label class="quick-capture-picker__search"><span class="sr-only">Search people</span>${icons.search}<input type="search" data-capture-person-search autocomplete="off" autocapitalize="words" placeholder="Who did you meet?"></label><div class="quick-capture-picker__heading"><span>${recent.length?"Recent people":"People"}</span><small data-capture-person-count>${recent.length}</small></div><div class="quick-capture-picker__list" data-capture-person-list>${ordered.map(contact=>{const selected=selectedId===String(contact.id);return `<button type="button" class="quick-capture-picker__row${selected?" is-selected":""}" data-capture-person-id="${escapeHTML(contact.id)}" data-capture-recent="${recentIds.has(String(contact.id))}" data-capture-search-value="${escapeHTML([contact.fullName,contact.placeName,contact.phoneNumber,contact.email].filter(Boolean).join(" ").toLowerCase())}" aria-pressed="${selected}" ${recentIds.has(String(contact.id))?"":"hidden"}>${Avatar(contact.fullName,{size:"small"})}<span><strong>${escapeHTML(contact.fullName||"Unnamed person")}</strong><small>${escapeHTML(peopleRelativeDate(peopleActivityAt(contact)))}</small></span><span class="quick-capture-picker__selected" data-capture-selected aria-hidden="true">${selected?"Selected":""}</span></button>`;}).join("")}</div>${allowNew?`<button class="quick-capture-picker__new" type="button" data-capture-new-person hidden>${icons.userPlus}<span>Add <strong data-capture-new-person-label>new person</strong></span>${icons.chevronRight}</button><div data-new-person-name hidden>${field("New person name",'<input name="fullName" autocomplete="name" placeholder="Full name">')}</div>`:""}</div>`;
+  return `<div class="quick-capture-picker" data-capture-person-picker data-guide-target="capture-person"><input type="hidden" name="contactId" value="${escapeHTML(selectedId)}"><label class="quick-capture-picker__search"><span class="sr-only">Search people</span>${icons.search}<input type="search" data-capture-person-search autocomplete="off" autocapitalize="words" placeholder="Who did you meet?"></label><div class="quick-capture-picker__heading"><span>${recent.length?"Recent people":"People"}</span><small data-capture-person-count>${recent.length}</small></div><div class="quick-capture-picker__list" data-capture-person-list>${ordered.map(contact=>{const selected=selectedId===String(contact.id);const tutorialTarget=bridgeGuideTutorialActive()&&String(contact.id)===BRIDGE_GUIDE_CONTACT_ID?' data-guide-target="capture-tutorial-person"':"";return `<button type="button" class="quick-capture-picker__row${selected?" is-selected":""}" data-capture-person-id="${escapeHTML(contact.id)}" data-capture-recent="${recentIds.has(String(contact.id))}" data-capture-search-value="${escapeHTML([contact.fullName,contact.placeName,contact.phoneNumber,contact.email].filter(Boolean).join(" ").toLowerCase())}" aria-pressed="${selected}"${tutorialTarget} ${recentIds.has(String(contact.id))?"":"hidden"}>${Avatar(contact.fullName,{size:"small"})}<span><strong>${escapeHTML(contact.fullName||"Unnamed person")}</strong><small>${escapeHTML(peopleRelativeDate(peopleActivityAt(contact)))}</small></span><span class="quick-capture-picker__selected" data-capture-selected aria-hidden="true">${selected?"Selected":""}</span></button>`;}).join("")}</div>${allowNew?`<button class="quick-capture-picker__new" type="button" data-capture-new-person hidden>${icons.userPlus}<span>Add <strong data-capture-new-person-label>new person</strong></span>${icons.chevronRight}</button><div data-new-person-name hidden>${field("New person name",'<input name="fullName" autocomplete="name" placeholder="Full name">')}</div>`:""}</div>`;
 }
 function quickCapturePlaceActivityMap() {
   const activity=new Map();
@@ -2400,7 +2513,7 @@ function closeQuickCreate() {
     walkthrough.exitGuide();
     return;
   }
-  ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";
+  ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;
   const backdrop=$('#quickCreateBackdrop');
   const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus({preventScroll:true});quickCreateFocusReturn=null;});};
   if(!backdrop||backdrop.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches){finish();return;}
@@ -2452,20 +2565,20 @@ function validateQuickCaptureStep(form,index) {
   }
   const error=$('.quick-capture-error',form);if(error){error.hidden=true;error.textContent='';}return true;
 }
-function setQuickCaptureStep(form,nextIndex,{direction='forward',behavior=null}={}) {
+function setQuickCaptureStep(form,nextIndex,{direction='forward',behavior=null,restore=false}={}) {
   const panels=$$('[data-capture-step]',form);if(!panels.length)return;
   const current=Math.max(0,Math.min(panels.length-1,Number(form.dataset.captureStepIndex)||0));const next=Math.max(0,Math.min(panels.length-1,nextIndex));
   panels.forEach((panel,index)=>{panel.hidden=index!==next;panel.classList.remove('is-entering-forward','is-entering-back');});
-  form.dataset.captureStepIndex=String(next);$$('.quick-capture-wizard__progress span',form).forEach((item,index)=>{item.classList.toggle('is-complete',index<next);item.classList.toggle('is-current',index===next);});const status=$('[data-capture-step-number]',form);if(status)status.textContent=String(next+1);syncQuickCaptureStepAction(form);if(next===panels.length-1)updateQuickCaptureReview(form);
+  ui.quickCreateStep=next;form.dataset.captureStepIndex=String(next);$$('.quick-capture-wizard__progress span',form).forEach((item,index)=>{item.classList.toggle('is-complete',index<next);item.classList.toggle('is-current',index===next);});const status=$('[data-capture-step-number]',form);if(status)status.textContent=String(next+1);syncQuickCaptureStepAction(form);if(next===panels.length-1)updateQuickCaptureReview(form);if(restore)return;
   const panel=panels[next];panel.classList.add(direction==='back'?'is-entering-back':'is-entering-forward');requestAnimationFrame(()=>{panel.classList.remove('is-entering-forward','is-entering-back');const focusTarget=$('input:not([type="hidden"]):not([tabindex="-1"]), textarea, button',panel);focusTarget?.focus({preventScroll:true});panel.scrollIntoView({block:'start',behavior:behavior||(matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth')});});
 }
 function bindQuickCreateEvents() {
   const backgroundShell=$('.bridge-pattern-shell');if(backgroundShell){backgroundShell.inert=true;backgroundShell.setAttribute('aria-hidden','true');}
   bindBottomSheetGesture($('.quick-create-modal'),closeQuickCreate);
   $('#closeQuickCreate')?.addEventListener('click',closeQuickCreate);$('#quickCreateBackdrop')?.addEventListener('click',event=>{if(event.target.id==='quickCreateBackdrop')closeQuickCreate();});
-  $$('.quick-create-back').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=null;ui.quickCreateContactId="";render();}));
-  $$('[data-quick-mode]').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=button.dataset.quickMode;ui.quickCreateContactId="";render();}));
-  $$('.quick-capture-composer').forEach(form=>{syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);form.addEventListener('input',()=>syncQuickCaptureStepAction(form));form.elements.contactId?.addEventListener('change',event=>{ui.quickCreateContactId=event.target.value;syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);});form.elements.role?.addEventListener('change',()=>syncQuickCaptureFields(form));});
+  $$('.quick-create-back').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
+  $$('[data-quick-mode]').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=button.dataset.quickMode;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
+  $$('.quick-capture-composer').forEach(form=>{syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);setQuickCaptureStep(form,ui.quickCreateStep,{behavior:'auto',restore:true});applyBridgeGuideCaptureFixture(form);form.addEventListener('input',()=>syncQuickCaptureStepAction(form));form.elements.contactId?.addEventListener('change',event=>{ui.quickCreateContactId=event.target.value;syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);});form.elements.role?.addEventListener('change',()=>syncQuickCaptureFields(form));});
   $$('[data-capture-person-search]').forEach(input=>input.addEventListener('input',event=>{const form=event.currentTarget.closest('form');const query=event.currentTarget.value.trim().toLowerCase();let visible=0;$$('[data-capture-person-id]',form).forEach(button=>{button.hidden=query?!String(button.dataset.captureSearchValue||'').includes(query):button.dataset.captureRecent!=='true';if(!button.hidden)visible+=1;});const count=$('[data-capture-person-count]',form);if(count)count.textContent=String(visible);const heading=$('.quick-capture-picker__heading span',form);if(heading)heading.textContent=query?'Search results':visible?'Recent people':'People';const create=$('[data-capture-new-person]',form);if(create){const exact=state.contacts.some(contact=>String(contact.fullName||'').trim().toLowerCase()===query);create.hidden=!query||exact;const label=$('[data-capture-new-person-label]',form);if(label)label.textContent=query?`“${event.currentTarget.value.trim()}”`:'new person';}}));
   $$('[data-capture-person-id]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');form.elements.contactId.value=event.currentTarget.dataset.capturePersonId;ui.quickCreateContactId=form.elements.contactId.value;if(form.elements.fullName)form.elements.fullName.value='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{delete section.dataset.captureNewPersonActive;section.hidden=true;});syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);}));
   $$('[data-capture-new-person]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const query=String($('[data-capture-person-search]',form)?.value||'').trim();form.elements.contactId.value='';ui.quickCreateContactId='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{section.dataset.captureNewPersonActive="true";section.hidden=false;});syncQuickCaptureFields(form);syncQuickCapturePickerState(form);if(form.elements.fullName){form.elements.fullName.value=query;form.elements.fullName.focus();}syncQuickCaptureStepAction(form);}));
@@ -2474,7 +2587,7 @@ function bindQuickCreateEvents() {
   $$('[data-capture-new-place]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const query=String($('[data-capture-place-search]',form)?.value||'').trim();form.elements.placeId.value='';if(form.elements.newPlaceName){form.elements.newPlaceName.value=query;const fields=$('[data-capture-new-place-fields]',form);if(fields)fields.hidden=false;form.elements.newPlaceName.focus();}syncQuickCapturePickerState(form);}));
   $$('[name="nextAction"]').forEach(input=>input.addEventListener('change',event=>{const form=event.currentTarget.closest('form');const action=event.currentTarget.value;$$('[data-next-action-detail]',form).forEach(section=>{section.hidden=section.dataset.nextActionDetail!==action;});if(action==='followUp'){if(!form.elements.followUpDate.value)form.elements.followUpDate.value=dateTimeLocalValue(addDays(new Date(),state.settings.defaultFollowUpDays));form.elements.checkBackDate.value='';}else if(action==='checkBack'){if(!form.elements.checkBackDate.value)form.elements.checkBackDate.value=dateTimeLocalValue(addDays(new Date(),Math.max(14,state.settings.defaultFollowUpDays)));form.elements.followUpDate.value='';}else{form.elements.followUpDate.value='';form.elements.checkBackDate.value='';}}));
   $$('[data-capture-step-next]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const index=Number(form.dataset.captureStepIndex)||0;if(validateQuickCaptureStep(form,index))setQuickCaptureStep(form,index+1);}));
-  $$('[data-capture-step-back]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const index=Number(form.dataset.captureStepIndex)||0;if(index<=0){ui.quickCreateMode=null;ui.quickCreateContactId='';render();return;}setQuickCaptureStep(form,index-1,{direction:'back'});}));
+  $$('[data-capture-step-back]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const index=Number(form.dataset.captureStepIndex)||0;if(index<=0){ui.quickCreateMode=null;ui.quickCreateContactId='';ui.quickCreateStep=0;render();return;}setQuickCaptureStep(form,index-1,{direction:'back'});}));
   $$('.quick-capture-wizard').forEach(form=>form.addEventListener('keydown',event=>{if(event.key!=='Enter'||event.target.matches('textarea,button'))return;const index=Number(form.dataset.captureStepIndex)||0;const panels=$$('[data-capture-step]',form);if(index>=panels.length-1)return;event.preventDefault();if(validateQuickCaptureStep(form,index))setQuickCaptureStep(form,index+1);}));
   $('#quickContactForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const fullName=String(form.get('fullName')||'').trim();if(!fullName){quickCaptureError(event.currentTarget,'Add a full name.');return;}const phone=String(form.get('phoneNumber')||'').trim();const duplicate=isCallablePhone(phone)&&state.contacts.find(contact=>normalizedPhone(contact.phoneNumber)===normalizedPhone(phone));if(duplicate){quickCaptureError(event.currentTarget,`That phone number belongs to ${duplicate.fullName}.`);return;}const contact=quickCaptureNewContact(form,nowISO());state.contacts.unshift(contact);queueSave('Contact added');closeQuickCreate();});
   $('#quickActionForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const due=quickCaptureISO(form.get('dueDate'));if(!contact||!due){quickCaptureError(event.currentTarget,'Choose a person and a valid follow-up time.');return;}createFollowUp(contact,due,String(form.get('note')||'Follow up').trim()||'Follow up');contact.updatedAt=nowISO();queueSave('Action scheduled');closeQuickCreate();});
@@ -3654,10 +3767,10 @@ function closeContactDetail(onClose=null) {
 
 function bindCommonEvents(){
   $$('[data-presentation-back]').forEach(button=>button.addEventListener('click',presentationBack));
-  $$('[data-page]').forEach(button=>button.addEventListener('click',()=>{const nextPage=button.dataset.page;if(nextPage==='add'){const open=()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode=null;ui.quickCreateContactId="";render();};if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(open);return;}open();return;}navigateMain(nextPage,{mode:nextPage==="contacts"?"list":ui.contactMode,opener:button});}));
+  $$('[data-page]').forEach(button=>button.addEventListener('click',()=>{const nextPage=button.dataset.page;if(nextPage==='add'){const open=()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;render();};if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(open);return;}open();return;}navigateMain(nextPage,{mode:nextPage==="contacts"?"list":ui.contactMode,opener:button});}));
   $$('[data-open-people]').forEach(button=>button.addEventListener('click',()=>navigateMain("contacts",{mode:"list",opener:button})));
   $$('[data-open-pipeline]').forEach(button=>button.addEventListener('click',()=>{if(["No-Go","Archived"].includes(ui.visibilityFilter))ui.visibilityFilter="Active";navigateMain("contacts",{mode:"pipeline",role:ui.pipelineRole,opener:button});}));
-  $('#quickCreateButton')?.addEventListener('click',()=>{const opener=document.activeElement;const open=()=>{quickCreateFocusReturn=opener;ui.quickCreateOpen=true;render();};if(ui.detailId){closeContactDetail(open);return;}open();});
+  $('#quickCreateButton')?.addEventListener('click',()=>{const opener=document.activeElement;const open=()=>{quickCreateFocusReturn=opener;ui.quickCreateOpen=true;ui.quickCreateStep=0;render();};if(ui.detailId){closeContactDetail(open);return;}open();});
   $$('[data-contact-id]').forEach(button=>button.addEventListener('click',()=>navigatePresentation("person",{person:button.dataset.contactId},{opener:button})));
   $$('[data-communication-contact-id]').forEach(link=>link.addEventListener('click',event=>{const contact=state.contacts.find(item=>item.id===link.dataset.communicationContactId);const type=link.dataset.communicationType||"Call";if(!contact||!canonicalPhone(contact.phoneNumber)){event.preventDefault();showToast('Add a valid phone number before using this action');return;}if(!startCommunication(contact.id,type))event.preventDefault();}));
   $$('[data-log-communication-contact-id]').forEach(button=>button.addEventListener('click',()=>openCommunicationLog(button.dataset.logCommunicationContactId,button.dataset.communicationType||"Call")));
@@ -4610,7 +4723,7 @@ function bindContactModalEvents(){
     clearContactEdit();activate();
   }));
   $$('[data-edit-contact-info], #editContactInfo').forEach(button=>button.addEventListener('click',()=>{if(ui.routedScreen==="person")navigatePresentation("person-edit",{person:c.id},{opener:button});else{ui.contactDetailTab='overview';ui.contactEditing=true;ui.contactEditDirty=false;render();requestAnimationFrame(()=>$('#contactInfoForm input[name="fullName"]')?.focus());}}));
-  $$('[data-profile-followup]').forEach(button=>button.addEventListener('click',()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode="action";ui.quickCreateContactId=c.id;render();}));
+  $$('[data-profile-followup]').forEach(button=>button.addEventListener('click',()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode="action";ui.quickCreateContactId=c.id;ui.quickCreateStep=0;render();}));
   $$('[data-profile-reschedule]').forEach(button=>button.addEventListener('click',()=>{const active=c.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];if(!active)return;rescheduleFollowUp(active,addDays(new Date(active.dueDate),3).toISOString());c.updatedAt=nowISO();queueSave('Moved out three days');render();}));
   $('#contactInfoForm')?.addEventListener('input',()=>{ui.contactEditDirty=true;});
   $('#contactInfoForm')?.addEventListener('change',()=>{ui.contactEditDirty=true;});

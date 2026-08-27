@@ -13,6 +13,7 @@ const step = (definition) => Object.freeze({
   interaction: "manual",
   advanceOn: "next",
   beforeEnter: null,
+  captureStep: null,
   optional: false,
   blockTarget: false,
   ...definition
@@ -30,13 +31,13 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"open-capture", chapter:"Capture", route:"today", target:"capture-button", placement:"above", title:"Open Capture", description:"Capture is where every relationship update begins.", instruction:"Tap the + button below.", interaction:"target", advanceOn:"click" }),
   step({ id:"capture-types", chapter:"Capture", route:"capture-menu", target:"capture-types", placement:"above", title:"Choose what happened", description:"Record a conversation, meeting, call, text, follow-up, or new person. Each path saves only its real activity type." }),
   step({ id:"choose-conversation", chapter:"Capture", route:"capture-menu", target:"capture-conversation", placement:"above", title:"Start a conversation", description:"The Conversation flow connects what happened to a person, place, context, and next action.", instruction:"Tap Conversation to open the guided flow.", interaction:"target", advanceOn:"click" }),
-  step({ id:"choose-person", chapter:"Capture", route:"capture-conversation", target:"capture-person", title:"Choose the relationship", description:"Select an existing person or search and add someone new. Nothing is saved until the final review.", instruction:"Explore the person picker, then select Next when ready.", optional:true }),
-  step({ id:"capture-place", chapter:"Capture", route:"capture-place", target:"capture-place", title:"Remember where you met", description:"Add a place when it gives the relationship useful context, so Bridge can connect people and conversations to where they happened." }),
-  step({ id:"conversation-notes", chapter:"Capture", route:"capture-learned", target:"capture-notes", placement:"above", title:"Record what happened", description:"Conversation notes belong to this interaction and appear in the relationship timeline." }),
-  step({ id:"what-i-know", chapter:"Capture", route:"capture-learned", target:"capture-context", placement:"above", title:"Keep durable context separate", description:"What I Know is for lasting details—goals, work, family, interests, or needs—that should help later." }),
-  step({ id:"next-action", chapter:"Capture", route:"capture-next", target:"capture-next-action", placement:"above", title:"Choose the next step", description:"Save without a reminder, reconnect later, or schedule a specific follow-up with a reason and time." }),
-  step({ id:"capture-tracking", chapter:"Capture", route:"capture-next", target:"capture-tracking", placement:"above", title:"Track activity and stage accurately", description:"Advanced details hold MSA and DTM activity markers plus exact Prospect or Customer stage movement. They never rewrite earlier history." }),
-  step({ id:"save-capture", chapter:"Capture", route:"capture-next", target:"capture-save", placement:"above", title:"Review before saving", description:"Saving writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"The guide keeps Save disabled here so no tutorial record is created. Select Next to continue safely.", blockTarget:true }),
+  step({ id:"choose-person", chapter:"Capture", route:"capture-conversation", captureStep:0, target:"capture-tutorial-person", beforeEnter:"prepare-tutorial-person", title:"Choose the relationship", description:"Bridge connects each interaction to a person, keeping context, actions, and history together.", instruction:"Tap Jordan Brooks to continue.", interaction:"target", advanceOn:"click" }),
+  step({ id:"capture-place", chapter:"Capture", route:"capture-place", captureStep:1, target:"capture-place", beforeEnter:"select-tutorial-contact", title:"Remember where you met", description:"Add a place when it gives the relationship useful context, so Bridge can connect people and conversations to where they happened." }),
+  step({ id:"conversation-notes", chapter:"Capture", route:"capture-learned", captureStep:2, target:"capture-notes", beforeEnter:"seed-tutorial-notes", placement:"above", title:"Record what happened", description:"Conversation notes belong to this interaction and appear in the relationship timeline." }),
+  step({ id:"what-i-know", chapter:"Capture", route:"capture-learned", captureStep:2, target:"capture-context", beforeEnter:"seed-tutorial-context", placement:"above", title:"Keep durable context separate", description:"What I Know is for lasting details—goals, work, family, interests, or needs—that should help later." }),
+  step({ id:"next-action", chapter:"Capture", route:"capture-next", captureStep:3, target:"capture-next-action", beforeEnter:"prepare-tutorial-next-action", placement:"above", title:"Choose the next step", description:"Save without a reminder, reconnect later, or schedule a specific follow-up with a reason and time." }),
+  step({ id:"capture-tracking", chapter:"Capture", route:"capture-next", captureStep:3, target:"capture-tracking", beforeEnter:"expand-tutorial-tracking", placement:"above", title:"Track activity and stage accurately", description:"Advanced details hold MSA and DTM activity markers plus exact Prospect or Customer stage movement. They never rewrite earlier history." }),
+  step({ id:"save-capture", chapter:"Capture", route:"capture-next", captureStep:3, target:"capture-save", beforeEnter:"complete-tutorial-capture", placement:"above", title:"Review before saving", description:"Saving normally writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"This tutorial uses a simulated save. No contact, activity, follow-up, or metric can enter your real workspace.", blockTarget:true }),
 
   step({ id:"open-people", chapter:"People", route:"today", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"people-search", chapter:"People", route:"people", target:"people-search", title:"Search saved context", description:"Search finds names, contact details, places, conversation notes, and What I Know text." }),
@@ -99,7 +100,7 @@ function chapterProgress(index) {
   return { chapter, position: position + 1, count: chapterSteps.length };
 }
 
-export function createBridgeWalkthrough({ getState, persist, activate, close, lockScroll, bringIntoView } = {}) {
+export function createBridgeWalkthrough({ getState, persist, activate, close, lockScroll, bringIntoView, startSession } = {}) {
   if ([getState, persist, activate, lockScroll, bringIntoView].some(callback => typeof callback !== "function")) {
     throw new TypeError("Bridge Guide requires state, persistence, navigation, and scroll-lock handlers.");
   }
@@ -123,6 +124,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   const currentStep = () => BRIDGE_GUIDE_STEPS[stepIndex] || BRIDGE_GUIDE_STEPS[0];
   const active = () => phase === "active";
   const visible = () => phase !== "hidden";
+  const targetInteractionBlocked = guideStep => Boolean(guideStep?.blockTarget || guideStep?.advanceOn !== "click");
 
   function persistGuide(status, guideStep = null) {
     persist({
@@ -180,7 +182,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   function waitForGuideTarget(guideStep, sequence) {
     if (!guideStep.target) return Promise.resolve(null);
     return new Promise(resolve => {
-      let framesRemaining = guideStep.optional ? 6 : 30;
+      let framesRemaining = 30;
       let previousRect = null;
       let stableFrames = 0;
       const check = () => {
@@ -241,7 +243,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       if (event.key !== "Tab") return;
       const root = safeQuery("[data-bridge-guide]");
       if (!root) return;
-      const items = [currentStep().blockTarget ? null : resolveGuideTarget(), ...root.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")]
+      const items = [targetInteractionBlocked(currentStep()) ? null : resolveGuideTarget(), ...root.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")]
         .filter((item, index, values) => item && item.getClientRects().length && values.indexOf(item) === index);
       if (!items.length) return;
       const first = items[0];
@@ -269,6 +271,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   }
 
   function openGuide(opener = document.activeElement) {
+    startSession?.();
     focusReturn = opener instanceof HTMLElement ? opener : null;
     phase = "active";
     panelPosition = null;
@@ -312,9 +315,14 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     coverGuideViewport(root);
     setGuideControlsBusy(root, true);
     try {
-      await activate(guideStep.route, guideStep.beforeEnter);
+      await activate(guideStep.route, guideStep.beforeEnter, guideStep);
       const target = await waitForGuideTarget(guideStep, sequence);
       if (!active() || sequence !== activationSequence) return;
+      if (guideStep.target && !target) {
+        console.error(`[Bridge Guide] Required target "${guideStep.target}" was not ready for step "${guideStep.id}".`);
+        exitGuide(GUIDE_STATUS.inProgress);
+        return;
+      }
       targetAvailable = Boolean(target) || !guideStep.target;
       updateGuidePanel();
       bindGuideTarget(target, guideStep);
@@ -347,7 +355,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const previousDescription = target.getAttribute("aria-describedby");
     const previousDisabled = "disabled" in target ? target.disabled : null;
     const previousAriaDisabled = target.getAttribute("aria-disabled");
-    if (guideStep.blockTarget && "disabled" in target) {
+    if (targetInteractionBlocked(guideStep) && "disabled" in target) {
       target.disabled = true;
       target.setAttribute("aria-disabled", "true");
     }
@@ -512,7 +520,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       spotlight.style.width = `${right - left}px`;
       spotlight.style.height = `${bottom - top}px`;
       spotlight.style.borderRadius = radius;
-      spotlight.classList.toggle("is-blocking", guideStep.blockTarget);
+      spotlight.classList.toggle("is-blocking", targetInteractionBlocked(guideStep));
     }
     const placement = panelPlacement(guideStep, rect, panel, viewport);
     panel.style.setProperty("--guide-left", `${placement.left}px`);

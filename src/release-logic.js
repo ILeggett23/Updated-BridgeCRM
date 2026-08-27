@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.37",
-    assetVersion: "v1.3.37",
+    version: "1.3.39",
+    assetVersion: "v1.3.39",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
         icon: "bridge",
-        title: "A steadier Bridge Guide",
-        description: "The guide now stays attached to the right screen, resumes saved progress, respects mobile safe areas, and follows every real Capture step."
+        title: "Practice safely with fake data",
+        description: "Bridge Guide now uses one isolated tutorial workspace for every user, keeps Capture synchronized, and prevents tutorial activity from reaching real records or metrics."
       }),
       Object.freeze({
         icon: "people",
