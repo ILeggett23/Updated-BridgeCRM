@@ -1,5 +1,5 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.35";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.35";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.36";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.36";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -1017,13 +1017,14 @@ function closeWalkthroughCapture() {
   return true;
 }
 
-function navigateWalkthroughMain(page, { mode = page === "contacts" ? "list" : ui.contactMode, role = ui.pipelineRole } = {}) {
+function navigateWalkthroughMain(page, { mode = page === "contacts" ? "list" : ui.contactMode, role = ui.pipelineRole, forceRender = false } = {}) {
   const moved = navigateMain(page, { mode, role, replace: true, opener: document.activeElement });
-  if (!moved) render();
+  if (!moved && forceRender) render();
 }
 
 function activateWalkthroughDestination(destination) {
   if (destination === "capture-menu") {
+    if (ui.quickCreateOpen && ui.quickCreateMode === null && $("[data-guide-target='capture-types']")) return;
     ui.quickCreateOpen = true;
     ui.quickCreateMode = null;
     ui.quickCreateContactId = "";
@@ -1031,52 +1032,52 @@ function activateWalkthroughDestination(destination) {
     return;
   }
   if (["capture-conversation", "capture-learned", "capture-next"].includes(destination)) {
-    ui.quickCreateOpen = true;
-    ui.quickCreateMode = "conversation";
-    ui.quickCreateContactId = "";
-    render();
     const captureStep = destination === "capture-learned" ? 2 : destination === "capture-next" ? 3 : 0;
-    if (!captureStep) return;
+    let form = $("#quickConversationForm");
+    if (!ui.quickCreateOpen || ui.quickCreateMode !== "conversation" || !form) {
+      ui.quickCreateOpen = true;
+      ui.quickCreateMode = "conversation";
+      ui.quickCreateContactId = "";
+      render();
+      form = $("#quickConversationForm");
+    }
     return new Promise(resolve => requestAnimationFrame(() => {
-      const form = $("#quickConversationForm");
-      if (form) setQuickCaptureStep(form, captureStep, { direction: "forward", behavior: "auto" });
+      const currentStep = Number(form?.dataset.captureStepIndex) || 0;
+      if (form && currentStep !== captureStep) setQuickCaptureStep(form, captureStep, { direction: captureStep < currentStep ? "back" : "forward", behavior: "auto" });
       requestAnimationFrame(resolve);
     }));
   }
-  closeWalkthroughCapture();
+  const closedCapture = closeWalkthroughCapture();
   if (destination === "people") {
-    navigateWalkthroughMain("contacts", { mode: "list" });
+    navigateWalkthroughMain("contacts", { mode: "list", forceRender: closedCapture });
     return;
   }
   if (destination === "pipeline") {
-    navigateWalkthroughMain("contacts", { mode: "pipeline", role: "Prospect" });
+    navigateWalkthroughMain("contacts", { mode: "pipeline", role: "Prospect", forceRender: closedCapture });
     return;
   }
   if (destination === "places") {
-    navigateWalkthroughMain("contacts", { mode: "places" });
+    navigateWalkthroughMain("contacts", { mode: "places", forceRender: closedCapture });
     return;
   }
   if (destination === "followups") {
-    navigateWalkthroughMain("followups");
+    navigateWalkthroughMain("followups", { forceRender: closedCapture });
     return;
   }
   if (destination === "insights") {
-    navigateWalkthroughMain("analytics");
+    navigateWalkthroughMain("analytics", { forceRender: closedCapture });
     return;
   }
   if (destination === "settings") {
-    if (ui.routedScreen === "settings" && ui.routedSection === "root") {
-      render();
-      return;
-    }
+    if (ui.routedScreen === "settings" && ui.routedSection === "root") return;
     navigatePresentation("settings", { section: "root" }, { replace: true, opener: document.activeElement });
     return;
   }
   if (destination === "current") {
-    render();
+    if (closedCapture) render();
     return;
   }
-  navigateWalkthroughMain("dashboard", { mode: "list" });
+  navigateWalkthroughMain("dashboard", { mode: "list", forceRender: closedCapture });
 }
 
 function closeWalkthroughSurface() {

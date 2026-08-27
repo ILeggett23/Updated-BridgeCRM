@@ -36,16 +36,16 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"capture-tracking", chapter:"Capture", route:"capture-next", target:"capture-tracking", placement:"above", title:"Track activity and stage accurately", description:"Advanced details hold MSA and DTM activity markers plus exact Prospect or Customer stage movement. They never rewrite earlier history." }),
   step({ id:"save-capture", chapter:"Capture", route:"capture-next", target:"capture-save", placement:"above", title:"Review before saving", description:"Saving writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"Do not save a tutorial record. Select Next to continue safely." }),
 
-  step({ id:"open-people", chapter:"People", route:"current", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-people", chapter:"People", route:"today", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"people-search", chapter:"People", route:"people", target:"people-search", title:"Search saved context", description:"Search finds names, contact details, places, conversation notes, and What I Know text." }),
   step({ id:"people-filters", chapter:"People", route:"people", target:"people-filters", title:"Focus the list", description:"Quick filters and the full Filter control narrow relationships by role, stage, recency, health, follow-up state, and more." }),
-  step({ id:"open-person", chapter:"People", route:"current", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap any person row, or Skip step if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
+  step({ id:"open-person", chapter:"People", route:"people", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap any person row, or Skip step if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
   step({ id:"person-actions", chapter:"People", route:"current", target:"person-actions", placement:"below", title:"Act from the profile", description:"Call, text, log activity, schedule a follow-up, or edit the relationship from these production actions.", optional:true }),
   step({ id:"bridge-brief", chapter:"People", route:"current", target:"bridge-brief", title:"Read the Bridge Brief", description:"Bridge Brief summarizes durable What I Know context without mixing it into individual conversation notes.", optional:true }),
   step({ id:"person-timeline", chapter:"People", route:"current", target:"person-timeline", title:"Review the timeline", description:"The timeline keeps conversations, follow-ups, and exact pipeline events in chronological relationship history.", optional:true }),
   step({ id:"person-pipeline", chapter:"People", route:"current", target:"person-pipeline", title:"Understand status and history", description:"The profile shows the current stage separately from historical stage movement, along with relationship details and follow-up information.", optional:true }),
 
-  step({ id:"open-pipeline", chapter:"Pipeline", route:"current", target:"nav-pipeline", placement:"above", title:"Open Pipeline", description:"Pipeline shows where a relationship currently stands when the next stage is clear.", instruction:"Tap Pipeline in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-pipeline", chapter:"Pipeline", route:"people", target:"nav-pipeline", placement:"above", title:"Open Pipeline", description:"Pipeline shows where a relationship currently stands when the next stage is clear.", instruction:"Tap Pipeline in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"pipeline-types", chapter:"Pipeline", route:"pipeline", target:"pipeline-tabs", title:"Keep the pipelines distinct", description:"Prospect and Customer are separate workflows. Changing tabs never changes a person’s stored role or stage." }),
   step({ id:"prospect-stages", chapter:"Pipeline", route:"pipeline", target:"prospect-stages", title:"Follow the Prospect path", description:"Prospect stages remain exactly PQI → QI/P → FUP → LA. Counts show current people; MSA and DTM remain standalone activity markers." }),
   step({ id:"customer-tab", chapter:"Pipeline", route:"pipeline", target:"customer-tab", title:"View Customer relationships", description:"Customer work uses its own exact stage sequence.", instruction:"Tap Customer to switch pipeline views.", interaction:"target", advanceOn:"click" }),
@@ -57,7 +57,7 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"open-places", chapter:"Follow-ups / Places", route:"people", target:"people-places", title:"Open Places", description:"Places groups people and recorded interactions by genuine saved location context.", instruction:"Tap the location button beside People.", interaction:"target", advanceOn:"click" }),
   step({ id:"places-workspace", chapter:"Follow-ups / Places", route:"current", target:"places-workspace", title:"See where relationships happen", description:"Place totals come from saved people and conversations. Empty accounts stay empty—Bridge never creates tutorial data." }),
 
-  step({ id:"open-insights", chapter:"Insights", route:"current", target:"nav-insights", placement:"above", title:"Open Insights", description:"Insights explains the activity already recorded in Bridge.", instruction:"Tap Insights in the navigation.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-insights", chapter:"Insights", route:"today", target:"nav-insights", placement:"above", title:"Open Insights", description:"Insights explains the activity already recorded in Bridge.", instruction:"Tap Insights in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"insights-week", chapter:"Insights", route:"insights", target:"insights-week", title:"Read the period summary", description:"The hero summarizes conversations, new people, pipeline movement, follow-through, and places for the selected period." }),
   step({ id:"insights-conversations", chapter:"Insights", route:"insights", target:"insights-conversations", title:"See conversation rhythm", description:"The chart uses counted conversations only, so calls, texts, and notes remain separate activity." }),
   step({ id:"insights-pipeline", chapter:"Insights", route:"insights", target:"insights-pipeline", title:"Spot pipeline signals", description:"Pipeline intelligence identifies genuine movement and relationships that may have stalled in their current exact stage." }),
@@ -65,7 +65,7 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"insights-followups", chapter:"Insights", route:"insights", target:"insights-followups", title:"Measure follow-through", description:"Follow-up effectiveness compares completed actions with follow-ups recorded or due in the selected period." }),
   step({ id:"analytics-periods", chapter:"Insights", route:"insights", target:"analytics-periods", title:"Choose the right period", description:"Detailed analytics offers day, week, month, and custom local-date views with the meaning of each real metric." }),
 
-  step({ id:"open-settings", chapter:"Settings", route:"current", target:"settings-button", title:"Open Settings", description:"Settings controls your account, goals, reminders, relationship workflow, and data tools.", instruction:"Tap Settings.", interaction:"target", advanceOn:"click" }),
+  step({ id:"open-settings", chapter:"Settings", route:"today", target:"settings-button", title:"Open Settings", description:"Settings controls your account, goals, reminders, relationship workflow, and data tools.", instruction:"Tap Settings.", interaction:"target", advanceOn:"click" }),
   step({ id:"settings-profile", chapter:"Settings", route:"settings", target:"settings-profile", title:"Manage profile and account", description:"Profile stores your Bridge identity. Account & Security manages password, sessions, and account controls when cloud accounts are enabled." }),
   step({ id:"settings-goals", chapter:"Settings", route:"settings", target:"settings-goals", title:"Set goals and protect streaks", description:"Choose daily, weekly, and monthly conversation goals. Rest days preserve streak continuity without inventing completed days." }),
   step({ id:"settings-notifications", chapter:"Settings", route:"settings", target:"settings-notifications", title:"Control reminders", description:"Configure the daily nudge and follow-up notifications according to the capabilities available on this device." }),
@@ -113,6 +113,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   let resizeObserver = null;
   let globalCleanup = null;
   let originScrollY = null;
+  let panelPosition = null;
 
   const currentStep = () => BRIDGE_GUIDE_STEPS[stepIndex] || BRIDGE_GUIDE_STEPS[0];
   const active = () => phase === "active";
@@ -129,7 +130,8 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   function hydrate() {
     const saved = getState()?.settings?.walkthrough || {};
     const versionMatches = String(saved.version || "") === BRIDGE_GUIDE_VERSION;
-    if (saved.status === GUIDE_STATUS.unseen && isFreshWorkspace(getState())) {
+    const savedStatus = Object.values(GUIDE_STATUS).includes(saved.status) ? saved.status : GUIDE_STATUS.unseen;
+    if (savedStatus === GUIDE_STATUS.unseen && isFreshWorkspace(getState())) {
       phase = "intro";
       originScrollY = window.scrollY;
       document.body.classList.add("bridge-guide-active");
@@ -245,6 +247,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     focusReturn = opener instanceof HTMLElement ? opener : null;
     phase = "active";
     stepIndex = 0;
+    panelPosition = null;
     if (originScrollY === null) originScrollY = window.scrollY;
     document.body.classList.add("bridge-guide-active");
     lockScroll(true);
@@ -267,6 +270,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const guideStep = currentStep();
     targetAvailable = false;
     if (save) persistGuide(GUIDE_STATUS.inProgress, guideStep);
+    refreshGuidePanel();
     try {
       await activate(guideStep.route, guideStep.beforeEnter);
       const target = await waitForGuideTarget(guideStep, sequence);
@@ -276,7 +280,10 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       positionGuidePanel({ reveal:true });
       setGuideControlsBusy(safeQuery("[data-bridge-guide]"), false);
     } finally {
-      if (sequence === activationSequence) transitioning = false;
+      if (sequence === activationSequence) {
+        transitioning = false;
+        safeQuery("[data-bridge-guide]")?.classList.remove("is-transitioning");
+      }
     }
   }
 
@@ -343,7 +350,24 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
 
   function viewportMetrics() {
     const viewport = window.visualViewport;
-    return { left:viewport?.offsetLeft || 0, top:viewport?.offsetTop || 0, width:viewport?.width || innerWidth, height:viewport?.height || innerHeight };
+    const left = viewport?.offsetLeft || 0;
+    const top = viewport?.offsetTop || 0;
+    const width = viewport?.width || innerWidth;
+    const height = viewport?.height || innerHeight;
+    const safeArea = safeQuery("[data-guide-safe-area]");
+    const safeStyle = safeArea ? getComputedStyle(safeArea) : null;
+    const inset = property => Math.max(0, Number.parseFloat(safeStyle?.getPropertyValue(property) || "0") || 0);
+    const insetTop = inset("padding-top");
+    const insetRight = inset("padding-right");
+    const insetBottom = inset("padding-bottom");
+    const insetLeft = inset("padding-left");
+    return {
+      left, top, width, height,
+      safeTop: top + insetTop,
+      safeRight: left + width - insetRight,
+      safeBottom: top + height - insetBottom,
+      safeLeft: left + insetLeft
+    };
   }
 
   function setScrim(element, { top=0, left=0, width=0, height=0 } = {}) {
@@ -355,10 +379,11 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
 
   function centerPanel(root, panel, viewport) {
     const edge = 12;
-    const left = viewport.left + clamp((viewport.width - panel.offsetWidth) / 2, edge, viewport.width - panel.offsetWidth - edge);
-    const top = viewport.top + clamp((viewport.height - panel.offsetHeight) / 2, edge, viewport.height - panel.offsetHeight - edge);
+    const left = clamp(viewport.left + (viewport.width - panel.offsetWidth) / 2, viewport.safeLeft + edge, viewport.safeRight - panel.offsetWidth - edge);
+    const top = clamp(viewport.top + (viewport.height - panel.offsetHeight) / 2, viewport.safeTop + edge, viewport.safeBottom - panel.offsetHeight - edge);
     panel.style.setProperty("--guide-left", `${left}px`);
     panel.style.setProperty("--guide-top", `${top}px`);
+    panelPosition = { left, top };
     root.classList.add("is-positioned", "is-fallback");
     root.classList.remove("is-targeted");
   }
@@ -366,11 +391,11 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   function panelPlacement(guideStep, rect, panel, viewport) {
     const edge = 12;
     const gap = 10;
-    const safeTop = viewport.top + edge;
+    const safeTop = viewport.safeTop + edge;
     const dockClearance = safeQuery(".bridge-pattern-nav") && viewport.width <= 767 ? 82 : edge;
-    const safeBottom = viewport.top + viewport.height - Math.max(edge, dockClearance);
-    const maxLeft = Math.max(viewport.left + edge, viewport.left + viewport.width - panel.offsetWidth - edge);
-    const centeredLeft = clamp(rect.left + rect.width / 2 - panel.offsetWidth / 2, viewport.left + edge, maxLeft);
+    const safeBottom = viewport.safeBottom - Math.max(edge, dockClearance);
+    const maxLeft = Math.max(viewport.safeLeft + edge, viewport.safeRight - panel.offsetWidth - edge);
+    const centeredLeft = clamp(rect.left + rect.width / 2 - panel.offsetWidth / 2, viewport.safeLeft + edge, maxLeft);
     const above = rect.top - panel.offsetHeight - gap;
     const below = rect.bottom + gap;
     const preferredAbove = guideStep.placement === "above";
@@ -423,6 +448,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const placement = panelPlacement(guideStep, rect, panel, viewport);
     panel.style.setProperty("--guide-left", `${placement.left}px`);
     panel.style.setProperty("--guide-top", `${placement.top}px`);
+    panelPosition = placement;
     root.classList.add("is-targeted");
     root.classList.remove("is-fallback");
     if (reveal) root.classList.add("is-positioned");
@@ -439,13 +465,25 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       ? '<button type="button" class="bridge-guide__skip" data-guide-skip-step>Skip step</button>'
       : '<button type="button" class="bridge-guide__skip" data-guide-skip>Skip guide</button>';
     const primary = interactive ? "" : `<button type="button" class="button primary" data-guide-next>${last ? "Finish" : "Next"}</button>`;
-    return `<section class="bridge-guide__panel" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription${guideStep.instruction ? " bridgeGuideInstruction" : ""}" aria-busy="${transitioning}" tabindex="-1"><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>${progress.chapter} · ${progress.position}/${progress.count}</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">${guideStep.title}</h2><p id="bridgeGuideDescription">${guideStep.description}</p>${guideStep.instruction ? `<p class="bridge-guide__instruction" id="bridgeGuideInstruction">${guideStep.instruction}</p>` : ""}<footer class="bridge-guide__actions"><button type="button" class="button subtle" data-guide-back ${stepIndex === 0 || transitioning ? "disabled" : ""}>Back</button>${middle}${primary}</footer></section>`;
+    const position = panelPosition ? ` style="--guide-left:${panelPosition.left}px;--guide-top:${panelPosition.top}px"` : "";
+    return `<section class="bridge-guide__panel" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription${guideStep.instruction ? " bridgeGuideInstruction" : ""}" aria-busy="${transitioning}" tabindex="-1"${position}><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>${progress.chapter} · ${progress.position}/${progress.count}</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">${guideStep.title}</h2><p id="bridgeGuideDescription">${guideStep.description}</p>${guideStep.instruction ? `<p class="bridge-guide__instruction" id="bridgeGuideInstruction">${guideStep.instruction}</p>` : ""}<footer class="bridge-guide__actions"><button type="button" class="button subtle" data-guide-back ${stepIndex === 0 || transitioning ? "disabled" : ""}>Back</button>${middle}${primary}</footer></section>`;
+  }
+
+  function refreshGuidePanel() {
+    const root = safeQuery("[data-bridge-guide]");
+    const panel = root?.querySelector("[data-guide-panel]");
+    if (!root || !panel || !active()) return;
+    root.classList.toggle("is-positioned", Boolean(panelPosition));
+    root.classList.add("is-transitioning");
+    panel.outerHTML = guidePanelMarkup();
+    bind();
   }
 
   function markup() {
     if (phase === "hidden") return "";
     if (phase === "intro") return `<div class="bridge-guide bridge-guide--intro" data-bridge-guide><section class="bridge-guide__panel bridge-guide__panel--intro" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription" tabindex="-1"><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>Interactive onboarding</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">Learn Bridge by using it</h2><p id="bridgeGuideDescription">Follow the highlighted controls through Today, Capture, People, Pipeline, Follow-Ups, Insights, and Settings. The guide never creates tutorial records.</p><footer class="bridge-guide__intro-actions"><button class="button subtle" type="button" data-guide-later>Not now</button><button class="button primary" type="button" data-guide-start>Start guide</button></footer></section></div>`;
-    return `<div class="bridge-guide" data-bridge-guide><div class="bridge-guide__scrim" data-guide-scrim="top"></div><div class="bridge-guide__scrim" data-guide-scrim="right"></div><div class="bridge-guide__scrim" data-guide-scrim="bottom"></div><div class="bridge-guide__scrim" data-guide-scrim="left"></div><div class="bridge-guide__spotlight" data-guide-spotlight aria-hidden="true"></div>${guidePanelMarkup()}</div>`;
+    const stateClasses = `${panelPosition ? " is-positioned" : ""}${transitioning ? " is-transitioning" : ""}`;
+    return `<div class="bridge-guide${stateClasses}" data-bridge-guide><div class="bridge-guide__safe-area" data-guide-safe-area aria-hidden="true"></div><div class="bridge-guide__scrim" data-guide-scrim="top"></div><div class="bridge-guide__scrim" data-guide-scrim="right"></div><div class="bridge-guide__scrim" data-guide-scrim="bottom"></div><div class="bridge-guide__scrim" data-guide-scrim="left"></div><div class="bridge-guide__spotlight" data-guide-spotlight aria-hidden="true"></div>${guidePanelMarkup()}</div>`;
   }
 
   function bind() {
