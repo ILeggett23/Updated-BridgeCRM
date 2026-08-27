@@ -4,6 +4,7 @@ const htmlTemplate = await readFile(new URL("./src/index.html", import.meta.url)
 const css = await readFile(new URL("./src/styles.css", import.meta.url), "utf8");
 const uiFoundation = await readFile(new URL("./src/ui-foundation.js", import.meta.url), "utf8");
 const walkthrough = await readFile(new URL("./src/walkthrough.js", import.meta.url), "utf8");
+const tutorialFixture = await readFile(new URL("./src/tutorial-fixture.js", import.meta.url), "utf8");
 const contactLogic = await readFile(new URL("./src/contact-logic.js", import.meta.url), "utf8");
 const engagementLogic = await readFile(new URL("./src/engagement-logic.js", import.meta.url), "utf8");
 const communicationLogic = await readFile(new URL("./src/communication-logic.js", import.meta.url), "utf8");
@@ -53,6 +54,7 @@ const worker = `const PAGE = ${JSON.stringify(html)};
 const STYLES = ${JSON.stringify(css)};
 const UI_FOUNDATION = ${JSON.stringify(uiFoundation)};
 const WALKTHROUGH = ${JSON.stringify(walkthrough)};
+const TUTORIAL_FIXTURE = ${JSON.stringify(tutorialFixture)};
 const CONTACT_LOGIC = ${JSON.stringify(contactLogic)};
 const ENGAGEMENT_LOGIC = ${JSON.stringify(engagementLogic)};
 const COMMUNICATION_LOGIC = ${JSON.stringify(communicationLogic)};
@@ -408,6 +410,7 @@ async function handleRequest(request, env) {
     if (url.pathname === "/styles.css") return new Response(STYLES, { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (url.pathname === "/ui-foundation.js") return new Response(UI_FOUNDATION, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (url.pathname === "/walkthrough.js") return new Response(WALKTHROUGH, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
+    if (url.pathname === "/tutorial-fixture.js") return new Response(TUTORIAL_FIXTURE, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (FONT_ASSETS[url.pathname]) return new Response(binaryFromBase64(FONT_ASSETS[url.pathname]), { headers: { "content-type": "font/woff2", "cache-control": "public, max-age=31536000, immutable", "cross-origin-resource-policy": "same-origin" } });
     if (url.pathname === "/contact-logic.js") return new Response(CONTACT_LOGIC, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (url.pathname === "/engagement-logic.js") return new Response(ENGAGEMENT_LOGIC, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
@@ -623,6 +626,7 @@ await writeFile(new URL("./dist/server/index.js", import.meta.url), worker);
 await writeFile(new URL("./dist/index.html", import.meta.url), html);
 await writeFile(new URL("./dist/ui-foundation.js", import.meta.url), uiFoundation);
 await writeFile(new URL("./dist/walkthrough.js", import.meta.url), walkthrough);
+await writeFile(new URL("./dist/tutorial-fixture.js", import.meta.url), tutorialFixture);
 await writeFile(new URL("./dist/config.js", import.meta.url), config);
 await writeFile(new URL("./dist/account-client.js", import.meta.url), accountClient);
 await Promise.all([
