@@ -1,5 +1,5 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.36";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.36";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.37";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.37";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -573,6 +573,7 @@ function presentationBack() {
 function initializePresentationHistory() {
   if (!Number.isInteger(history.state?.bridgeIndex)) history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:window.scrollY }, "", presentationPath());
   window.addEventListener("popstate", event => {
+    if (walkthrough.visible()) walkthrough.exitGuide();
     cancelPendingScrollState();
     const nextIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
     const direction = nextIndex < presentationHistoryIndex ? "back" : "forward";
@@ -802,8 +803,9 @@ function finishStateHydration() {
   syncAchievements(false);
   applyFixedAppearance();
   stateHydrated = true;
-  walkthrough.hydrate();
   const pendingURL = pendingNotificationNavigationURL;
+  const notificationLaunch = new URL(location.href).searchParams.get("notification") === "1";
+  walkthrough.hydrate({ suppressPrompt: Boolean(ui.accountMigrationOpen || pendingURL || notificationLaunch) });
   let consumedNotification = false;
   if (!pendingURL || !blockingModalOpen()) {
     pendingNotificationNavigationURL = "";
@@ -859,13 +861,9 @@ async function loadAccountState() {
   anonymousSnapshot = await readAnonymousState();
   const cachedAccountState = await accountClient.loadState();
   state = normalizeState(cachedAccountState || defaultState());
-  finishStateHydration();
-
   const migration = await accountClient.migrationStatus();
-  if (!migration.completed && hasMeaningfulBridgeData(anonymousSnapshot)) {
-    ui.accountMigrationOpen = true;
-    render();
-  }
+  ui.accountMigrationOpen = !migration.completed && hasMeaningfulBridgeData(anonymousSnapshot);
+  finishStateHydration();
 }
 
 async function startBridge() {
@@ -1019,10 +1017,12 @@ function closeWalkthroughCapture() {
 
 function navigateWalkthroughMain(page, { mode = page === "contacts" ? "list" : ui.contactMode, role = ui.pipelineRole, forceRender = false } = {}) {
   const moved = navigateMain(page, { mode, role, replace: true, opener: document.activeElement });
+  positionLockedGuideTarget(null, 0);
   if (!moved && forceRender) render();
 }
 
-function activateWalkthroughDestination(destination) {
+async function activateWalkthroughDestination(destination, beforeEnter = null) {
+  if (typeof beforeEnter === "function") await beforeEnter();
   if (destination === "capture-menu") {
     if (ui.quickCreateOpen && ui.quickCreateMode === null && $("[data-guide-target='capture-types']")) return;
     ui.quickCreateOpen = true;
@@ -1031,8 +1031,8 @@ function activateWalkthroughDestination(destination) {
     render();
     return;
   }
-  if (["capture-conversation", "capture-learned", "capture-next"].includes(destination)) {
-    const captureStep = destination === "capture-learned" ? 2 : destination === "capture-next" ? 3 : 0;
+  if (["capture-conversation", "capture-place", "capture-learned", "capture-next"].includes(destination)) {
+    const captureStep = destination === "capture-place" ? 1 : destination === "capture-learned" ? 2 : destination === "capture-next" ? 3 : 0;
     let form = $("#quickConversationForm");
     if (!ui.quickCreateOpen || ui.quickCreateMode !== "conversation" || !form) {
       ui.quickCreateOpen = true;
@@ -1071,6 +1071,7 @@ function activateWalkthroughDestination(destination) {
   if (destination === "settings") {
     if (ui.routedScreen === "settings" && ui.routedSection === "root") return;
     navigatePresentation("settings", { section: "root" }, { replace: true, opener: document.activeElement });
+    positionLockedGuideTarget(null, 0);
     return;
   }
   if (destination === "current") {
@@ -1604,6 +1605,7 @@ function bindAccountMigrationEvents() {
       ui.accountBusy = false;
       syncAchievements(false);
       applyFixedAppearance();
+      walkthrough.hydrate();
       render();
       showToast(result.conflicts ? `Data copied with ${result.conflicts} item${result.conflicts === 1 ? "" : "s"} to review` : "Local data copied to your account");
     } catch (error) {
@@ -1626,6 +1628,7 @@ function bindAccountMigrationEvents() {
           await accountClient.skipLocalMigration(anonymousSnapshot || defaultState());
           ui.accountMigrationOpen = false;
           ui.accountBusy = false;
+          walkthrough.hydrate();
           render();
           showToast("Account started without copying browser-only data");
         } catch (error) {
@@ -1792,9 +1795,9 @@ function render() {
   const nextNavSelection=navSelectionIndex();
   const nextPresentationKey=ui.routedScreen?presentationPath():"";
   ui.routeEntryMotion=nextPresentationKey&&nextPresentationKey!==lastRenderedPresentationKey?ui.routeDirection:"";
-  const transientModalOpen=Boolean(walkthrough.active()||ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
+  const transientModalOpen=Boolean(walkthrough.visible()||ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
   syncDocumentScrollLock(transientModalOpen);
-  app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}${walkthrough.markup()}`;
+  app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}`;
   lastRenderedPresentationKey=nextPresentationKey;
   ui.routeEntryMotion="";
   lastRenderedNavSelection=nextNavSelection;
@@ -1861,7 +1864,7 @@ function bindSharedScorecardEvents() {
 }
 
 function blockingModalOpen() {
-  return Boolean(ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
+  return Boolean(walkthrough.visible()||ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
 }
 
 function requestConfirmation({ title, message, confirmLabel = "Confirm", danger = false, onConfirm, onCancel = null }) {
@@ -2011,12 +2014,31 @@ function syncDocumentScrollLock(shouldLock) {
   });
 }
 
+function scrollGuideTargetWithinContainer(target) {
+  if (!(target instanceof Element)) return false;
+  for (let container = target.parentElement; container && container !== document.body; container = container.parentElement) {
+    const overflowY = getComputedStyle(container).overflowY;
+    if (!/(auto|scroll)/.test(overflowY) || container.scrollHeight <= container.clientHeight + 1) continue;
+    const targetRect = target.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const targetTop = container.scrollTop + targetRect.top - containerRect.top;
+    const nextTop = Math.min(
+      Math.max(0, container.scrollHeight - container.clientHeight),
+      Math.max(0, targetTop - (container.clientHeight - targetRect.height) / 2)
+    );
+    container.scrollTo({ top:nextTop, behavior:"auto" });
+    return true;
+  }
+  return false;
+}
+
 function positionLockedGuideTarget(target, restoreY = null) {
+  if (target instanceof Element && scrollGuideTargetWithinContainer(target)) return;
   if (lockedDocumentScrollY === null) {
     if (target instanceof Element) target.scrollIntoView({ block:"center", inline:"nearest", behavior:"auto" });
     return;
   }
-  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const maxScroll = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
   const nextY = Number.isFinite(restoreY)
     ? Math.min(maxScroll, Math.max(0, restoreY))
     : target instanceof Element
@@ -2284,7 +2306,7 @@ function quickCapturePlacePicker() {
   const activity=quickCapturePlaceActivityMap();
   const places=[...state.places].sort((left,right)=>Number(right.isFavorite)-Number(left.isFavorite)||new Date(quickCapturePlaceActivityAt(right,activity)||0)-new Date(quickCapturePlaceActivityAt(left,activity)||0)||left.name.localeCompare(right.name));
   const suggestions=places.slice(0,4);
-  return `<div class="quick-capture-picker quick-capture-place-picker" data-capture-place-picker><select name="placeId" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">None</option>${places.map(place=>`<option value="${escapeHTML(place.id)}">${escapeHTML(place.name)}</option>`).join("")}</select>${suggestions.length?`<div class="quick-capture-place-suggestions" aria-label="Favorite and recent places">${suggestions.map(place=>`<button type="button" data-capture-place-id="${escapeHTML(place.id)}">${place.isFavorite?icons.star:""}<span>${escapeHTML(place.name.split("—")[0].trim())}</span></button>`).join("")}</div>`:""}<label class="quick-capture-picker__search"><span class="sr-only">Search places</span>${icons.location}<input type="search" data-capture-place-search autocomplete="off" placeholder="Search or create a place"></label><div class="quick-capture-picker__list" data-capture-place-list>${places.map(place=>{const usedAt=quickCapturePlaceActivityAt(place,activity);return `<button type="button" class="quick-capture-picker__row" data-capture-place-id="${escapeHTML(place.id)}" data-capture-search-value="${escapeHTML(String(place.name||"").toLowerCase())}"><span><strong>${escapeHTML(place.name)}</strong><small>${place.isFavorite?"Favorite place":usedAt?`Used ${fmtDate(usedAt)}`:"Saved place"}</small></span><i></i></button>`;}).join("")}</div><button class="quick-capture-picker__new" type="button" data-capture-new-place hidden>${icons.plus}<span>Create <strong data-capture-new-place-label>place</strong></span>${icons.chevronRight}</button><div class="quick-capture-new-place" data-capture-new-place-fields hidden>${field("New place",'<input name="newPlaceName" placeholder="Place name">')}<label class="quick-capture-check"><input type="checkbox" name="favoritePlace"><span>Save as a favorite</span></label></div></div>`;
+  return `<div class="quick-capture-picker quick-capture-place-picker" data-capture-place-picker data-guide-target="capture-place"><select name="placeId" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">None</option>${places.map(place=>`<option value="${escapeHTML(place.id)}">${escapeHTML(place.name)}</option>`).join("")}</select>${suggestions.length?`<div class="quick-capture-place-suggestions" aria-label="Favorite and recent places">${suggestions.map(place=>`<button type="button" data-capture-place-id="${escapeHTML(place.id)}">${place.isFavorite?icons.star:""}<span>${escapeHTML(place.name.split("—")[0].trim())}</span></button>`).join("")}</div>`:""}<label class="quick-capture-picker__search"><span class="sr-only">Search places</span>${icons.location}<input type="search" data-capture-place-search autocomplete="off" placeholder="Search or create a place"></label><div class="quick-capture-picker__list" data-capture-place-list>${places.map(place=>{const usedAt=quickCapturePlaceActivityAt(place,activity);return `<button type="button" class="quick-capture-picker__row" data-capture-place-id="${escapeHTML(place.id)}" data-capture-search-value="${escapeHTML(String(place.name||"").toLowerCase())}"><span><strong>${escapeHTML(place.name)}</strong><small>${place.isFavorite?"Favorite place":usedAt?`Used ${fmtDate(usedAt)}`:"Saved place"}</small></span><i></i></button>`;}).join("")}</div><button class="quick-capture-picker__new" type="button" data-capture-new-place hidden>${icons.plus}<span>Create <strong data-capture-new-place-label>place</strong></span>${icons.chevronRight}</button><div class="quick-capture-new-place" data-capture-new-place-fields hidden>${field("New place",'<input name="newPlaceName" placeholder="Place name">')}<label class="quick-capture-check"><input type="checkbox" name="favoritePlace"><span>Save as a favorite</span></label></div></div>`;
 }
 function quickCaptureWizardFooter({last=false,saveLabel="Save conversation"}={}) { return `<footer class="quick-capture-wizard__footer">${last?`<button class="button primary" type="submit" data-guide-target="capture-save">${icons.check}<span>${escapeHTML(saveLabel)}</span></button>`:`<button class="button primary" type="button" data-capture-step-next>Continue</button>`}</footer>`; }
 function quickCaptureWizardStep(key,title,content,{first=false,last=false,saveLabel="Save conversation"}={}) { return `<section class="quick-capture-wizard__step" data-capture-step="${key}" ${first?"":"hidden"}><header><h3>${escapeHTML(title)}</h3></header>${content}${quickCaptureWizardFooter({last,saveLabel})}</section>`; }
@@ -2374,6 +2396,10 @@ function quickCreateModal() {
 }
 
 function closeQuickCreate() {
+  if (walkthrough.active()) {
+    walkthrough.exitGuide();
+    return;
+  }
   ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";
   const backdrop=$('#quickCreateBackdrop');
   const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus({preventScroll:true});quickCreateFocusReturn=null;});};

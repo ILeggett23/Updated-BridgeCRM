@@ -1,4 +1,4 @@
-export const BRIDGE_GUIDE_VERSION = "2.0";
+export const BRIDGE_GUIDE_VERSION = "3.0";
 
 const GUIDE_STATUS = Object.freeze({
   unseen: "unseen",
@@ -14,6 +14,7 @@ const step = (definition) => Object.freeze({
   advanceOn: "next",
   beforeEnter: null,
   optional: false,
+  blockTarget: false,
   ...definition
 });
 
@@ -27,19 +28,20 @@ export const BRIDGE_GUIDE_STEPS = Object.freeze([
   step({ id:"primary-navigation", chapter:"Getting Oriented", route:"today", target:"primary-navigation", placement:"above", title:"Move through Bridge", description:"The dock opens Today, People, Capture, Pipeline, and Insights. Follow-Ups also appear from Today and Insights." }),
 
   step({ id:"open-capture", chapter:"Capture", route:"today", target:"capture-button", placement:"above", title:"Open Capture", description:"Capture is where every relationship update begins.", instruction:"Tap the + button below.", interaction:"target", advanceOn:"click" }),
-  step({ id:"capture-types", chapter:"Capture", route:"capture-menu", target:"capture-types", placement:"above", title:"Choose what happened", description:"Record a conversation, meeting, call, text, follow-up, person, or note. Each path saves only its real activity type." }),
+  step({ id:"capture-types", chapter:"Capture", route:"capture-menu", target:"capture-types", placement:"above", title:"Choose what happened", description:"Record a conversation, meeting, call, text, follow-up, or new person. Each path saves only its real activity type." }),
   step({ id:"choose-conversation", chapter:"Capture", route:"capture-menu", target:"capture-conversation", placement:"above", title:"Start a conversation", description:"The Conversation flow connects what happened to a person, place, context, and next action.", instruction:"Tap Conversation to open the guided flow.", interaction:"target", advanceOn:"click" }),
   step({ id:"choose-person", chapter:"Capture", route:"capture-conversation", target:"capture-person", title:"Choose the relationship", description:"Select an existing person or search and add someone new. Nothing is saved until the final review.", instruction:"Explore the person picker, then select Next when ready.", optional:true }),
+  step({ id:"capture-place", chapter:"Capture", route:"capture-place", target:"capture-place", title:"Remember where you met", description:"Add a place when it gives the relationship useful context, so Bridge can connect people and conversations to where they happened." }),
   step({ id:"conversation-notes", chapter:"Capture", route:"capture-learned", target:"capture-notes", placement:"above", title:"Record what happened", description:"Conversation notes belong to this interaction and appear in the relationship timeline." }),
   step({ id:"what-i-know", chapter:"Capture", route:"capture-learned", target:"capture-context", placement:"above", title:"Keep durable context separate", description:"What I Know is for lasting details—goals, work, family, interests, or needs—that should help later." }),
   step({ id:"next-action", chapter:"Capture", route:"capture-next", target:"capture-next-action", placement:"above", title:"Choose the next step", description:"Save without a reminder, reconnect later, or schedule a specific follow-up with a reason and time." }),
   step({ id:"capture-tracking", chapter:"Capture", route:"capture-next", target:"capture-tracking", placement:"above", title:"Track activity and stage accurately", description:"Advanced details hold MSA and DTM activity markers plus exact Prospect or Customer stage movement. They never rewrite earlier history." }),
-  step({ id:"save-capture", chapter:"Capture", route:"capture-next", target:"capture-save", placement:"above", title:"Review before saving", description:"Saving writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"Do not save a tutorial record. Select Next to continue safely." }),
+  step({ id:"save-capture", chapter:"Capture", route:"capture-next", target:"capture-save", placement:"above", title:"Review before saving", description:"Saving writes the activity to the person, analytics, and any chosen follow-up or stage history.", instruction:"The guide keeps Save disabled here so no tutorial record is created. Select Next to continue safely.", blockTarget:true }),
 
   step({ id:"open-people", chapter:"People", route:"today", target:"nav-people", placement:"above", title:"Open People", description:"People is the complete relationship workspace.", instruction:"Tap People in the navigation.", interaction:"target", advanceOn:"click" }),
   step({ id:"people-search", chapter:"People", route:"people", target:"people-search", title:"Search saved context", description:"Search finds names, contact details, places, conversation notes, and What I Know text." }),
   step({ id:"people-filters", chapter:"People", route:"people", target:"people-filters", title:"Focus the list", description:"Quick filters and the full Filter control narrow relationships by role, stage, recency, health, follow-up state, and more." }),
-  step({ id:"open-person", chapter:"People", route:"people", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap any person row, or Skip step if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
+  step({ id:"open-person", chapter:"People", route:"people", target:"person-row", title:"Open a relationship", description:"A person profile brings the relationship’s context, activity, actions, and pipeline history together.", instruction:"Tap the highlighted person, or select Next if your list is empty.", interaction:"target", advanceOn:"click", optional:true }),
   step({ id:"person-actions", chapter:"People", route:"current", target:"person-actions", placement:"below", title:"Act from the profile", description:"Call, text, log activity, schedule a follow-up, or edit the relationship from these production actions.", optional:true }),
   step({ id:"bridge-brief", chapter:"People", route:"current", target:"bridge-brief", title:"Read the Bridge Brief", description:"Bridge Brief summarizes durable What I Know context without mixing it into individual conversation notes.", optional:true }),
   step({ id:"person-timeline", chapter:"People", route:"current", target:"person-timeline", title:"Review the timeline", description:"The timeline keeps conversations, follow-ups, and exact pipeline events in chronological relationship history.", optional:true }),
@@ -114,9 +116,13 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   let globalCleanup = null;
   let originScrollY = null;
   let panelPosition = null;
+  let boundTarget = null;
+  let pendingTargetAdvance = false;
+  let resumeAvailable = false;
 
   const currentStep = () => BRIDGE_GUIDE_STEPS[stepIndex] || BRIDGE_GUIDE_STEPS[0];
   const active = () => phase === "active";
+  const visible = () => phase !== "hidden";
 
   function persistGuide(status, guideStep = null) {
     persist({
@@ -127,11 +133,21 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     });
   }
 
-  function hydrate() {
+  function hydrate({ suppressPrompt = false } = {}) {
     const saved = getState()?.settings?.walkthrough || {};
     const versionMatches = String(saved.version || "") === BRIDGE_GUIDE_VERSION;
-    const savedStatus = Object.values(GUIDE_STATUS).includes(saved.status) ? saved.status : GUIDE_STATUS.unseen;
-    if (savedStatus === GUIDE_STATUS.unseen && isFreshWorkspace(getState())) {
+    let savedStatus = Object.values(GUIDE_STATUS).includes(saved.status) ? saved.status : GUIDE_STATUS.unseen;
+    if (savedStatus === GUIDE_STATUS.inProgress && !versionMatches) {
+      savedStatus = GUIDE_STATUS.unseen;
+      persistGuide(GUIDE_STATUS.unseen);
+    }
+    if (suppressPrompt) {
+      phase = "hidden";
+      return;
+    }
+    resumeAvailable = savedStatus === GUIDE_STATUS.inProgress && versionMatches;
+    if (resumeAvailable) stepIndex = firstStepIndex(saved.stepId);
+    if (resumeAvailable || (savedStatus === GUIDE_STATUS.unseen && isFreshWorkspace(getState()))) {
       phase = "intro";
       originScrollY = window.scrollY;
       document.body.classList.add("bridge-guide-active");
@@ -139,7 +155,6 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       bindGlobalLifecycle();
       return;
     }
-    if (saved.status === GUIDE_STATUS.inProgress && versionMatches) stepIndex = firstStepIndex(saved.stepId);
     phase = "hidden";
   }
 
@@ -153,6 +168,13 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     if (!target || target.hidden) return false;
     const rect = target.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
+  }
+
+  function scrollableGuideAncestor(target) {
+    for (let node = target?.parentElement; node && node !== document.body; node = node.parentElement) {
+      if (/(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1) return node;
+    }
+    return null;
   }
 
   function waitForGuideTarget(guideStep, sequence) {
@@ -182,13 +204,14 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   function clearTargetBinding() {
     targetCleanup?.();
     targetCleanup = null;
+    boundTarget = null;
     resizeObserver?.disconnect();
     resizeObserver = null;
-    safeQuery(".bridge-guide-target")?.classList.remove("bridge-guide-target");
+    document.querySelectorAll(".bridge-guide-target").forEach(target => target.classList.remove("bridge-guide-target"));
   }
 
   function setGuideControlsBusy(root, busy) {
-    root?.querySelectorAll("[data-guide-back], [data-guide-next], [data-guide-skip-step]").forEach(button => {
+    root?.querySelectorAll("[data-guide-back], [data-guide-next]").forEach(button => {
       button.disabled = busy || (button.matches("[data-guide-back]") && stepIndex === 0);
     });
     root?.querySelector("[data-guide-panel]")?.setAttribute("aria-busy", String(busy));
@@ -205,6 +228,8 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   function bindGlobalLifecycle() {
     if (globalCleanup) return;
     const stopScroll = event => {
+      const scrollContainer = scrollableGuideAncestor(resolveGuideTarget());
+      if (scrollContainer?.contains(event.target)) return;
       if (event.cancelable) event.preventDefault();
     };
     const onKeyDown = event => {
@@ -216,7 +241,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       if (event.key !== "Tab") return;
       const root = safeQuery("[data-bridge-guide]");
       if (!root) return;
-      const items = [resolveGuideTarget(), ...root.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")]
+      const items = [currentStep().blockTarget ? null : resolveGuideTarget(), ...root.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")]
         .filter((item, index, values) => item && item.getClientRects().length && values.indexOf(item) === index);
       if (!items.length) return;
       const first = items[0];
@@ -243,16 +268,27 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     };
   }
 
-  function startGuide(opener = document.activeElement) {
+  function openGuide(opener = document.activeElement) {
     focusReturn = opener instanceof HTMLElement ? opener : null;
     phase = "active";
-    stepIndex = 0;
     panelPosition = null;
+    pendingTargetAdvance = false;
+    resumeAvailable = false;
     if (originScrollY === null) originScrollY = window.scrollY;
     document.body.classList.add("bridge-guide-active");
     lockScroll(true);
     bindGlobalLifecycle();
-    enterGuideStep(0);
+    renderGuideSurface({ force:true });
+    enterGuideStep(stepIndex);
+  }
+
+  function startGuide(opener = document.activeElement) {
+    stepIndex = 0;
+    openGuide(opener);
+  }
+
+  function continueGuide(opener = document.activeElement) {
+    openGuide(opener);
   }
 
   function restart(opener = document.activeElement) {
@@ -262,6 +298,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
   async function enterGuideStep(nextIndex, { save = true } = {}) {
     if (!active() || transitioning) return;
     transitioning = true;
+    pendingTargetAdvance = false;
     clearTargetBinding();
     if (positionFrame) cancelAnimationFrame(positionFrame);
     positionFrame = 0;
@@ -270,19 +307,24 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const guideStep = currentStep();
     targetAvailable = false;
     if (save) persistGuide(GUIDE_STATUS.inProgress, guideStep);
-    refreshGuidePanel();
+    const root = guideRoot();
+    root?.classList.add("is-transitioning");
+    coverGuideViewport(root);
+    setGuideControlsBusy(root, true);
     try {
       await activate(guideStep.route, guideStep.beforeEnter);
       const target = await waitForGuideTarget(guideStep, sequence);
       if (!active() || sequence !== activationSequence) return;
       targetAvailable = Boolean(target) || !guideStep.target;
+      updateGuidePanel();
       bindGuideTarget(target, guideStep);
       positionGuidePanel({ reveal:true });
-      setGuideControlsBusy(safeQuery("[data-bridge-guide]"), false);
     } finally {
       if (sequence === activationSequence) {
         transitioning = false;
-        safeQuery("[data-bridge-guide]")?.classList.remove("is-transitioning");
+        const currentRoot = guideRoot();
+        currentRoot?.classList.remove("is-transitioning");
+        setGuideControlsBusy(currentRoot, false);
       }
     }
   }
@@ -300,21 +342,35 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
 
   function bindGuideTarget(target, guideStep) {
     if (!target) return;
+    boundTarget = target;
     target.classList.add("bridge-guide-target");
     const previousDescription = target.getAttribute("aria-describedby");
+    const previousDisabled = "disabled" in target ? target.disabled : null;
+    const previousAriaDisabled = target.getAttribute("aria-disabled");
+    if (guideStep.blockTarget && "disabled" in target) {
+      target.disabled = true;
+      target.setAttribute("aria-disabled", "true");
+    }
     if (guideStep.instruction) target.setAttribute("aria-describedby", [previousDescription, "bridgeGuideInstruction"].filter(Boolean).join(" "));
     let handled = false;
     const onTargetClick = () => {
       if (handled || guideStep.advanceOn !== "click") return;
       handled = true;
-      queueMicrotask(() => requestAnimationFrame(advanceGuide));
+      pendingTargetAdvance = true;
+      queueMicrotask(advanceGuide);
     };
-    if (guideStep.advanceOn === "click") target.addEventListener("click", onTargetClick);
+    if (guideStep.advanceOn === "click") target.addEventListener("click", onTargetClick, true);
+    const scrollContainer = scrollableGuideAncestor(target);
+    scrollContainer?.addEventListener("scroll", schedulePosition, { passive:true });
     targetCleanup = () => {
-      target.removeEventListener("click", onTargetClick);
+      target.removeEventListener("click", onTargetClick, true);
+      scrollContainer?.removeEventListener("scroll", schedulePosition);
       target.classList.remove("bridge-guide-target");
       if (previousDescription) target.setAttribute("aria-describedby", previousDescription);
       else target.removeAttribute("aria-describedby");
+      if (previousDisabled !== null) target.disabled = previousDisabled;
+      if (previousAriaDisabled === null) target.removeAttribute("aria-disabled");
+      else target.setAttribute("aria-disabled", previousAriaDisabled);
     };
     if (globalThis.ResizeObserver) {
       resizeObserver = new ResizeObserver(schedulePosition);
@@ -334,6 +390,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     document.body.classList.remove("bridge-guide-active");
     persistGuide(status, status === GUIDE_STATUS.inProgress ? currentStep() : null);
     close?.({ status });
+    renderGuideSurface({ force:true });
     bringIntoView(null, originScrollY);
     originScrollY = null;
     lockScroll(false);
@@ -377,6 +434,18 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     element.style.height = `${Math.max(0, height)}px`;
   }
 
+  function coverGuideViewport(root = guideRoot()) {
+    if (!root) return;
+    const viewport = viewportMetrics();
+    root.querySelectorAll("[data-guide-scrim]").forEach((scrim, index) => setScrim(scrim, index ? {} : { left:viewport.left, top:viewport.top, width:viewport.width, height:viewport.height }));
+    const spotlight = root.querySelector("[data-guide-spotlight]");
+    if (spotlight) {
+      spotlight.style.cssText = "";
+      spotlight.classList.remove("is-blocking");
+    }
+    root.classList.remove("is-targeted");
+  }
+
   function centerPanel(root, panel, viewport) {
     const edge = 12;
     const left = clamp(viewport.left + (viewport.width - panel.offsetWidth) / 2, viewport.safeLeft + edge, viewport.safeRight - panel.offsetWidth - edge);
@@ -413,10 +482,9 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     const guideStep = currentStep();
     const target = resolveGuideTarget(guideStep);
     const viewport = viewportMetrics();
+    panel.style.setProperty("--guide-max-height", `${Math.max(180, viewport.safeBottom - viewport.safeTop - 24)}px`);
     if (!target || !targetAvailable) {
-      root.querySelectorAll("[data-guide-scrim]").forEach((scrim, index) => setScrim(scrim, index ? {} : { width:viewport.width, height:viewport.height }));
-      const spotlight = root.querySelector("[data-guide-spotlight]");
-      if (spotlight) spotlight.style.cssText = "";
+      coverGuideViewport(root);
       centerPanel(root, panel, viewport);
       panel.focus({ preventScroll:true });
       return;
@@ -444,6 +512,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
       spotlight.style.width = `${right - left}px`;
       spotlight.style.height = `${bottom - top}px`;
       spotlight.style.borderRadius = radius;
+      spotlight.classList.toggle("is-blocking", guideStep.blockTarget);
     }
     const placement = panelPlacement(guideStep, rect, panel, viewport);
     panel.style.setProperty("--guide-left", `${placement.left}px`);
@@ -456,55 +525,114 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     else panel.focus({ preventScroll:true });
   }
 
+  function guideActionsMarkup(guideStep = currentStep()) {
+    const last = stepIndex === BRIDGE_GUIDE_STEPS.length - 1;
+    const interactive = guideStep.advanceOn === "click";
+    const primary = interactive && !guideStep.optional ? "" : `<button type="button" class="button primary" data-guide-next>${last ? "Finish" : "Next"}</button>`;
+    return `<button type="button" class="button subtle" data-guide-back ${stepIndex === 0 || transitioning ? "disabled" : ""}>Back</button><button type="button" class="bridge-guide__skip" data-guide-skip>Skip guide</button>${primary}`;
+  }
+
   function guidePanelMarkup() {
     const guideStep = currentStep();
     const progress = chapterProgress(stepIndex);
-    const last = stepIndex === BRIDGE_GUIDE_STEPS.length - 1;
-    const interactive = guideStep.advanceOn === "click";
-    const middle = interactive || guideStep.optional
-      ? '<button type="button" class="bridge-guide__skip" data-guide-skip-step>Skip step</button>'
-      : '<button type="button" class="bridge-guide__skip" data-guide-skip>Skip guide</button>';
-    const primary = interactive ? "" : `<button type="button" class="button primary" data-guide-next>${last ? "Finish" : "Next"}</button>`;
     const position = panelPosition ? ` style="--guide-left:${panelPosition.left}px;--guide-top:${panelPosition.top}px"` : "";
-    return `<section class="bridge-guide__panel" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription${guideStep.instruction ? " bridgeGuideInstruction" : ""}" aria-busy="${transitioning}" tabindex="-1"${position}><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>${progress.chapter} · ${progress.position}/${progress.count}</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">${guideStep.title}</h2><p id="bridgeGuideDescription">${guideStep.description}</p>${guideStep.instruction ? `<p class="bridge-guide__instruction" id="bridgeGuideInstruction">${guideStep.instruction}</p>` : ""}<footer class="bridge-guide__actions"><button type="button" class="button subtle" data-guide-back ${stepIndex === 0 || transitioning ? "disabled" : ""}>Back</button>${middle}${primary}</footer></section>`;
+    return `<section class="bridge-guide__panel" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription${guideStep.instruction ? " bridgeGuideInstruction" : ""}" aria-busy="${transitioning}" tabindex="-1"${position}><header class="bridge-guide__header"><strong>Bridge Guide</strong><span data-guide-progress>${progress.chapter} · ${progress.position} of ${progress.count}</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle" data-guide-title>${guideStep.title}</h2><p id="bridgeGuideDescription" data-guide-description>${guideStep.description}</p>${guideStep.instruction ? `<p class="bridge-guide__instruction" id="bridgeGuideInstruction" data-guide-instruction>${guideStep.instruction}</p>` : ""}<footer class="bridge-guide__actions" data-guide-actions>${guideActionsMarkup(guideStep)}</footer></section>`;
   }
 
-  function refreshGuidePanel() {
-    const root = safeQuery("[data-bridge-guide]");
-    const panel = root?.querySelector("[data-guide-panel]");
-    if (!root || !panel || !active()) return;
-    root.classList.toggle("is-positioned", Boolean(panelPosition));
-    root.classList.add("is-transitioning");
-    panel.outerHTML = guidePanelMarkup();
-    bind();
+  function updateGuidePanel() {
+    const panel = guideRoot()?.querySelector("[data-guide-panel]");
+    if (!panel || !active()) return;
+    const guideStep = currentStep();
+    const progress = chapterProgress(stepIndex);
+    panel.querySelector("[data-guide-progress]").textContent = `${progress.chapter} · ${progress.position} of ${progress.count}`;
+    panel.querySelector("[data-guide-title]").textContent = guideStep.title;
+    panel.querySelector("[data-guide-description]").textContent = guideStep.description;
+    let instruction = panel.querySelector("[data-guide-instruction]");
+    if (guideStep.instruction) {
+      if (!instruction) {
+        instruction = document.createElement("p");
+        instruction.className = "bridge-guide__instruction";
+        instruction.id = "bridgeGuideInstruction";
+        instruction.dataset.guideInstruction = "";
+        panel.querySelector("[data-guide-actions]").before(instruction);
+      }
+      instruction.textContent = guideStep.instruction;
+    } else {
+      instruction?.remove();
+    }
+    panel.setAttribute("aria-describedby", `bridgeGuideDescription${guideStep.instruction ? " bridgeGuideInstruction" : ""}`);
+    panel.querySelector("[data-guide-actions]").innerHTML = guideActionsMarkup(guideStep);
+    setGuideControlsBusy(guideRoot(), transitioning);
   }
+
+  const guideHost = () => document.getElementById("bridgeGuideRoot");
+  const guideRoot = () => guideHost()?.querySelector("[data-bridge-guide]") || null;
 
   function markup() {
     if (phase === "hidden") return "";
-    if (phase === "intro") return `<div class="bridge-guide bridge-guide--intro" data-bridge-guide><section class="bridge-guide__panel bridge-guide__panel--intro" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription" tabindex="-1"><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>Interactive onboarding</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">Learn Bridge by using it</h2><p id="bridgeGuideDescription">Follow the highlighted controls through Today, Capture, People, Pipeline, Follow-Ups, Insights, and Settings. The guide never creates tutorial records.</p><footer class="bridge-guide__intro-actions"><button class="button subtle" type="button" data-guide-later>Not now</button><button class="button primary" type="button" data-guide-start>Start guide</button></footer></section></div>`;
+    if (phase === "intro") {
+      const savedStep = currentStep();
+      const title = resumeAvailable ? "Continue your Bridge Guide" : "Learn Bridge by using it";
+      const description = resumeAvailable
+        ? `Pick up with ${savedStep.chapter}, or exit and restart the complete guide later from Settings.`
+        : "Follow the highlighted controls through Today, Capture, People, Pipeline, Follow-Ups, Insights, and Settings. The guide never creates tutorial records.";
+      const primary = resumeAvailable
+        ? '<button class="button primary" type="button" data-guide-resume>Continue</button>'
+        : '<button class="button primary" type="button" data-guide-start>Start guide</button>';
+      return `<div class="bridge-guide bridge-guide--intro" data-bridge-guide><section class="bridge-guide__panel bridge-guide__panel--intro" data-guide-panel role="dialog" aria-modal="true" aria-labelledby="bridgeGuideTitle" aria-describedby="bridgeGuideDescription" tabindex="-1"><header class="bridge-guide__header"><strong>Bridge Guide</strong><span>${resumeAvailable ? "Saved progress" : "Interactive onboarding"}</span></header><div class="bridge-guide__rule" aria-hidden="true"></div><h2 id="bridgeGuideTitle">${title}</h2><p id="bridgeGuideDescription">${description}</p><footer class="bridge-guide__intro-actions"><button class="button subtle" type="button" data-guide-later>${resumeAvailable ? "Exit guide" : "Not now"}</button>${primary}</footer></section></div>`;
+    }
     const stateClasses = `${panelPosition ? " is-positioned" : ""}${transitioning ? " is-transitioning" : ""}`;
     return `<div class="bridge-guide${stateClasses}" data-bridge-guide><div class="bridge-guide__safe-area" data-guide-safe-area aria-hidden="true"></div><div class="bridge-guide__scrim" data-guide-scrim="top"></div><div class="bridge-guide__scrim" data-guide-scrim="right"></div><div class="bridge-guide__scrim" data-guide-scrim="bottom"></div><div class="bridge-guide__scrim" data-guide-scrim="left"></div><div class="bridge-guide__spotlight" data-guide-spotlight aria-hidden="true"></div>${guidePanelMarkup()}</div>`;
   }
 
+  function renderGuideSurface({ force=false } = {}) {
+    const host = guideHost();
+    if (!host) return null;
+    const renderedPhase = host.dataset.guidePhase || "hidden";
+    if (phase === "hidden") {
+      if (force || host.childElementCount) host.replaceChildren();
+      host.dataset.guidePhase = "hidden";
+      return null;
+    }
+    if (force || renderedPhase !== phase || !guideRoot()) {
+      host.innerHTML = markup();
+      host.dataset.guidePhase = phase;
+    }
+    return guideRoot();
+  }
+
+  function bindGuideHost() {
+    const host = guideHost();
+    if (!host || host.dataset.guideBound === "true") return;
+    host.dataset.guideBound = "true";
+    host.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button || !host.contains(button)) return;
+      if (button.matches("[data-guide-start]")) startGuide(button);
+      else if (button.matches("[data-guide-resume]")) continueGuide(button);
+      else if (button.matches("[data-guide-later], [data-guide-skip]")) skipGuide();
+      else if (button.matches("[data-guide-back]")) previousGuideStep();
+      else if (button.matches("[data-guide-next]")) advanceGuide();
+    });
+  }
+
   function bind() {
-    const root = safeQuery("[data-bridge-guide]");
+    bindGuideHost();
+    const root = renderGuideSurface();
     if (!root) return;
-    root.querySelector("[data-guide-start]")?.addEventListener("click", event => startGuide(event.currentTarget));
-    root.querySelector("[data-guide-later]")?.addEventListener("click", skipGuide);
-    root.querySelector("[data-guide-back]")?.addEventListener("click", previousGuideStep);
-    root.querySelector("[data-guide-next]")?.addEventListener("click", advanceGuide);
-    root.querySelector("[data-guide-skip]")?.addEventListener("click", skipGuide);
-    root.querySelector("[data-guide-skip-step]")?.addEventListener("click", advanceGuide);
     setGuideControlsBusy(root, transitioning);
     if (phase === "intro") requestAnimationFrame(() => root.querySelector("[data-guide-panel]")?.focus({ preventScroll:true }));
     else if (active()) {
       document.body.classList.add("bridge-guide-active");
       lockScroll(true);
       bindGlobalLifecycle();
-      if (!transitioning) {
+      if (!transitioning && !pendingTargetAdvance) {
         const target = resolveGuideTarget();
         targetAvailable = Boolean(target) || !currentStep().target;
-        bindGuideTarget(target, currentStep());
+        if (target !== boundTarget) {
+          clearTargetBinding();
+          bindGuideTarget(target, currentStep());
+        }
         requestAnimationFrame(() => positionGuidePanel({ reveal:true }));
       }
     }
@@ -529,6 +657,7 @@ export function createBridgeWalkthrough({ getState, persist, activate, close, lo
     restart,
     resume,
     startGuide,
-    skip: skipGuide
+    skip: skipGuide,
+    visible
   });
 }
