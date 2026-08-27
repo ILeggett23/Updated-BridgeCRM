@@ -44,7 +44,7 @@ test("legacy pages, notification launches, and secure shared scorecards retain t
   assert.match(app, /const launchPageAliases = \{ actions: "followups", insights: "analytics" \}/);
   assert.match(app, /if \(requestedLaunchPage === "add"\)/);
   assert.match(app, /if \(sharedScorecardToken\) return false/);
-  assert.match(app, /window\.addEventListener\("pagehide", \(\) => \{\s+if \(sharedScorecardToken \|\| !stateHydrated\) return/);
+  assert.match(app, /window\.addEventListener\("pagehide", \(\) => \{\s+if \(sharedScorecardToken \|\| !stateHydrated \|\| bridgeGuideTutorialActive\(\)\) return/);
   assert.match(app, /target\.searchParams\.get\("notification"\) !== "1"/);
   assert.match(app, /screen:"person", person:openedContactId/);
   assert.match(app, /const legacyContact = String\(target\.searchParams\.get\("contact"\)/);

@@ -17,7 +17,7 @@ test("Bridge Guide is versioned, chapter-based, and data driven", () => {
   assert.equal(new Set(BRIDGE_GUIDE_STEPS.map(item => item.id)).size, BRIDGE_GUIDE_STEPS.length);
   assert.deepEqual([...new Set(BRIDGE_GUIDE_STEPS.map(item => item.chapter))], ["Getting Oriented", "Capture", "People", "Pipeline", "Follow-ups / Places", "Insights", "Settings"]);
   for (const guideStep of BRIDGE_GUIDE_STEPS) {
-    for (const key of ["id", "chapter", "route", "target", "title", "description", "instruction", "placement", "interaction", "advanceOn", "beforeEnter", "blockTarget"]) assert.ok(key in guideStep, `${guideStep.id} is missing ${key}`);
+    for (const key of ["id", "chapter", "route", "captureStep", "target", "title", "description", "instruction", "placement", "interaction", "advanceOn", "beforeEnter", "blockTarget"]) assert.ok(key in guideStep, `${guideStep.id} is missing ${key}`);
     assert.ok(guideStep.title.length <= 40, `${guideStep.id} title should stay compact`);
     assert.ok(guideStep.description.length <= 190, `${guideStep.id} description should stay concise`);
   }
@@ -25,7 +25,7 @@ test("Bridge Guide is versioned, chapter-based, and data driven", () => {
 
 test("interactive steps identify the exact safe control and expected action", () => {
   const interactive = BRIDGE_GUIDE_STEPS.filter(item => item.advanceOn === "click");
-  assert.deepEqual(interactive.map(item => item.id), ["open-capture", "choose-conversation", "open-people", "open-person", "open-pipeline", "customer-tab", "open-places", "open-insights", "open-settings"]);
+  assert.deepEqual(interactive.map(item => item.id), ["open-capture", "choose-conversation", "choose-person", "open-people", "open-person", "open-pipeline", "customer-tab", "open-places", "open-insights", "open-settings"]);
   for (const guideStep of interactive) {
     assert.equal(guideStep.interaction, "target");
     assert.ok(guideStep.target);
@@ -39,7 +39,8 @@ test("interactive steps identify the exact safe control and expected action", ()
   assert.match(walkthrough, /data-guide-skip>Skip guide/);
   assert.equal(BRIDGE_GUIDE_STEPS.find(item => item.id === "save-capture").blockTarget, true);
   assert.match(styles, /\.bridge-guide__spotlight\.is-blocking \{ pointer-events: auto; \}/);
-  assert.match(walkthrough, /if \(guideStep\.blockTarget && "disabled" in target\)/);
+  assert.match(walkthrough, /targetInteractionBlocked\(guideStep\) && "disabled" in target/);
+  assert.match(walkthrough, /spotlight\.classList\.toggle\("is-blocking", targetInteractionBlocked\(guideStep\)\)/);
 });
 
 test("guide teaches exact production taxonomy without changing it", () => {
@@ -62,22 +63,26 @@ test("stable data-guide-target hooks cover real routes, sheets, and conditional 
   }
   assert.match(app, /\["capture-conversation", "capture-place", "capture-learned", "capture-next"\]/);
   assert.match(app, /destination === "capture-place" \? 1/);
-  assert.match(app, /setQuickCaptureStep\(form, captureStep, \{ direction: captureStep < currentStep \? "back" : "forward", behavior: "auto" \}\)/);
+  assert.match(app, /ui\.quickCreateStep = captureStep/);
+  assert.match(app, /const liveForm = \$\("#quickConversationForm"\)/);
+  assert.match(app, /setQuickCaptureStep\(liveForm, captureStep, \{ direction: captureStep < currentStep \? "back" : "forward", behavior: "auto", restore: true \}\)/);
   assert.match(app, /destination === "places"/);
   assert.match(app, /destination === "current"/);
   assert.match(app, /navigateWalkthroughMain[\s\S]*positionLockedGuideTarget\(null, 0\)/);
-  assert.match(app, /async function activateWalkthroughDestination\(destination, beforeEnter = null\)/);
+  assert.match(app, /async function activateWalkthroughDestination\(destination, beforeEnter = null, guideStep = null\)/);
   assert.match(app, /typeof beforeEnter === "function"/);
 });
 
 test("route changes wait for rendered targets and missing targets fall back safely", () => {
   assert.match(walkthrough, /async function enterGuideStep/);
-  assert.match(walkthrough, /await activate\(guideStep\.route, guideStep\.beforeEnter\)/);
+  assert.match(walkthrough, /await activate\(guideStep\.route, guideStep\.beforeEnter, guideStep\)/);
   assert.match(walkthrough, /await waitForGuideTarget\(guideStep, sequence\)/);
-  assert.match(walkthrough, /framesRemaining = guideStep\.optional \? 6 : 30/);
+  assert.match(walkthrough, /framesRemaining = 30/);
   assert.match(walkthrough, /if \(!target \|\| !targetAvailable\)/);
   assert.match(walkthrough, /is-fallback/);
   assert.match(walkthrough, /coverGuideViewport\(root\)/);
+  assert.match(walkthrough, /Required target.*was not ready for step/);
+  assert.match(walkthrough, /if \(guideStep\.target && !target\)[\s\S]*exitGuide\(GUIDE_STATUS\.inProgress\)/);
   assert.doesNotMatch(walkthrough, /setTimeout/);
 });
 
@@ -137,7 +142,7 @@ test("focus, keyboard, reduced motion, and lifecycle cleanup remain accessible",
 
 test("completion, interrupted progress, replay, and cache availability are wired", () => {
   assert.match(app, /version, status, stepId, chapter/);
-  assert.match(app, /queueSave\("Walkthrough preference saved", \{ silent: true \}\)/);
+  assert.match(app, /queueStateSnapshot\(preferenceState, "Walkthrough preference saved", \{ silent:true, syncReminders:false \}\)/);
   assert.match(app, /data-replay-walkthrough data-guide-target="guide-replay"/);
   assert.match(app, /walkthrough\.restart\(button\)/);
   assert.match(walkthrough, /resumeAvailable = savedStatus === GUIDE_STATUS\.inProgress && versionMatches/);
@@ -156,4 +161,13 @@ test("dismissing Capture exits the active guide instead of orphaning its overlay
   assert.match(app, /function closeQuickCreate\(\) \{\s+if \(walkthrough\.active\(\)\) \{\s+walkthrough\.exitGuide\(\);\s+return;/);
   assert.match(app, /bindBottomSheetGesture\(\$\('\.quick-create-modal'\),closeQuickCreate\)/);
   assert.match(app, /id='closeQuickCreate'|id="closeQuickCreate"/);
+});
+
+test("Capture wizard state survives production account-sync rerenders", () => {
+  assert.match(app, /quickCreateStep: 0/);
+  assert.match(app, /function setQuickCaptureStep\(form,nextIndex,\{direction='forward',behavior=null,restore=false\}=\{\}\)/);
+  assert.match(app, /ui\.quickCreateStep=next;form\.dataset\.captureStepIndex=String\(next\)/);
+  assert.match(app, /setQuickCaptureStep\(form,ui\.quickCreateStep,\{behavior:'auto',restore:true\}\)/);
+  assert.match(app, /if\(restore\)return/);
+  assert.match(app, /status\?\.stateData && accountContext\.authenticated[\s\S]*if \(stateHydrated\) render\(\)/);
 });

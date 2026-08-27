@@ -265,7 +265,7 @@ test("sessions stay out of localStorage and are verified by a server-side token 
 });
 
 test("GitHub Pages loads the real account client and exposes verification recovery", () => {
-  assert.ok(page.indexOf("account-client.js?v=1.3.37") < page.indexOf("app.js?v=1.3.37"));
+  assert.ok(page.indexOf("account-client.js?v=1.3.39") < page.indexOf("app.js?v=1.3.39"));
   assert.match(serviceWorker, /new URL\("account-client\.js", ROOT\)\.href/);
   assert.match(accountClient, /data-auth-mode="resend"/);
   assert.match(accountClient, /await resendVerification\(values\.email, securityToken\)/);
@@ -390,11 +390,11 @@ test("restore atomically drops only the restored user's queued mutations before 
 });
 
 test("signed-in persistence bypasses anonymous CRM caches", () => {
-  const queueSave = appSource.slice(appSource.indexOf("function queueSave("), appSource.indexOf("async function requestPersistentStorage"));
+  const queueSave = appSource.slice(appSource.indexOf("function queueStateSnapshot("), appSource.indexOf("async function requestPersistentStorage"));
   const silentSave = appSource.slice(appSource.indexOf("async function persistStateSilently("), appSource.indexOf("async function sendBridgeNotification"));
 
   assert.match(queueSave, /accountClient\.queueState\(accountSnapshot\)/);
-  assert.match(queueSave, /return;\s*\}\s*localCache\.set\(snapshot\)/);
+  assert.match(queueSave, /return true;\s*\}\s*localCache\.set\(snapshot\)/);
   assert.match(silentSave, /if \(accountModeActive\(\)\) \{[\s\S]*accountClient\.queueState/);
   assert.match(silentSave, /return;\s*\}\s*localCache\.set\(snapshot\)/);
   assert.match(appSource, /Your original browser-only data is not deleted either way\./);
