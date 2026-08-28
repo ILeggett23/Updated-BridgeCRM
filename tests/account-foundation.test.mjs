@@ -265,7 +265,7 @@ test("sessions stay out of localStorage and are verified by a server-side token 
 });
 
 test("GitHub Pages loads the real account client and exposes verification recovery", () => {
-  assert.ok(page.indexOf("account-client.js?v=1.3.40") < page.indexOf("app.js?v=1.3.40"));
+  assert.ok(page.indexOf("account-client.js?v=1.3.41") < page.indexOf("app.js?v=1.3.41"));
   assert.match(serviceWorker, /new URL\("account-client\.js", ROOT\)\.href/);
   assert.match(accountClient, /data-auth-mode="resend"/);
   assert.match(accountClient, /await resendVerification\(values\.email, securityToken\)/);

@@ -32,6 +32,8 @@ test("the shared analytics chart scrolls dense months and bounds every bar",()=>
   assert.match(styles,/\.analytics-detail-chart \{[^}]*min-width: max\(100%,var\(--analytics-chart-min\)\)/);
   assert.match(styles,/grid-template-columns: repeat\(var\(--insights-points\), minmax\(22px, 1fr\)\)/);
   assert.match(styles,/\.analytics-detail-chart i\.has-value \{ width: min\(100%,32px\)/);
+  assert.match(activity,/analytics-detail-chart__column/);
+  assert.match(styles,/\.analytics-detail-chart__column \{[^}]*flex-direction: column;[^}]*justify-content: flex-end/);
 });
 
 test("day chart remains bounded for zero, one, repeated, and large activity values",()=>{
@@ -52,6 +54,15 @@ test("day chart remains bounded for zero, one, repeated, and large activity valu
   assert.match(activity,/Math\.max\(6,Math\.round\(point\.value\/max\*70\)\)/);
   assert.match(activity,/model\.conversations\.length\?/);
   assert.match(styles,/\.analytics-detail-chart i\.has-value \{ width: min\(100%,32px\)/);
+});
+
+test("conversation values stay attached directly above their bars",()=>{
+  const chart=app.slice(app.indexOf("function insightsConversationChart"),app.indexOf("function insightsPipelineIntelligence"));
+  assert.match(chart,/insights-chart__column/);
+  assert.ok(chart.indexOf("insights-chart__value") < chart.indexOf("insights-chart__bar"));
+  assert.match(styles,/\.insights-chart__column \{[^}]*flex-direction: column;[^}]*justify-content: flex-end/);
+  assert.match(styles,/\.insights-chart__value \{[^}]*margin-bottom: 4px/);
+  assert.doesNotMatch(styles,/\.insights-chart__point \{[^}]*grid-template-rows: 17px minmax/);
 });
 
 test("summary and pipeline activity consume the same selected-range model",()=>{

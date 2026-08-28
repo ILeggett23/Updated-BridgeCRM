@@ -1,9 +1,9 @@
-const CACHE = "bridge-app-v1.3.40";
+const CACHE = "bridge-app-v1.3.41";
 const ROOT = new URL("./", self.location.href).href;
 const APP_ROOT = new URL(ROOT);
 const FOLLOW_UP_FALLBACK = new URL("?page=followups&notification=1", APP_ROOT).href;
 try {
-  importScripts(new URL("config.js?v=1.3.40", ROOT).href);
+  importScripts(new URL("config.js?v=1.3.41", ROOT).href);
 } catch {
   // A restarted worker must still install and serve the offline shell when
   // the versioned config script is not in the browser HTTP cache yet.
@@ -246,8 +246,8 @@ self.addEventListener("push", event => {
   const title = payload.title || "Bridge follow-up";
   const options = {
     body: payload.body || "A scheduled follow-up is ready.",
-    icon: new URL("bridge-icon-192.png?v=1.3.40", ROOT).href,
-    badge: new URL("bridge-icon-192.png?v=1.3.40", ROOT).href,
+    icon: new URL("bridge-icon-192.png?v=1.3.41", ROOT).href,
+    badge: new URL("bridge-icon-192.png?v=1.3.41", ROOT).href,
     tag: payload.tag || "bridge-followup",
     renotify: false,
     data: { url: notificationTarget(payload.url) }

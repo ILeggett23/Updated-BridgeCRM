@@ -3433,8 +3433,9 @@ body .bridge-pattern-nav .quick-create-button > span { position: absolute; width
 .insights-chart-scroll { overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .insights-chart-scroll::-webkit-scrollbar { display: none; }
 .insights-chart { min-width: calc(var(--insights-points) * 38px); height: 151px; padding: 8px 0 0; display: grid; grid-template-columns: repeat(var(--insights-points), minmax(30px,1fr)); align-items: end; gap: 7px; }
-.insights-chart__point { height: 100%; display: grid; grid-template-rows: 22px minmax(2px,1fr) 25px; justify-items: center; align-items: end; }
-.insights-chart__value { align-self: center; color: var(--color-text-tertiary); font-size: 12px; }
+.insights-chart__point { height: 100%; display: grid; grid-template-rows: minmax(2px,1fr) 25px; justify-items: center; align-items: end; }
+.insights-chart__column { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.insights-chart__value { flex: 0 0 auto; margin-bottom: 4px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1; }
 .insights-chart__bar { width: 100%; max-width: 51px; min-height: 4px; border-radius: 3px 3px 1px 1px; background: var(--color-border); }
 .insights-chart__bar.has-value { background: var(--color-text-primary); }
 .insights-chart__label { padding-top: 7px; color: var(--color-text-tertiary); font-size: 12px; }
@@ -4260,7 +4261,7 @@ body .bridge-pattern-shell > .main {
 .insights-section { padding: 28px 0 0; border-top: 0; }
 .insights-section__description { margin: 0 0 12px; font-size: 12px; }
 .insights-chart { height: 96px; min-width: calc(var(--insights-points) * 38px); gap: 8px; padding-top: 0; }
-.insights-chart__point { grid-template-rows: 17px minmax(2px, 1fr) 18px; }
+.insights-chart__point { grid-template-rows: minmax(2px, 1fr) 18px; }
 .insights-chart__value,
 .insights-chart__label { font-size: 11px; }
 .insights-chart__label { padding-top: 6px; }
@@ -4357,10 +4358,12 @@ body .bridge-pattern-shell > .main {
 .analytics-detail-chart > div {
   height: 96px;
   display: grid;
-  grid-template-rows: 17px minmax(3px, 1fr) 18px;
+  grid-template-rows: minmax(3px, 1fr) 18px;
   align-items: end;
   justify-items: center;
 }
+.analytics-detail-chart__column { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.analytics-detail-chart__column > span { flex: 0 0 auto; margin-bottom: 4px; line-height: 1; }
 .analytics-detail-chart span,
 .analytics-detail-chart small { color: var(--color-text-tertiary); font-size: 11px; font-weight: var(--font-weight-regular); }
 .analytics-detail-chart i { width: 8px; min-height: 3px; border-radius: var(--radius-pill); background: var(--color-border); }

@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.40",
-    assetVersion: "v1.3.40",
+    version: "1.3.41",
+    assetVersion: "v1.3.41",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "circleCheck",
-        title: "Safer Capture and navigation",
-        description: "Unsaved relationship and Capture drafts now survive Back confirmations, repeated navigation, and stale async completions until you choose to discard them."
+        icon: "chart",
+        title: "Clearer conversation charts",
+        description: "Conversation counts now stay attached directly above their activity bars, so each value follows the height it describes."
       }),
       Object.freeze({
         icon: "bridge",
