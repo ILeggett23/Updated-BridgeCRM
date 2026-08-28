@@ -57,7 +57,7 @@ test("tutorial sandbox owns production-write guards and complete cleanup", () =>
 });
 
 test("tutorial fixture is available in preview, production build, and offline shell", () => {
-  assert.match(app, /tutorial-fixture\.js\?v=1\.3\.41/);
+  assert.match(app, /tutorial-fixture\.js\?v=1\.3\.42/);
   assert.match(dev, /\["\/tutorial-fixture\.js", \["\.\/src\/tutorial-fixture\.js"/);
   assert.match(build, /const tutorialFixture = await readFile/);
   assert.match(build, /url\.pathname === "\/tutorial-fixture\.js"/);

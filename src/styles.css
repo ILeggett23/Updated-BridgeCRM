@@ -4152,7 +4152,16 @@ body .bridge-pattern-shell > .main {
 
 /* People */
 .people-home__header { margin-bottom: 12px; }
-.primary-page-title, .page-head h1.primary-page-title { font-size: 26px !important; letter-spacing: -.025em !important; line-height: 1.15 !important; }
+.primary-page-title,
+.page-head h1.primary-page-title,
+.today-home__header h1.primary-page-title {
+  font-family: var(--font-editorial) !important;
+  font-optical-sizing: auto;
+  font-size: 26px !important;
+  font-weight: var(--font-weight-medium) !important;
+  letter-spacing: -.025em !important;
+  line-height: 1.15 !important;
+}
 .people-home__places { width: 36px; height: 36px; flex-basis: 36px; }
 .people-home__places .app-icon { width: 19px; height: 19px; stroke-width: 1.8; }
 .people-home__search {

@@ -77,7 +77,7 @@ test("service-worker cache writes reject API or redirected private responses", (
 });
 
 test("a cold offline worker can start without the versioned config HTTP cache", () => {
-  assert.match(serviceWorker, /try \{\s*importScripts\(new URL\("config\.js\?v=1\.3\.41", ROOT\)\.href\);\s*\} catch/);
+  assert.match(serviceWorker, /try \{\s*importScripts\(new URL\("config\.js\?v=1\.3\.42", ROOT\)\.href\);\s*\} catch/);
   assert.match(serviceWorker, /const productionAPI = "https:\/\/bridge-crm-api\.bridgecrm-zayway\.workers\.dev"/);
   assert.match(serviceWorker, /localHost = hostname === "localhost"/);
   assert.match(serviceWorker, /self\.BridgeConfig\?\.apiBase \|\| injectedAPI/);

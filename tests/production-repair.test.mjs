@@ -44,8 +44,9 @@ test("People, Pipeline, and Insights share the primary title typography class", 
   assert.match(app, /<h1 class="primary-page-title">People<\/h1>/);
   assert.match(app, /<h1 class="primary-page-title">Pipeline<\/h1>/);
   assert.match(app, /pageHead\("Insights",[\s\S]*"primary-page-title"\)/);
+  assert.match(app, /<h1 class="primary-page-title">\$\{greeting\}<\/h1>/);
   assert.match(styles, /\.primary-page-title \{[^}]*font-family: var\(--font-editorial\);[^}]*font-size: clamp\(40px, 10\.7vw, 50px\);[^}]*font-weight: var\(--font-weight-medium\);/);
-  assert.match(styles, /\.primary-page-title, \.page-head h1\.primary-page-title \{ font-size: 26px !important; letter-spacing: -\.025em !important; line-height: 1\.15 !important; \}/);
+  assert.match(styles, /\.primary-page-title,[\s\S]*?\.today-home__header h1\.primary-page-title \{[\s\S]*?font-family: var\(--font-editorial\) !important;[\s\S]*?font-size: 26px !important;[\s\S]*?font-weight: var\(--font-weight-medium\) !important;[\s\S]*?letter-spacing: -\.025em !important;[\s\S]*?line-height: 1\.15 !important;/);
   assert.doesNotMatch(styles, /\.pipeline-home__header h1/);
 });
 

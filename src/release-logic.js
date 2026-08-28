@@ -1,14 +1,14 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.41",
-    assetVersion: "v1.3.41",
+    version: "1.3.42",
+    assetVersion: "v1.3.42",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "chart",
-        title: "Clearer conversation charts",
-        description: "Conversation counts now stay attached directly above their activity bars, so each value follows the height it describes."
+        icon: "sparkles",
+        title: "Consistent page typography",
+        description: "Today, People, Pipeline, and Insights now share the same Newsreader title family, size, weight, spacing, and line height."
       }),
       Object.freeze({
         icon: "bridge",
