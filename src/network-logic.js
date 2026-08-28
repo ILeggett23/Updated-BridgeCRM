@@ -1,11 +1,49 @@
 (function installBridgeNetwork(global) {
-  const timestamp = value => {
-    const result = new Date(value || "").getTime();
-    return Number.isFinite(result) ? result : null;
+  const asArray = value => Array.isArray(value) ? value : [];
+  const hasValue = value => {
+    if (value === null || value === undefined) return false;
+    try { return String(value).trim() !== ""; } catch { return false; }
   };
-  const clean = value => String(value || "").trim();
-  const scheduledFollowUps = contact => (contact?.followUps || []).filter(item => !item.completedAt && !item.canceledAt && !item.deletedAt && timestamp(item.dueDate) !== null);
-  const latestConversation = contact => (contact?.conversations || []).reduce((latest, item) => Math.max(latest, timestamp(item.conversationDate || item.createdAt) || 0), 0) || null;
+  const finiteNumber = value => {
+    if (value === null || value === undefined || value === "") return null;
+    try {
+      const result = Number(value);
+      return Number.isFinite(result) ? result : null;
+    } catch {
+      return null;
+    }
+  };
+  const validDateOnly = text => {
+    const [year, month, day] = text.split("-").map(Number);
+    const date = new Date(`${text}T12:00:00`);
+    return Number.isFinite(date.getTime()) && date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day;
+  };
+  const timestamp = value => {
+    if (!hasValue(value)) return null;
+    try {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) && !validDateOnly(value.trim())) return null;
+      const result = value instanceof Date ? value.getTime() : new Date(value).getTime();
+      return Number.isFinite(result) ? result : null;
+    } catch {
+      return null;
+    }
+  };
+  const clean = value => {
+    try { return String(value ?? "").trim(); } catch { return ""; }
+  };
+  const activityTimestamp = item => timestamp(item?.conversationDate) ?? timestamp(item?.createdAt);
+  const scheduledFollowUps = contact => asArray(contact?.followUps).filter(item => {
+    if (!item || typeof item !== "object") return false;
+    const status = item.status || (item.completedAt ? "completed" : item.deletedAt ? "deleted" : item.canceledAt ? "canceled" : "scheduled");
+    return ["scheduled", "open"].includes(status) && timestamp(item.dueDate) !== null;
+  });
+  const latestConversation = contact => {
+    const values = asArray(contact?.conversations)
+      .filter(item => item && typeof item === "object")
+      .map(activityTimestamp)
+      .filter(value => value !== null);
+    return values.length ? Math.max(...values) : null;
+  };
   const stableId = (type, value) => `${type}:${clean(value)}`;
   const pointOnRing = (index, total, radius, centerX, centerY, offset = -Math.PI / 2) => {
     const angle = offset + (Math.PI * 2 * index / Math.max(1, total));
@@ -16,27 +54,34 @@
     if (normalizedBand === "Strong") return "strong";
     if (normalizedBand === "Steady") return "steady";
     if (["Needs Attention", "At Risk"].includes(normalizedBand)) return "attention";
-    if (score === null || score === undefined || score === "" || !Number.isFinite(Number(score))) return "baseline";
-    if (Number(score) >= 80) return "strong";
-    if (Number(score) >= 60) return "steady";
+    const numericScore = finiteNumber(score);
+    if (numericScore === null) return "baseline";
+    if (numericScore >= 80) return "strong";
+    if (numericScore >= 60) return "steady";
     return "attention";
   };
 
-  function buildNetworkModel({ contacts = [], places = [], companies = [], scores = [], now = new Date(), entityFilter = "all", maxPeople = 40 } = {}) {
-    const nowTime = timestamp(now) || Date.now();
-    const scoreMap = new Map((scores || []).map(score => [String(score.contactId), score]));
-    const allowedContacts = [...contacts]
-      .filter(contact => contact && contact.id)
+  function buildNetworkModel(input = {}) {
+    const options = input && typeof input === "object" ? input : {};
+    const { contacts = [], places = [], companies = [], scores = [], now = new Date(), entityFilter = "all", maxPeople: requestedMaxPeople = 40 } = options;
+    const nowTime = timestamp(now) ?? Date.now();
+    const scoreMap = new Map(asArray(scores).filter(score => score && typeof score === "object" && hasValue(score.contactId)).map(score => [String(score.contactId), score]));
+    const allowedContacts = asArray(contacts)
+      .filter(contact => contact && typeof contact === "object" && hasValue(contact.id))
       .sort((left, right) => {
-        const leftScore = Number(scoreMap.get(String(left.id))?.score);
-        const rightScore = Number(scoreMap.get(String(right.id))?.score);
-        const scoreDifference = (Number.isFinite(rightScore) ? rightScore : -1) - (Number.isFinite(leftScore) ? leftScore : -1);
+        const leftScore = finiteNumber(scoreMap.get(String(left.id))?.score);
+        const rightScore = finiteNumber(scoreMap.get(String(right.id))?.score);
+        const scoreDifference = (rightScore ?? -1) - (leftScore ?? -1);
         return scoreDifference || (latestConversation(right) || 0) - (latestConversation(left) || 0) || String(left.id).localeCompare(String(right.id));
       });
+    const normalizedMaxPeople = finiteNumber(requestedMaxPeople);
+    const maxPeople = normalizedMaxPeople === null ? 40 : Math.max(1, Math.floor(normalizedMaxPeople));
     const visibleContacts = allowedContacts.slice(0, Math.max(1, maxPeople));
-    const savedPlaceMap = new Map((places || []).filter(place => place?.id).map(place => [String(place.id), place]));
-    const savedPlaceNameMap = new Map((places || []).filter(place => clean(place?.name)).map(place => [clean(place.name).toLowerCase(), place]));
-    const companyMap = new Map((companies || []).filter(company => company?.id).map(company => [String(company.id), company]));
+    const savedPlaces = asArray(places).filter(place => place && typeof place === "object" && hasValue(place.id));
+    const savedPlaceMap = new Map(savedPlaces.map(place => [String(place.id), place]));
+    const savedPlaceNameMap = new Map(savedPlaces.filter(place => clean(place.name)).map(place => [clean(place.name).toLowerCase(), place]));
+    const savedCompanies = asArray(companies).filter(company => company && typeof company === "object" && hasValue(company.id));
+    const companyMap = new Map(savedCompanies.map(company => [String(company.id), company]));
     const scoreFor = contact => scoreMap.get(String(contact.id)) || null;
     const personNodes = visibleContacts.map((contact, index) => {
       const score = scoreFor(contact);
@@ -46,10 +91,10 @@
       const point = pointOnRing(index, visibleContacts.length, visibleContacts.length > 16 ? 170 : 145, 360, 240);
       return {
         id: stableId("person", contact.id), type: "person", recordId: String(contact.id), label: clean(contact.fullName) || "Unnamed contact",
-        x: point.x, y: point.y, score: Number.isFinite(Number(score?.score)) ? Number(score.score) : null,
+        x: point.x, y: point.y, score: finiteNumber(score?.score),
         band: clean(score?.band) || "Building Baseline", strength: strengthClass(score?.band, score?.score), trend: clean(score?.trend?.direction || score?.trend) || "steady",
         role: clean(contact.role), interest: clean(contact.interestLevel), judgment: clean(contact.judgement), stage: clean(contact.currentStage),
-        placeName: clean(contact.placeName), lastConversationAt: latestConversation(contact), conversationCount: (contact.conversations || []).length,
+        placeName: clean(contact.placeName), lastConversationAt: latestConversation(contact), conversationCount: asArray(contact.conversations).filter(item => item && typeof item === "object" && activityTimestamp(item) !== null).length,
         nextAction: nextAction ? { id: String(nextAction.id), dueDate: nextAction.dueDate, note: clean(nextAction.note) || "Follow up", overdue } : null,
         phoneNumber: clean(contact.phoneNumber), archived: Boolean(contact.archivedAt), filteredOut: Boolean(contact.isFilteredOut)
       };
@@ -59,13 +104,13 @@
     const companyRelations = new Map();
     for (const contact of visibleContacts) {
       const person = personByRecordId.get(String(contact.id));
-      const place = contact.placeId ? savedPlaceMap.get(String(contact.placeId)) : savedPlaceNameMap.get(clean(contact.placeName).toLowerCase());
+      const place = hasValue(contact.placeId) ? savedPlaceMap.get(String(contact.placeId)) : savedPlaceNameMap.get(clean(contact.placeName).toLowerCase());
       if (person && place) {
         const key = String(place.id);
         if (!placeRelations.has(key)) placeRelations.set(key, { place, people: [] });
         placeRelations.get(key).people.push(person.recordId);
       }
-      const company = contact.companyId ? companyMap.get(String(contact.companyId)) : null;
+      const company = contact.companyId ? companyMap.get(String(contact.companyId)) : (hasValue(contact.companyId) ? companyMap.get(String(contact.companyId)) : null);
       if (person && company) {
         const key = String(company.id);
         if (!companyRelations.has(key)) companyRelations.set(key, { company, people: [] });

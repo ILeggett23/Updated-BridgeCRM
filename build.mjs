@@ -25,7 +25,13 @@ const config = configuredAPIBase
   : configSource;
 const js = await readFile(new URL("./src/app.js", import.meta.url), "utf8");
 const manifest = await readFile(new URL("./src/manifest.webmanifest", import.meta.url), "utf8");
-const serviceWorker = await readFile(new URL("./src/sw.js", import.meta.url), "utf8");
+const serviceWorkerSource = await readFile(new URL("./src/sw.js", import.meta.url), "utf8");
+const serviceWorker = configuredAPIBase
+  ? serviceWorkerSource.replace(
+      'const injectedAPI = String(self.BRIDGE_API_BASE || "").trim();',
+      `const injectedAPI = String(self.BRIDGE_API_BASE || ${JSON.stringify(configuredAPIBase)}).trim();`
+    )
+  : serviceWorkerSource;
 const appleTouchIcon = await readFile(new URL("./src/apple-touch-icon.png", import.meta.url));
 const bridgeMarkTransparent = await readFile(new URL("./src/bridge-mark-transparent.png", import.meta.url));
 const icon192 = await readFile(new URL("./src/bridge-icon-192.png", import.meta.url));
@@ -99,7 +105,7 @@ const withCORS = (response, request, env) => {
   const headers = new Headers(secured.headers);
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", "Authorization, Content-Type");
+  headers.set("access-control-allow-headers", "Authorization, Content-Type, X-Bridge-Management-Token");
   headers.set("access-control-max-age", "86400");
   headers.append("vary", "Origin");
   return new Response(secured.body, { status: secured.status, statusText: secured.statusText, headers });
@@ -279,8 +285,9 @@ function randomToken() {
 }
 
 function timeZoneParts(value, timeZone) {
+  const normalizedTimeZone = normalizeTimeZone(timeZone) || "UTC";
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timeZone || "UTC",
+    timeZone: normalizedTimeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -289,6 +296,18 @@ function timeZoneParts(value, timeZone) {
     hourCycle: "h23"
   }).formatToParts(value);
   return Object.fromEntries(parts.map(part => [part.type, part.value]));
+}
+
+function normalizeTimeZone(value) {
+  if (typeof value !== "string") return null;
+  const candidate = value.trim();
+  if (!candidate || candidate.length > 128) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format();
+    return candidate;
+  } catch {
+    return null;
+  }
 }
 
 function localDayKey(value, timeZone) {
@@ -334,14 +353,15 @@ function remindersForSubscription(row, env, now = new Date()) {
     }
   }
   if (schedule.dailyReminderEnabled) {
-    const local = timeZoneParts(now, row.time_zone || schedule.timeZone || "UTC");
+    const timeZone = normalizeTimeZone(row.time_zone) || normalizeTimeZone(schedule.timeZone) || "UTC";
+    const local = timeZoneParts(now, timeZone);
     const currentMinutes = Number(local.hour) * 60 + Number(local.minute);
     const [hour, minute] = String(schedule.dailyReminderTime || "09:00").split(":").map(Number);
     const reminderMinutes = (Number.isFinite(hour) ? hour : 9) * 60 + (Number.isFinite(minute) ? minute : 0);
     const today = local.year + "-" + local.month + "-" + local.day;
     const todayCount = (Array.isArray(schedule.conversationDates) ? schedule.conversationDates : []).filter(value => {
       const date = new Date(value);
-      return Number.isFinite(date.getTime()) && localDayKey(date, row.time_zone || schedule.timeZone || "UTC") === today;
+      return Number.isFinite(date.getTime()) && localDayKey(date, timeZone) === today;
     }).length;
     const goal = Math.max(1, Number(schedule.dailyGoal) || 5);
     if (currentMinutes >= reminderMinutes && todayCount < goal) {
@@ -486,16 +506,16 @@ async function handleRequest(request, env) {
       }
       if (request.method === "DELETE" && token) {
         const managementToken = bearerToken(request);
-        if (!managementToken) return json({ error: "Unauthorized" }, 401);
+        const alternateManagementToken = request.headers.get("x-bridge-management-token") || "";
+        if (!managementToken && !alternateManagementToken) return json({ error: "Unauthorized" }, 401);
         if (accountEnabled(env)) {
           const session = await accountSession(request, env, { required: false });
           if (!session.error && session.user) {
             const result = await env.DB.prepare("UPDATE bridge_shared_scorecards SET revoked_at = ?1 WHERE token = ?2 AND user_id = ?3 AND revoked_at IS NULL").bind(new Date().toISOString(), token, session.user.id).run();
-            if (!result.meta?.changes) return json({ error: "Scorecard link was not found" }, 404);
-            return json({ ok: true });
+            if (result.meta?.changes) return json({ ok: true });
           }
         }
-        const managementHash = await sha256(managementToken);
+        const managementHash = await sha256(alternateManagementToken || managementToken);
         const result = await env.DB.prepare("UPDATE bridge_shared_scorecards SET revoked_at = ?1 WHERE token = ?2 AND management_hash = ?3 AND revoked_at IS NULL").bind(new Date().toISOString(), token, managementHash).run();
         if (!result.meta?.changes) return json({ error: "Scorecard link was not found" }, 404);
         return json({ ok: true });
@@ -512,6 +532,9 @@ async function handleRequest(request, env) {
       if (request.method === "POST") {
         const subscription = body.subscription;
         if (!subscription?.endpoint?.startsWith("https://") || !subscription.keys?.p256dh || !subscription.keys?.auth) return json({ error: "Invalid push subscription" }, 400);
+        const requestedTimeZone = body.timeZone == null || body.timeZone === "" ? "UTC" : body.timeZone;
+        const timeZone = normalizeTimeZone(requestedTimeZone);
+        if (!timeZone) return json({ error: "Invalid time zone" }, 400);
         let subscriptionUserId = null;
         if (accountEnabled(env)) {
           const session = await accountSession(request, env);
@@ -522,9 +545,9 @@ async function handleRequest(request, env) {
         const deviceToken = crypto.randomUUID() + crypto.randomUUID();
         const tokenHash = await sha256(deviceToken);
         if (subscriptionUserId) {
-          await env.DB.prepare("INSERT INTO bridge_push_subscriptions (endpoint, subscription_json, token_hash, time_zone, schedule_json, created_at, updated_at, disabled_at, user_id) VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?5, NULL, ?6) ON CONFLICT(endpoint) DO UPDATE SET subscription_json = excluded.subscription_json, token_hash = excluded.token_hash, time_zone = excluded.time_zone, updated_at = excluded.updated_at, disabled_at = NULL, user_id = excluded.user_id").bind(subscription.endpoint, JSON.stringify(subscription), tokenHash, String(body.timeZone || "UTC"), now, subscriptionUserId).run();
+          await env.DB.prepare("INSERT INTO bridge_push_subscriptions (endpoint, subscription_json, token_hash, time_zone, schedule_json, created_at, updated_at, disabled_at, user_id) VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?5, NULL, ?6) ON CONFLICT(endpoint) DO UPDATE SET subscription_json = excluded.subscription_json, token_hash = excluded.token_hash, time_zone = excluded.time_zone, updated_at = excluded.updated_at, disabled_at = NULL, user_id = excluded.user_id").bind(subscription.endpoint, JSON.stringify(subscription), tokenHash, timeZone, now, subscriptionUserId).run();
         } else {
-          await env.DB.prepare("INSERT INTO bridge_push_subscriptions (endpoint, subscription_json, token_hash, time_zone, schedule_json, created_at, updated_at, disabled_at) VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?5, NULL) ON CONFLICT(endpoint) DO UPDATE SET subscription_json = excluded.subscription_json, token_hash = excluded.token_hash, time_zone = excluded.time_zone, updated_at = excluded.updated_at, disabled_at = NULL").bind(subscription.endpoint, JSON.stringify(subscription), tokenHash, String(body.timeZone || "UTC"), now).run();
+          await env.DB.prepare("INSERT INTO bridge_push_subscriptions (endpoint, subscription_json, token_hash, time_zone, schedule_json, created_at, updated_at, disabled_at) VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?5, NULL) ON CONFLICT(endpoint) DO UPDATE SET subscription_json = excluded.subscription_json, token_hash = excluded.token_hash, time_zone = excluded.time_zone, updated_at = excluded.updated_at, disabled_at = NULL").bind(subscription.endpoint, JSON.stringify(subscription), tokenHash, timeZone, now).run();
         }
         return json({ ok: true, deviceToken });
       }
@@ -548,12 +571,17 @@ async function handleRequest(request, env) {
       await ensureDatabase(env.DB);
       const body = await request.json().catch(() => ({}));
       const endpoint = String(body.endpoint || "");
-      if (!await authorizedSubscription(request, env, endpoint)) return json({ error: "Unauthorized" }, 401);
+      const authorized = await authorizedSubscription(request, env, endpoint);
+      if (!authorized) return json({ error: "Unauthorized" }, 401);
       const schedule = body.schedule && typeof body.schedule === "object" ? body.schedule : null;
       if (!schedule) return json({ error: "Invalid reminder schedule" }, 400);
-      const scheduleJSON = JSON.stringify(schedule);
+      const requestedTimeZone = schedule.timeZone == null || schedule.timeZone === "" ? authorized.time_zone || "UTC" : schedule.timeZone;
+      const timeZone = normalizeTimeZone(requestedTimeZone);
+      if (!timeZone) return json({ error: "Invalid time zone" }, 400);
+      const normalizedSchedule = { ...schedule, timeZone };
+      const scheduleJSON = JSON.stringify(normalizedSchedule);
       if (scheduleJSON.length > 250_000) return json({ error: "Reminder schedule is too large" }, 413);
-      await env.DB.prepare("UPDATE bridge_push_subscriptions SET schedule_json = ?1, time_zone = ?2, updated_at = ?3 WHERE endpoint = ?4").bind(scheduleJSON, String(schedule.timeZone || "UTC"), new Date().toISOString(), endpoint).run();
+      await env.DB.prepare("UPDATE bridge_push_subscriptions SET schedule_json = ?1, time_zone = ?2, updated_at = ?3 WHERE endpoint = ?4").bind(scheduleJSON, timeZone, new Date().toISOString(), endpoint).run();
       return json({ ok: true });
     }
     if (url.pathname === "/api/push/test-device" && request.method === "POST") {
@@ -629,6 +657,20 @@ await writeFile(new URL("./dist/walkthrough.js", import.meta.url), walkthrough);
 await writeFile(new URL("./dist/tutorial-fixture.js", import.meta.url), tutorialFixture);
 await writeFile(new URL("./dist/config.js", import.meta.url), config);
 await writeFile(new URL("./dist/account-client.js", import.meta.url), accountClient);
+await Promise.all([
+  ["app.js", js],
+  ["styles.css", css],
+  ["contact-logic.js", contactLogic],
+  ["engagement-logic.js", engagementLogic],
+  ["communication-logic.js", communicationLogic],
+  ["analytics-logic.js", analyticsLogic],
+  ["relationship-health-logic.js", relationshipHealthLogic],
+  ["network-logic.js", networkLogic],
+  ["scorecard-logic.js", scorecardLogic],
+  ["release-logic.js", releaseLogic],
+  ["sw.js", serviceWorker],
+  ["manifest.webmanifest", manifest]
+].map(([fileName, contents]) => writeFile(new URL(`./dist/${fileName}`, import.meta.url), contents)));
 await Promise.all([
   copyFile(new URL("./src/apple-touch-icon.png", import.meta.url), new URL("./dist/apple-touch-icon.png", import.meta.url)),
   copyFile(new URL("./src/bridge-mark-transparent.png", import.meta.url), new URL("./dist/bridge-mark-transparent.png", import.meta.url)),

@@ -14,12 +14,23 @@
   let syncing = false;
   let restoreInProgress = false;
   let stateQueue = Promise.resolve();
+  let sessionGeneration = 0;
+  let sessionWriteQueue = Promise.resolve();
+  let fallbackIdCounter = 0;
   let lastStatus = { state: "local", message: "Saved on this device", pending: 0, conflicts: 0 };
 
   const accountURL = path => apiBase ? `${apiBase}${path.startsWith("/") ? path : `/${path}`}` : path;
   const recordKey = (type, id) => `${type}:${id}`;
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-  const uid = () => globalThis.crypto?.randomUUID?.() || `bridge-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const uid = () => {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    if (globalThis.crypto?.getRandomValues) {
+      const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+      return `bridge-${[...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+    }
+    fallbackIdCounter += 1;
+    return `bridge-${Date.now()}-${fallbackIdCounter.toString(36)}`;
+  };
 
   function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -128,7 +139,8 @@
   async function request(path, options = {}, { allowAnonymous = false } = {}) {
     const headers = new Headers(options.headers || {});
     if (!headers.has("content-type") && options.body) headers.set("content-type", "application/json");
-    if (!allowAnonymous && session?.token) headers.set("authorization", `Bearer ${session.token}`);
+    const requestToken = !allowAnonymous ? session?.token || "" : "";
+    if (!allowAnonymous && requestToken) headers.set("authorization", `Bearer ${session.token}`);
     const response = await fetch(accountURL(path), { ...options, headers, cache: "no-store" });
     let body = null;
     const contentType = response.headers.get("content-type") || "";
@@ -138,7 +150,7 @@
       error.code = body?.error?.code || "request_failed";
       error.status = response.status;
       error.details = body?.error?.details;
-      if (!allowAnonymous && response.status === 401 && session) {
+      if (!allowAnonymous && response.status === 401 && requestToken && session?.token === requestToken) {
         const previousUser = session.user;
         await saveSession(null);
         setStatus({
@@ -156,8 +168,9 @@
 
   async function readStoredSession() {
     const stored = await getStoreValue("secure", "session");
-    if (!stored?.token || !stored?.user?.id) return null;
-    if (stored.expiresAt && new Date(stored.expiresAt).getTime() <= Date.now()) {
+    if (typeof stored?.token !== "string" || !stored.token || stored.token.length > 256 || typeof stored?.user?.id !== "string" || !stored.user.id) return null;
+    const expiresAt = typeof stored.expiresAt === "string" ? new Date(stored.expiresAt).getTime() : NaN;
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       await deleteStoreValue("secure", "session");
       return null;
     }
@@ -166,8 +179,13 @@
 
   async function saveSession(next) {
     session = next;
-    if (next) await setStoreValue("secure", "session", next);
-    else await deleteStoreValue("secure", "session");
+    const generation = ++sessionGeneration;
+    sessionWriteQueue = sessionWriteQueue.catch(() => {}).then(async () => {
+      if (generation !== sessionGeneration) return;
+      if (next) await setStoreValue("secure", "session", next);
+      else await deleteStoreValue("secure", "session");
+    });
+    await sessionWriteQueue;
   }
 
   async function fetchConfig() {
@@ -185,8 +203,10 @@
   async function bootstrap(baseURL) {
     apiBase = String(baseURL || "").replace(/\/+$/, "");
     session = await readStoredSession();
+    sessionGeneration += 1;
     await fetchConfig();
     if (!config.authEnabled) {
+      if (!config.unavailable && session) await saveSession(null);
       setStatus({ state: "local", message: "Saved on this device", pending: 0, conflicts: 0 });
       return { mode: "local", config };
     }
@@ -216,6 +236,7 @@
       method: "POST",
       body: JSON.stringify(values)
     }, { allowAnonymous: true });
+    if (!result?.sessionToken || !result?.user?.id || !result?.expiresAt) throw new Error("Bridge returned an invalid sign-in session.");
     await saveSession({ token: result.sessionToken, expiresAt: result.expiresAt, user: result.user });
     return result.user;
   }
@@ -305,22 +326,31 @@
     return next;
   }
 
-  async function syncMetadata() {
-    if (!session?.user?.id) return { cursor: 0, records: {}, conflicts: {} };
-    return (await getStoreValue("sync", userStorageId(session.user.id))) || { cursor: 0, records: {}, conflicts: {} };
+  async function syncMetadata(userId = session?.user?.id) {
+    if (!userId) return { cursor: 0, records: {}, conflicts: {} };
+    const stored = await getStoreValue("sync", userStorageId(userId));
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return { cursor: 0, records: {}, conflicts: {} };
+    const cursor = Number(stored.cursor);
+    return {
+      ...stored,
+      cursor: Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0,
+      records: stored.records && typeof stored.records === "object" && !Array.isArray(stored.records) ? stored.records : {},
+      conflicts: stored.conflicts && typeof stored.conflicts === "object" && !Array.isArray(stored.conflicts) ? stored.conflicts : {}
+    };
   }
 
-  async function saveSyncMetadata(value) {
-    if (!session?.user?.id) return;
-    await setStoreValue("sync", userStorageId(session.user.id), value);
+  async function saveSyncMetadata(value, userId = session?.user?.id) {
+    if (!userId) return;
+    await setStoreValue("sync", userStorageId(userId), value);
   }
 
-  async function pendingMutations() {
-    if (!session?.user?.id) return [];
-    const prefix = `${session.user.id}:`;
+  async function pendingMutations(userId = session?.user?.id) {
+    if (!userId) return [];
+    const prefix = `${userId}:`;
     return (await allStoreValues("mutations"))
-      .filter(entry => entry.id.startsWith(prefix))
+      .filter(entry => String(entry.id || "").startsWith(prefix))
       .map(entry => entry.value)
+      .filter(value => value && typeof value === "object")
       .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)));
   }
 
@@ -328,7 +358,7 @@
     if (!userId) return [];
     const prefix = `${userId}:`;
     return (await allStoreValues("mutations"))
-      .filter(entry => entry.id.startsWith(prefix))
+      .filter(entry => String(entry.id || "").startsWith(prefix))
       .map(entry => entry.value);
   }
 
@@ -340,12 +370,13 @@
     return (await pendingMutations()).length;
   }
 
-  async function conflictCount() {
-    const metadata = await syncMetadata();
+  async function conflictCount(userId = session?.user?.id) {
+    const metadata = await syncMetadata(userId);
     return Object.keys(metadata.conflicts || {}).length;
   }
 
-  async function queueMutation(record, expectedRevision) {
+  async function queueMutation(record, expectedRevision, userId = session?.user?.id) {
+    if (!userId) throw new Error("Sign in before saving cloud changes.");
     const mutation = {
       mutationId: uid(),
       createdAt: new Date().toISOString(),
@@ -357,7 +388,10 @@
         expectedRevision: Math.max(0, Number(expectedRevision) || 0)
       }
     };
-    await setStoreValue("mutations", `${session.user.id}:${mutation.mutationId}`, mutation);
+    const storageKey = userId === session?.user?.id
+      ? `${session.user.id}:${mutation.mutationId}`
+      : `${userId}:${mutation.mutationId}`;
+    await setStoreValue("mutations", storageKey, mutation);
     return mutation;
   }
 
@@ -374,15 +408,20 @@
   }
 
   async function queueStateInternal(nextState) {
-    if (!config?.authEnabled || !session?.user?.id) return;
-    await setStoreValue("states", userStorageId(session.user.id), clone(nextState));
+    const activeUserId = session?.user?.id || "";
+    const activeToken = session?.token || "";
+    const isActive = () => Boolean(activeUserId && activeToken && session?.user?.id === activeUserId && session?.token === activeToken);
+    if (!config?.authEnabled || !isActive()) return;
+    await setStoreValue("states", userStorageId(activeUserId), clone(nextState));
     await waitForActiveSync();
-    const metadata = await syncMetadata();
+    if (!isActive()) return;
+    const metadata = await syncMetadata(activeUserId);
     const current = flattenState(nextState);
-    const existingPending = await pendingMutations();
+    const existingPending = await pendingMutations(activeUserId);
     const pendingByKey = new Map(existingPending.map(item => [recordKey(item.record.type, item.record.id), item]));
 
     for (const [key, record] of current) {
+      if (!isActive()) return;
       const hash = await digest(JSON.stringify(record.payload));
       const known = metadata.records?.[key];
       if (known?.hash === hash) continue;
@@ -396,14 +435,15 @@
           payload: clone(record.payload),
           deleted: false
         };
-        await setStoreValue("mutations", `${session.user.id}:${pending.mutationId}`, pending);
+        await setStoreValue("mutations", `${activeUserId}:${pending.mutationId}`, pending);
       } else {
-        const mutation = await queueMutation(record, known?.revision || 0);
+        const mutation = await queueMutation(record, known?.revision || 0, activeUserId);
         pendingByKey.set(key, mutation);
       }
       metadata.records = { ...(metadata.records || {}), [key]: { ...(known || {}), hash } };
     }
     for (const [key, known] of Object.entries(metadata.records || {})) {
+      if (!isActive()) return;
       if (current.has(key) || known.deleted) continue;
       const [type, ...idParts] = key.split(":");
       const pending = pendingByKey.get(key);
@@ -416,16 +456,18 @@
           payload: null,
           deleted: true
         };
-        await setStoreValue("mutations", `${session.user.id}:${pending.mutationId}`, pending);
+        await setStoreValue("mutations", `${activeUserId}:${pending.mutationId}`, pending);
       } else {
-        const mutation = await queueMutation({ type, id: idParts.join(":"), deleted: true }, known.revision || 0);
+        const mutation = await queueMutation({ type, id: idParts.join(":"), deleted: true }, known.revision || 0, activeUserId);
         pendingByKey.set(key, mutation);
       }
       metadata.records[key] = { ...known, deleted: true, hash: "" };
     }
-    await saveSyncMetadata(metadata);
-    const pending = await pendingCount();
-    setStatus({ state: navigator.onLine ? "pending" : "offline", message: navigator.onLine ? `Saving ${pending} change${pending === 1 ? "" : "s"}…` : "Offline changes will sync later", pending, conflicts: await conflictCount() });
+    if (!isActive()) return;
+    await saveSyncMetadata(metadata, activeUserId);
+    if (!isActive()) return;
+    const pending = await pendingCountForUser(activeUserId);
+    setStatus({ state: navigator.onLine ? "pending" : "offline", message: navigator.onLine ? `Saving ${pending} change${pending === 1 ? "" : "s"}…` : "Offline changes will sync later", pending, conflicts: await conflictCount(activeUserId) });
     scheduleSync();
   }
 
@@ -442,12 +484,18 @@
   }
 
   async function syncNow({ state: suppliedState = null, pullOnly = false } = {}) {
-    if (restoreInProgress || syncing || !config?.authEnabled || !session?.user?.id || !navigator.onLine) return { state: suppliedState };
+    const activeUserId = session?.user?.id || "";
+    const activeToken = session?.token || "";
+    const isActive = () => Boolean(activeUserId && activeToken && session?.user?.id === activeUserId && session?.token === activeToken);
+    if (restoreInProgress || syncing || !config?.authEnabled || !isActive() || !navigator.onLine) return { state: suppliedState };
     syncing = true;
     try {
-      const metadata = await syncMetadata();
-      const pending = pullOnly ? [] : (await pendingMutations()).slice(0, MAX_SYNC_BATCH);
-      setStatus({ state: "syncing", message: "Syncing…", pending: await pendingCount(), conflicts: Object.keys(metadata.conflicts || {}).length });
+      const metadata = await syncMetadata(activeUserId);
+      const pending = pullOnly ? [] : (await pendingMutations(activeUserId)).slice(0, MAX_SYNC_BATCH);
+      if (!isActive()) return { state: suppliedState, cancelled: true };
+      const pendingBeforeSync = await pendingCountForUser(activeUserId);
+      if (!isActive()) return { state: suppliedState, cancelled: true };
+      setStatus({ state: "syncing", message: "Syncing…", pending: pendingBeforeSync, conflicts: Object.keys(metadata.conflicts || {}).length });
       const response = pending.length
         ? await request("/api/v1/sync/push", {
             method: "POST",
@@ -458,13 +506,16 @@
             })
           })
         : await request(`/api/v1/sync/pull?cursor=${encodeURIComponent(metadata.cursor || 0)}`);
+      if (!isActive()) return { state: suppliedState, cancelled: true };
 
-      for (const result of response.results || []) {
+      const safeResponse = response && typeof response === "object" && !Array.isArray(response) ? response : {};
+      for (const result of Array.isArray(safeResponse.results) ? safeResponse.results : []) {
+        if (!result || typeof result !== "object") continue;
         const mutation = pending.find(item => item.mutationId === result.mutationId);
         if (!mutation) continue;
         const key = recordKey(mutation.record.type, mutation.record.id);
         if (result.status === "applied" || result.idempotent) {
-          await deleteStoreValue("mutations", `${session.user.id}:${mutation.mutationId}`);
+          await deleteStoreValue("mutations", `${activeUserId}:${mutation.mutationId}`);
           metadata.records = {
             ...(metadata.records || {}),
             [key]: {
@@ -486,17 +537,20 @@
         }
       }
 
-      let nextState = suppliedState || await getStoreValue("states", userStorageId(session.user.id)) || { contacts: [], places: [], settings: {}, analytics: {}, meta: { version: 1 } };
-      const unresolved = new Set((await pendingMutations()).map(item => recordKey(item.record.type, item.record.id)));
+      if (!isActive()) return { state: suppliedState, cancelled: true };
+      let nextState = suppliedState || await getStoreValue("states", userStorageId(activeUserId)) || { contacts: [], places: [], settings: {}, analytics: {}, meta: { version: 1 } };
+      const remainingPending = await pendingMutations(activeUserId);
+      const unresolved = new Set(remainingPending.map(item => recordKey(item.record.type, item.record.id)));
       const safeRemoteRecords = [];
-      for (const record of response.records || []) {
+      for (const record of Array.isArray(safeResponse.records) ? safeResponse.records : []) {
+        if (!record || typeof record !== "object" || typeof record.type !== "string" || typeof record.id !== "string") continue;
         const key = recordKey(record.type, record.id);
         if (unresolved.has(key)) {
           metadata.conflicts = {
             ...(metadata.conflicts || {}),
             [key]: {
               detectedAt: new Date().toISOString(),
-              localMutation: (await pendingMutations()).find(item => recordKey(item.record.type, item.record.id) === key),
+              localMutation: remainingPending.find(item => recordKey(item.record.type, item.record.id) === key),
               serverRecord: record
             }
           };
@@ -513,10 +567,13 @@
         };
       }
       nextState = applyRecords(nextState, safeRemoteRecords);
-      metadata.cursor = Math.max(Number(metadata.cursor || 0), Number(response.cursor || 0));
-      await setStoreValue("states", userStorageId(session.user.id), nextState);
-      await saveSyncMetadata(metadata);
-      const remaining = await pendingCount();
+      const remoteCursor = Number(safeResponse.cursor || 0);
+      if (Number.isSafeInteger(remoteCursor) && remoteCursor >= 0) metadata.cursor = Math.max(Number(metadata.cursor || 0), remoteCursor);
+      if (!isActive()) return { state: suppliedState, cancelled: true };
+      await setStoreValue("states", userStorageId(activeUserId), nextState);
+      await saveSyncMetadata(metadata, activeUserId);
+      if (!isActive()) return { state: suppliedState, cancelled: true };
+      const remaining = await pendingCountForUser(activeUserId);
       const conflicts = Object.keys(metadata.conflicts || {}).length;
       setStatus({
         state: conflicts ? "conflict" : remaining ? "pending" : "synced",
@@ -528,10 +585,10 @@
       if (safeRemoteRecords.length) listeners.forEach(listener => {
         try { listener({ ...clone(lastStatus), stateData: clone(nextState) }); } catch {}
       });
-      if (remaining && !conflicts) scheduleSync(300);
+      if ((remaining && !conflicts) || safeResponse.hasMore) scheduleSync(300);
       return { state: nextState, conflicts };
     } catch (error) {
-      setStatus({ state: "offline", message: "Offline changes will sync later", pending: await pendingCount(), conflicts: await conflictCount(), error: error.message });
+      if (isActive()) setStatus({ state: "offline", message: "Offline changes will sync later", pending: await pendingCountForUser(activeUserId), conflicts: await conflictCount(activeUserId), error: error.message });
       throw error;
     } finally {
       syncing = false;
@@ -567,12 +624,16 @@
   }
 
   async function importLocalState(sourceState) {
-    if (!session?.user?.id) throw new Error("Sign in before importing local data.");
+    const importingUserId = session?.user?.id || "";
+    const importingToken = session?.token || "";
+    const isActive = () => Boolean(importingUserId && importingToken && session?.user?.id === importingUserId && session?.token === importingToken);
+    if (!isActive()) throw new Error("Sign in before importing local data.");
     const cloudState = (await syncNow({
-      state: await getStoreValue("states", userStorageId(session.user.id)),
+      state: await getStoreValue("states", userStorageId(importingUserId)),
       pullOnly: true
     }))?.state || { contacts: [], places: [], settings: {}, analytics: {}, meta: { version: 1 } };
-    const metadata = await syncMetadata();
+    if (!isActive()) throw new Error("Sign in again before importing local data.");
+    const metadata = await syncMetadata(importingUserId);
     const localRecords = flattenState(sourceState);
     const cloudRecords = flattenState(cloudState);
     const recordsToMerge = [];
@@ -601,10 +662,13 @@
       payload: record.payload,
       deletedAt: null
     })));
-    await saveSyncMetadata(metadata);
-    await setStoreValue("states", userStorageId(session.user.id), merged);
+    await saveSyncMetadata(metadata, importingUserId);
+    if (!isActive()) throw new Error("Sign in again before importing local data.");
+    await setStoreValue("states", userStorageId(importingUserId), merged);
     await queueState(merged);
+    if (!isActive()) throw new Error("Sign in again before importing local data.");
     await syncNow({ state: merged });
+    if (!isActive()) throw new Error("Sign in again before importing local data.");
     await markMigrationComplete(sourceState);
     const conflicts = await conflictCount();
     return { state: merged, conflicts };
@@ -668,19 +732,22 @@
 
   async function restoreBackup(id, password, confirmation = "RESTORE") {
     const restoringUserId = session?.user?.id || "";
-    if (!restoringUserId || restoreInProgress) throw new Error("A Bridge restore is already in progress.");
+    const restoringToken = session?.token || "";
+    if (restoreInProgress) throw new Error("A Bridge restore is already in progress.");
+    if (!restoringUserId || !restoringToken) throw new Error("Sign in before restoring this backup.");
     clearTimeout(syncTimer);
     syncTimer = null;
     restoreInProgress = true;
     try {
       await stateQueue.catch(() => {});
       await waitForActiveSync();
-      if (session?.user?.id !== restoringUserId) throw new Error("Sign in again before restoring this backup.");
+      if (session?.user?.id !== restoringUserId || session?.token !== restoringToken) throw new Error("Sign in again before restoring this backup.");
       const result = await request(`/api/v1/backups/${encodeURIComponent(id)}/restore`, {
         method: "POST",
         body: JSON.stringify({ password, confirmation })
       });
-      if (result?.state && session?.user?.id === restoringUserId) {
+      if (session?.user?.id !== restoringUserId || session?.token !== restoringToken) throw new Error("Sign in again before restoring this backup.");
+      if (result?.state && session?.user?.id === restoringUserId && session?.token === restoringToken) {
         const cleanState = clone(result.state);
         await commitRestoredState(restoringUserId, cleanState);
         stateQueue = Promise.resolve();
@@ -706,15 +773,21 @@
   }
 
   async function conflicts() {
-    const metadata = await syncMetadata();
+    const metadata = await syncMetadata(session?.user?.id);
     return clone(metadata.conflicts || {});
   }
 
   async function downloadAccountExport() {
+    const requestToken = session?.token || "";
+    if (!requestToken) throw new Error("Sign in before exporting this account.");
     const headers = new Headers();
-    headers.set("authorization", `Bearer ${session.token}`);
+    headers.set("authorization", `Bearer ${requestToken}`);
     const response = await fetch(accountURL("/api/v1/account/export"), { headers, cache: "no-store" });
-    if (!response.ok) throw new Error("Bridge could not export this account.");
+    if (!response.ok) {
+      if (response.status === 401 && session?.token === requestToken) await saveSession(null);
+      throw new Error("Bridge could not export this account.");
+    }
+    if (session?.token !== requestToken) throw new Error("Sign in again before exporting this account.");
     return response.blob();
   }
 
@@ -736,7 +809,7 @@
       : message ? `<p class="auth-message" role="status">${escapeText(message)}</p>` : "";
     app.innerHTML = `<main class="auth-shell hn-auth-shell">
       <section class="auth-card hn-auth-card" aria-labelledby="authTitle">
-        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png?v=1.3.39" alt="" /><span>Bridge CRM</span></div>
+        <div class="hn-auth-brand"><img class="auth-logo" src="./bridge-icon-192.png?v=1.3.40" alt="" /><span>Bridge CRM</span></div>
         <div class="auth-heading">
           <p class="eyebrow">Your private network</p>
           <h1 id="authTitle">${activeMode === "signup" ? "Create your account" : activeMode === "forgot" ? "Reset your password" : activeMode === "reset" ? "Choose a new password" : activeMode === "resend" ? "Resend verification" : "Welcome back"}</h1>

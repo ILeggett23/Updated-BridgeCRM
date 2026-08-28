@@ -1,8 +1,11 @@
 (function installBridgeCommunication(global) {
-  const digitsOnly = value => String(value || "").replace(/\D/g, "");
+  const digitsOnly = value => {
+    try { return String(value ?? "").replace(/\D/g, ""); } catch { return ""; }
+  };
 
   function canonicalPhone(value) {
-    const raw = String(value || "").trim();
+    let raw;
+    try { raw = String(value ?? "").trim(); } catch { return null; }
     if (!raw) return null;
     const digits = digitsOnly(raw.replace(/(?:ext\.?|x)\s*\d+$/i, ""));
     if (raw.startsWith("+")) return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;

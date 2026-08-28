@@ -61,7 +61,8 @@ test("Analytics uses one share button with privacy-scoped, revocable link and im
   assert.ok(source.includes("const body = encodeURIComponent(url)"));
   assert.ok(source.includes("ui.scorecardCreated=created"));
   assert.ok(source.includes("async function revokeScorecardLink(created)"));
-  assert.ok(source.includes('accountClient.request(path,{method:"DELETE"})'));
+  assert.ok(source.includes('return accountClient.request(path,options)'));
+  assert.ok(source.includes('options.headers={"X-Bridge-Management-Token":created.managementToken}'));
   assert.ok(source.includes('Authorization:`Bearer ${created.managementToken}`'));
   assert.equal(source.includes("localStorage.setItem(created.managementToken"), false);
   assert.ok(source.includes('else $("#shareScorecard")?.focus();'));
@@ -76,7 +77,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.39"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.40"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -191,8 +192,8 @@ test("Conversation Studio uses the six-step guided flow without changing saved f
     assert.ok(source.includes(`name="${fieldName}"`));
   }
   assert.ok(source.includes("updateConversationReview"));
-  assert.ok(source.includes("createFollowUp(contact,new Date(String(form.get('followUpDate')))"));
-  assert.ok(source.includes("createFollowUp(contact,new Date(String(form.get('checkBackDate')))"));
+  assert.ok(source.includes("if(followUpDate)createFollowUp(contact,followUpDate,'Follow up')"));
+  assert.ok(source.includes("if(checkBackDate)createFollowUp(contact,checkBackDate,'Check back down the line')"));
   assert.ok(source.includes("Conversation added to existing contact"));
   assert.ok(source.includes("validateConversationStudio"));
   assert.ok(source.includes("data-conversation-next"));
@@ -362,7 +363,7 @@ test("recurring streak rest schedules migrate through settings, backups, and a s
   assert.ok(source.includes("next.streakExcludedDates=normalizeExcludedDates(ui.settingsExcludedDatesDraft)"));
   assert.ok(source.includes("next.streakRestRules=normalizeRestRules(ui.settingsRestRulesDraft)"));
   assert.ok(source.includes("JSON.stringify(state,null,2)"));
-  assert.ok(source.includes("const imported=normalizeState(JSON.parse(await file.text()))"));
+  assert.ok(source.includes("const imported=parseBackupDocument(await file.text())"));
   assert.ok(styles.includes(".rest-rule-builder"));
   assert.ok(styles.includes(".weekday-picker"));
   assert.ok(styles.includes(".rest-day-list"));
@@ -409,14 +410,14 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.39 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.39"));
-  assert.ok(page.includes("./styles.css?v=1.3.39"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.39"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.39"));
-  assert.ok(page.includes("./account-client.js?v=1.3.39"));
-  assert.ok(page.includes("./app.js?v=1.3.39"));
-  assert.ok(worker.includes("bridge-app-v1.3.39"));
+test("v1.3.40 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.40"));
+  assert.ok(page.includes("./styles.css?v=1.3.40"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.40"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.40"));
+  assert.ok(page.includes("./account-client.js?v=1.3.40"));
+  assert.ok(page.includes("./app.js?v=1.3.40"));
+  assert.ok(worker.includes("bridge-app-v1.3.40"));
 });
 
 test("the GitHub Pages client loads the real account gate while localhost can disable it", async () => {
@@ -426,9 +427,9 @@ test("the GitHub Pages client loads the real account gate while localhost can di
   assert.ok(source.includes("globalThis.BridgeConfig?.apiBase"));
   assert.ok(source.includes("const apiFetch = (path, options) => fetch(apiURL(path), options)"));
   assert.ok(source.includes('mode: "local"'));
-  assert.ok(page.indexOf("account-client.js?v=1.3.39") < page.indexOf("app.js?v=1.3.39"));
+  assert.ok(page.indexOf("account-client.js?v=1.3.40") < page.indexOf("app.js?v=1.3.40"));
   assert.ok(serviceWorker.includes('new URL("account-client.js", ROOT).href'));
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.39", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.40", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));
@@ -800,7 +801,7 @@ test("Person Profile retains canonical stage history after role conversion", () 
 });
 
 test("communication analytics respect the selected analytics range", () => {
-  assert.ok(analyticsLogic.includes('log.communicationType && inAnalyticsRange(log.conversationDate || log.createdAt, range)'));
+  assert.ok(analyticsLogic.includes('log.communicationType && inAnalyticsRange(activityDateValue(log), range)'));
   assert.ok(analyticsLogic.includes('communicationOutcomes'));
   assert.ok(source.includes('Communication outcomes'));
   assert.ok(source.includes('Logged communication outcomes for this period will appear here.'));

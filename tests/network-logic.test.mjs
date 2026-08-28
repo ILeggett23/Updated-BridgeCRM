@@ -69,3 +69,17 @@ test("large networks are capped after stable strength and recency ordering", () 
   assert.equal(model.truncated, true);
   assert.equal(model.nodes.length, 13);
 });
+
+test("network model ignores malformed records and keeps output finite", () => {
+  const model = buildNetworkModel({
+    contacts: [null, { id: "bad", conversations: [null, { conversationDate: "2026-02-30" }], followUps: { invalid: true } }],
+    places: [null, { id: "place", name: "Place" }],
+    companies: null,
+    scores: [null, { contactId: "bad", score: Infinity }],
+    now: "not-a-date",
+    maxPeople: Infinity
+  });
+  assert.equal(model.personCount, 1);
+  assert.equal(model.nodes.every(node => Number.isFinite(node.x) && Number.isFinite(node.y)), true);
+  assert.equal(model.nodes.find(node => node.id === "person:bad").conversationCount, 0);
+});

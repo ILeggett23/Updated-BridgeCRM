@@ -205,6 +205,25 @@ test("No-Go confirmation and restoration preserve pipeline and follow-ups", () =
   assert.equal(JSON.stringify({ stages: contact.stages, stageDates: contact.stageDates, followUps: contact.followUps }), preserved);
 });
 
+test("contact calculations ignore malformed records and do not archive contacts without valid activity", () => {
+  assert.equal(logic.latestConversationTime({ conversations: [null, {}, { conversationDate: "not-a-date" }] }), null);
+  assert.equal(logic.hasConversationInRange({ conversations: null }, "2026-07-01", "2026-07-31"), false);
+  const malformed = { id: "malformed", role: "Prospect", stages: {}, conversations: [{ conversationDate: "2026-02-30" }] };
+  const unknownRole = { id: "unknown", role: "Unknown", stages: {}, createdAt: "2026-01-01T12:00:00Z" };
+  assert.equal(logic.lastRelevantActivityTime(malformed), null);
+  assert.equal(logic.shouldArchiveContact(malformed, new Date("2026-08-01T12:00:00Z")), false);
+  assert.equal(logic.shouldArchiveContact(unknownRole, new Date("2026-08-01T12:00:00Z")), false);
+  assert.equal(logic.archiveInactiveContacts([null, malformed, unknownRole], true, new Date("2026-08-01T12:00:00Z")), 0);
+});
+
+test("legacy stage events using toStage still resolve the canonical current stage", () => {
+  const contact = baseContact({
+    stages: { PQI: true, "QI/P": true, FUP: false, LA: false },
+    stageEvents: [{ toStage: "QI/P", occurredAt: "2026-07-20T12:00:00Z" }]
+  });
+  assert.equal(logic.resolveCurrentPipelineStage(contact, ["PQI", "QI/P", "FUP", "LA"]), "QI/P");
+});
+
 test("pipeline UI excludes no-stage columns and inactive contacts", () => {
   assert.equal(appSource.includes('const stages=["No stage"'), false);
   assert.match(appSource, /function activePipelineContacts\(role\)/);

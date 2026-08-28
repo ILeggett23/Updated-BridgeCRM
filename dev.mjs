@@ -3,8 +3,15 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const port = Number(process.env.PORT || 4173);
 const configuredAPIBase = String(process.env.BRIDGE_API_BASE || "").trim().replace(/\/+$/, "");
+const PROJECT_PATH = "/Updated-BridgeCRM";
 const dataFile = new URL("./.dev-state.json", import.meta.url);
 const emptyState = { contacts: [], places: [], settings: {}, meta: { version: 1 } };
+
+function sourcePath(pathname) {
+  if (pathname === PROJECT_PATH) return "/";
+  if (pathname.startsWith(`${PROJECT_PATH}/`)) return pathname.slice(PROJECT_PATH.length) || "/";
+  return pathname;
+}
 
 const staticFiles = new Map([
   ["/styles.css", ["./src/styles.css", "text/css; charset=utf-8"]],
@@ -44,7 +51,8 @@ for (const fontFile of [
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
-  if (url.pathname === "/api/v1/config" && !configuredAPIBase) {
+  const pathname = sourcePath(url.pathname);
+  if ((url.pathname === "/api/v1/config" || pathname === "/api/v1/config") && !configuredAPIBase) {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
     response.end(JSON.stringify({
@@ -57,7 +65,7 @@ const server = http.createServer(async (request, response) => {
     }));
     return;
   }
-  if (url.pathname === "/api/state") {
+  if (pathname === "/api/state") {
     response.setHeader("content-type", "application/json");
     if (request.method === "GET") {
       try { response.end(await readFile(dataFile, "utf8")); }
@@ -78,7 +86,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
   }
-  if (url.pathname === "/config.js") {
+  if (pathname === "/config.js") {
     const configSource = await readFile(new URL("./src/config.js", import.meta.url), "utf8");
     const config = configuredAPIBase
       ? configSource.replace(
@@ -87,12 +95,25 @@ const server = http.createServer(async (request, response) => {
         )
       : configSource;
     response.setHeader("content-type", "text/javascript; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
     response.end(config);
     return;
   }
-  const staticFile = staticFiles.get(url.pathname);
+  if (pathname === "/sw.js" && configuredAPIBase) {
+    const serviceWorkerSource = await readFile(new URL("./src/sw.js", import.meta.url), "utf8");
+    const serviceWorker = serviceWorkerSource.replace(
+      'const injectedAPI = String(self.BRIDGE_API_BASE || "").trim();',
+      `const injectedAPI = String(self.BRIDGE_API_BASE || ${JSON.stringify(configuredAPIBase)}).trim();`
+    );
+    response.setHeader("content-type", "text/javascript; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
+    response.end(serviceWorker);
+    return;
+  }
+  const staticFile = staticFiles.get(pathname);
   if (staticFile) {
     response.setHeader("content-type", staticFile[1]);
+    response.setHeader("cache-control", "no-store");
     response.end(await readFile(new URL(staticFile[0], import.meta.url)));
     return;
   }

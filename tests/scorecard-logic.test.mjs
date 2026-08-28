@@ -25,3 +25,10 @@ test("scorecard-only snapshots never include contacts", () => {
   assert.deepEqual(snapshot.contacts, []);
   assert.equal(scorecardSummary(snapshot), "0 conversations, 0 contacts, 0 prospects, and 0 prospective customers");
 });
+
+test("snapshot creation fails closed for malformed input and truthy non-boolean sharing flags", () => {
+  const snapshot = createSnapshot({ includeContacts: "yes", contacts: [{ fullName: "Private Person" }] });
+  assert.equal(snapshot.includeContacts, false);
+  assert.deepEqual(snapshot.contacts, []);
+  assert.equal(createSnapshot(null).includeContacts, false);
+});

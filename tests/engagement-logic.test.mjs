@@ -325,7 +325,7 @@ test("JSON backup round trips recurring schedules alongside legacy one-time date
 
 test("PWA notifications and favorite stars are wired accessibly", () => {
   assert.match(workerSource, /notificationclick/);
-  assert.match(workerSource, /bridge-app-v1\.3\.39/);
+  assert.match(workerSource, /bridge-app-v1\.3\.40/);
   assert.match(workerSource, /addEventListener\("push"/);
   assert.match(workerSource, /setAppBadge/);
   assert.match(appSource, /aria-label="Favorite place"/);
@@ -334,4 +334,28 @@ test("PWA notifications and favorite stars are wired accessibly", () => {
   assert.match(workerSource, /bridge-reminder-schedule/);
   assert.match(workerSource, /readReminderSchedule/);
   assert.match(engagementSource, /Complete your first scheduled follow-up/);
+});
+
+test("malformed and future activity cannot create reminders or streak counts", () => {
+  const now = new Date("2026-07-12T15:00:00Z");
+  const stateWithBadRecords = state({
+    contacts: [null, {
+      conversations: [null,
+        { isCountedConversation: true, conversationDate: "2026-07-13T09:00:00Z" },
+        { isCountedConversation: true, conversationDate: "2026-02-30" }
+      ],
+      followUps: [null, { deletedAt: "2026-07-11T10:00:00Z", dueDate: "2026-07-12T10:00:00Z" }],
+      stageEvents: null
+    }],
+    settings: { ...state().settings, dailyGoal: 1, dailyReminderEnabled: false, dailyReminderTime: "25:99" }
+  });
+  assert.equal(logic.dailyGoalMetrics(stateWithBadRecords, now).todayCount, 0);
+  assert.deepEqual(logic.dueReminderEvents(stateWithBadRecords, now), []);
+});
+
+test("a rule that excludes every weekday cannot make streak evaluation loop forever", () => {
+  const sample = state({ settings: { ...state().settings, dailyGoal: 1, streakRestRules: [{ frequency: "weekly", weekdays: [0, 1, 2, 3, 4, 5, 6] }] } });
+  const metrics = logic.dailyGoalMetrics(sample, new Date("2026-07-12T18:00:00"));
+  assert.equal(metrics.goalStreak, 0);
+  assert.equal(metrics.todayExcluded, true);
 });

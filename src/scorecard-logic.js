@@ -1,7 +1,10 @@
 (function installBridgeScorecardLogic(global) {
-  const text = (value, max = 160) => String(value || "").trim().slice(0, max);
+  const text = (value, max = 160) => {
+    try { return String(value ?? "").trim().slice(0, max); } catch { return ""; }
+  };
   const metric = value => {
-    const number = Number(value);
+    let number;
+    try { number = Number(value); } catch { number = NaN; }
     return Number.isFinite(number) && number > 0 ? Math.min(Math.floor(number), 1_000_000_000) : 0;
   };
 
@@ -24,7 +27,9 @@
     };
   }
 
-  function createSnapshot({ ownerName, range, metrics, includeContacts = false, contacts = [] } = {}) {
+  function createSnapshot(input = {}) {
+    const options = input && typeof input === "object" ? input : {};
+    const { ownerName, range, metrics, includeContacts = false, contacts = [] } = options;
     const safeMetrics = {
       conversations: metric(metrics?.conversations),
       contacts: metric(metrics?.contacts),
@@ -40,8 +45,8 @@
         end: text(range?.end, 40)
       },
       metrics: safeMetrics,
-      includeContacts: Boolean(includeContacts),
-      contacts: includeContacts ? contacts.slice(0, 100).map(sanitizeSharedContact) : []
+      includeContacts: includeContacts === true,
+      contacts: includeContacts === true ? (Array.isArray(contacts) ? contacts.slice(0, 100).map(sanitizeSharedContact) : []) : []
     };
   }
 

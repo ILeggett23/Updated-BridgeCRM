@@ -135,3 +135,19 @@ test("health event history stores only changed calculated values", () => {
   const changed = health.recordHealthEvents(twice, [{ ...score, score: score.score - 6, band: "Needs Attention", calculatedAt: localDate(2026, 8, 7).toISOString() }]);
   assert.equal(changed.contactHealthEvents.length, 2);
 });
+
+test("health scoring ignores malformed and future signals without mutating analytics input", () => {
+  const now = localDate(2026, 7, 30);
+  const contactData = contact({
+    conversations: [null, { id: "invalid", isCountedConversation: true, conversationDate: "2026-02-30" }, conversation("past", localDate(2026, 7, 20))],
+    followUps: [null, { id: "future", status: "completed", dueDate: localDate(2026, 7, 20).toISOString(), completedAt: localDate(2026, 8, 1).toISOString() }]
+  });
+  const analytics = { customField: "preserved", contactHealthEvents: [] };
+  const score = health.scoreContact(contactData, { now, analytics });
+  assert.equal(Number.isFinite(score.score), score.score !== null);
+  assert.equal(analytics.contactHealthEvents.length, 0);
+  const recorded = health.recordHealthEvents(analytics, [{ ...score, score: 72, calculatedAt: now.toISOString(), formulaVersion: health.FORMULA_VERSION }]);
+  assert.equal(analytics.contactHealthEvents.length, 0);
+  assert.equal(recorded.customField, "preserved");
+  assert.equal(recorded.contactHealthEvents.length, 1);
+});

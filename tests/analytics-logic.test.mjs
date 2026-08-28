@@ -43,6 +43,31 @@ test("custom analytics includes both selected dates and normalizes reverse input
   assert.match(range.label, /July 10.*20, 2026/);
 });
 
+test("Insights treats date-only range endpoints as complete local days", () => {
+  const contact = {
+    id: "date-only-range",
+    role: "Prospect",
+    dateFirstMet: "2026-08-28T01:00:00",
+    conversations: [
+      { id: "early", isCountedConversation: true, conversationDate: "2026-08-28T01:00:00" },
+      { id: "late", isCountedConversation: true, conversationDate: "2026-08-28T23:00:00" }
+    ],
+    stageEvents: [],
+    followUps: []
+  };
+  const model = buildInsightsModel({
+    contacts: [contact],
+    places: [],
+    range: { start: "2026-08-28", end: "2026-08-28" },
+    pipelines: { Prospect: ["PQI"], Customer: [] },
+    now: "2026-08-28T23:30:00"
+  });
+  assert.equal(model.conversations.length, 2);
+  assert.equal(model.newPeople.length, 1);
+  assert.equal(model.daySeries.length, 1);
+  assert.equal(model.daySeries[0].value, 2);
+});
+
 test("phone capture analytics count each number once on its first capture date", () => {
   const contacts = [
     { id: "first", capturedPhoneNumber: "(479) 555-0101", phoneCapturedAt: "2026-07-10T12:00:00" },
@@ -167,4 +192,28 @@ test("Insights returns unavailable percentages when a period has insufficient ac
   assert.deepEqual(model.placeActivity, []);
   assert.deepEqual(model.standaloneEvents, []);
   assert.equal(model.daySeries[0].value, 0);
+});
+
+test("Insights stays finite and ignores malformed records and invalid dates", () => {
+  const model = buildInsightsModel({
+    contacts: [null, {
+      id: "bad",
+      role: "Prospect",
+      conversations: [null, { isCountedConversation: true, conversationDate: "2026-02-30" }],
+      stageEvents: { malformed: true },
+      followUps: [null, { status: "completed", createdAt: "not-a-date" }]
+    }],
+    places: [null, {}],
+    range: { start: new Date("not-a-date"), end: new Date("also-not-a-date") },
+    pipelines: { Prospect: ["PQI"], Customer: ["CNA"] },
+    dailyGoal: Infinity,
+    now: "not-a-date",
+    stallDays: Infinity
+  });
+  assert.equal(model.conversations.length, 0);
+  assert.equal(model.pipelineEvents.length, 0);
+  assert.equal(model.followUps.length, 0);
+  assert.equal(Number.isFinite(model.goal), true);
+  assert.equal(model.goalConsistency, null);
+  assert.equal(model.daySeries.every(point => Number.isFinite(point.value)), true);
 });

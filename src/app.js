@@ -1,6 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.39";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.39";
-import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.39";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.40";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.40";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.40";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -38,42 +38,77 @@ if (bridgeStyles.length > 1) {
 const uid = () => globalThis.crypto?.randomUUID?.() || `bridge-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const nowISO = () => new Date().toISOString();
 const todayInput = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+function safeISO(value, { dateOnly = false } = {}) {
+  if (value === null || value === undefined || value === "") return "";
+  let text;
+  try { text = typeof value === "string" ? value.trim() : String(value).trim(); } catch { return ""; }
+  if (!text) return "";
+  const datePrefix = text.match(/^(\d{4})-(\d{2})-(\d{2})(?=$|T|\s)/);
+  if (datePrefix) {
+    const [, year, month, day] = datePrefix;
+    const calendarDate = new Date(`${year}-${month}-${day}T12:00:00`);
+    if (calendarDate.getFullYear() !== Number(year) || calendarDate.getMonth() + 1 !== Number(month) || calendarDate.getDate() !== Number(day)) return "";
+  }
+  const candidate = dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T12:00:00` : text;
+  try {
+    const date = value instanceof Date ? new Date(value.getTime()) : new Date(candidate);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+  } catch { return ""; }
+}
+function safeNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  try {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  } catch { return null; }
+}
 const escapeHTML = (value = "") => String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const initials = name => (name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase();
 const localCache = {
   get() { try { return window.localStorage.getItem("bridge-crm-cache"); } catch { return null; } },
   set(value) { try { window.localStorage.setItem("bridge-crm-cache", value); } catch {} }
 };
+const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const durableCache = {
   open() {
     return new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) return reject(new Error("IndexedDB unavailable"));
       const request = indexedDB.open("bridge-crm", 1);
-      request.onupgradeneeded = () => request.result.createObjectStore("state");
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("state")) request.result.createObjectStore("state");
+      };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error("Durable state storage is blocked"));
     });
   },
   async get() {
+    let database = null;
     try {
-      const database = await this.open();
+      database = await this.open();
       return await new Promise((resolve, reject) => {
-        const request = database.transaction("state", "readonly").objectStore("state").get("primary");
+        const transaction = database.transaction("state", "readonly");
+        const request = transaction.objectStore("state").get("primary");
         request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error);
+        transaction.onabort = () => reject(transaction.error || new Error("Durable state read aborted"));
       });
     } catch { return null; }
+    finally { database?.close(); }
   },
   async set(value) {
+    let database = null;
     try {
-      const database = await this.open();
+      database = await this.open();
       await new Promise((resolve, reject) => {
         const transaction = database.transaction("state", "readwrite");
         transaction.objectStore("state").put(value, "primary");
         transaction.oncomplete = resolve;
         transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error || new Error("Durable state write aborted"));
       });
     } catch {}
+    finally { database?.close(); }
   }
 };
 
@@ -218,6 +253,7 @@ function beginBridgeGuideTutorialSession() {
     ...BRIDGE_GUIDE_CAPTURE_CONTENT
   };
   state = normalizeState(createBridgeGuideFixture({ baseState:defaultState(), allStages:ALL_STAGES, walkthroughPreference:realState?.settings?.walkthrough || {} }));
+  clearQuickCreateDraft();
   ui.quickCreateOpen = false;
   ui.quickCreateMode = null;
   ui.quickCreateContactId = "";
@@ -229,10 +265,7 @@ function endBridgeGuideTutorialSession() {
   if (!tutorialSession) return;
   state = tutorialSession.realState;
   tutorialSession = null;
-  ui.quickCreateOpen = false;
-  ui.quickCreateMode = null;
-  ui.quickCreateContactId = "";
-  ui.quickCreateStep = 0;
+  resetQuickCreateSurface();
   applyFixedAppearance();
 }
 
@@ -367,6 +400,12 @@ let profileHeaderScrollCleanup = null;
 let profileHeaderScrollSync = null;
 let conversationDraft = null;
 let conversationDraftDirty = false;
+let quickCreateDraft = null;
+let quickCreateDraftDirty = false;
+let relationshipFormDraft = null;
+let settingsSaveInProgress = false;
+let settingsOperation = 0;
+let scorecardOperation = 0;
 const launchParams = new URLSearchParams(location.search);
 const launchPageAliases = { actions: "followups", insights: "analytics" };
 const requestedLaunchPage = launchPageAliases[launchParams.get("page")] || launchParams.get("page");
@@ -395,6 +434,9 @@ let accountContext = {
 let anonymousSnapshot = null;
 let accountUnsubscribe = null;
 let presentationHistoryIndex = Number.isInteger(history.state?.bridgeIndex) ? history.state.bridgeIndex : 0;
+let pendingHistoryNavigation = null;
+let historyNavigationRestoring = false;
+let historyNavigationReplaying = false;
 let scrollStateTimer = 0;
 let suppressPeopleSearchRouteOnce = false;
 let lockedDocumentScrollY = null;
@@ -488,10 +530,150 @@ function presentationParentURL(screen = ui.routedScreen) {
   return presentationURL({ page:"dashboard", mode:"list" });
 }
 
+function clearQuickCreateDraft() {
+  quickCreateDraft = null;
+  quickCreateDraftDirty = false;
+}
+
+function resetQuickCreateSurface() {
+  ui.quickCreateOpen = false;
+  ui.quickCreateMode = null;
+  ui.quickCreateContactId = "";
+  ui.quickCreateStep = 0;
+  clearQuickCreateDraft();
+}
+
+function captureQuickCreateDraft(form) {
+  if (!form || !ui.quickCreateOpen || bridgeGuideTutorialActive()) return;
+  const values = {};
+  for (const element of form.elements || []) {
+    if (!element.name) continue;
+    if (element.type === "checkbox") values[element.name] = element.checked;
+    else if (element.type === "radio") {
+      if (element.checked) values[element.name] = element.value;
+    } else values[element.name] = element.value;
+  }
+  const newPersonSection = form.querySelector("[data-new-person-name], [data-new-person-fields]");
+  const newPlaceSection = form.querySelector("[data-capture-new-place-fields]");
+  quickCreateDraft = {
+    mode: ui.quickCreateMode,
+    step: ui.quickCreateStep,
+    values,
+    newPersonActive: Boolean(newPersonSection?.dataset.captureNewPersonActive),
+    newPlaceActive: Boolean(newPlaceSection && !newPlaceSection.hidden)
+  };
+  quickCreateDraftDirty = true;
+}
+
+function restoreQuickCreateDraft(form) {
+  if (!form || !quickCreateDraft || quickCreateDraft.mode !== ui.quickCreateMode) return;
+  const values = quickCreateDraft.values || {};
+  for (const element of form.elements || []) {
+    if (!element.name || !(element.name in values)) continue;
+    if (element.type === "checkbox") element.checked = Boolean(values[element.name]);
+    else if (element.type === "radio") element.checked = values[element.name] === element.value;
+    else element.value = values[element.name];
+  }
+  if ("contactId" in values) ui.quickCreateContactId = String(values.contactId || "");
+  if (quickCreateDraft.newPersonActive) {
+    form.querySelectorAll("[data-new-person-name], [data-new-person-fields]").forEach(section => {
+      section.dataset.captureNewPersonActive = "true";
+      section.hidden = false;
+    });
+  }
+  if (quickCreateDraft.newPlaceActive) {
+    const section = form.querySelector("[data-capture-new-place-fields]");
+    if (section) section.hidden = false;
+  }
+  syncQuickCaptureFields(form);
+  syncQuickCapturePickerState(form);
+  setQuickCaptureStep(form, quickCreateDraft.step, { behavior: "auto", restore: true });
+  syncQuickCaptureStepAction(form);
+}
+
+function discardQuickCreateDraft(onDiscard = null, onCancel = null) {
+  if (quickCreateDraftDirty && ui.quickCreateOpen) {
+    requestConfirmation({
+      title: "Discard this capture draft?",
+      message: "The information entered in this capture flow will not be saved.",
+      confirmLabel: "Discard draft",
+      danger: true,
+      onConfirm: () => {
+        resetQuickCreateSurface();
+        onDiscard?.();
+      },
+      onCancel
+    });
+    return false;
+  }
+  clearQuickCreateDraft();
+  onDiscard?.();
+  return true;
+}
+
+function captureRelationshipFormDraft(form) {
+  if (!form) return;
+  relationshipFormDraft = {
+    formId: form.id,
+    controls: [...form.elements].map(control => ({
+      name: control.name,
+      type: control.type,
+      value: control.value,
+      checked: Boolean(control.checked)
+    }))
+  };
+}
+
+function restoreRelationshipFormDraft() {
+  if (!relationshipFormDraft) return;
+  const form = document.getElementById(relationshipFormDraft.formId);
+  if (!form) return;
+  const liveControls = [...form.elements];
+  relationshipFormDraft.controls.forEach((saved, index) => {
+    const control = liveControls[index];
+    if (!control || control.name !== saved.name || control.type !== saved.type) return;
+    if (control.type === "checkbox" || control.type === "radio") control.checked = saved.checked;
+    else control.value = saved.value;
+  });
+}
+
+function clearRelationshipFormDraft(formId = "") {
+  if (!formId || relationshipFormDraft?.formId === formId) relationshipFormDraft = null;
+}
+
+function hasUnsavedNavigationDraft() {
+  return Boolean(ui.personalInfoDirty || (ui.contactEditing && ui.contactEditDirty) || conversationDraftDirty || (ui.quickCreateOpen && quickCreateDraftDirty));
+}
+
+function restorePendingHistoryNavigation() {
+  const pending = pendingHistoryNavigation;
+  if (!pending || pending.confirmationOpen) return;
+  pending.confirmationOpen = true;
+  discardNavigationDrafts(
+    () => {
+      const destination = pendingHistoryNavigation;
+      pendingHistoryNavigation = null;
+      if (!destination) return;
+      const delta = destination.nextIndex - presentationHistoryIndex;
+      if (!delta) {
+        history.replaceState(destination.state || history.state, "", presentationPath(destination.url));
+        applyPresentationRoute(destination.url, { renderNow:true, direction:destination.direction });
+        window.scrollTo({ top:Number(destination.state?.bridgeScrollY) || 0, left:0, behavior:"auto" });
+        return;
+      }
+      historyNavigationReplaying = true;
+      history.go(delta);
+    },
+    () => { pendingHistoryNavigation = null; }
+  );
+}
+
 function applyPresentationRoute(url = location.href, { renderNow = false, direction = "forward" } = {}) {
   if (sharedScorecardToken) return false;
   const target = new URL(url, location.href);
+  const previousScreen = ui.routedScreen;
   const requestedPage = launchPageAliases[target.searchParams.get("page")] || target.searchParams.get("page");
+  if (ui.quickCreateOpen && requestedPage !== "add") resetQuickCreateSurface();
   clearPresentationState();
   ui.page = requestedPage === "add" ? "dashboard" : ["dashboard", "contacts", "followups", "analytics"].includes(requestedPage) ? requestedPage : "dashboard";
   ui.contactMode = ["list", "pipeline", "places", "network"].includes(target.searchParams.get("mode")) ? target.searchParams.get("mode") : ui.page === "contacts" ? "list" : ui.contactMode;
@@ -499,6 +681,15 @@ function applyPresentationRoute(url = location.href, { renderNow = false, direct
   ui.routeDirection = direction;
   const legacyContact = String(target.searchParams.get("contact") || "");
   const requestedScreen = String(target.searchParams.get("screen") || (legacyContact ? "person" : ""));
+  if (previousScreen === "settings" && requestedScreen !== "settings") {
+    ui.settingsExcludedDatesDraft = null;
+    ui.settingsRestRulesDraft = null;
+  }
+  if (previousScreen === "scorecard" && requestedScreen !== "scorecard") {
+    scorecardOperation += 1;
+    ui.scorecardShareBusy = false;
+    ui.scorecardCreated = null;
+  }
   if (!PRESENTATION_SCREENS.includes(requestedScreen)) {
     if (requestedPage === "add") { ui.quickCreateOpen = true; ui.quickCreateMode = null; ui.quickCreateContactId = ""; ui.quickCreateStep = 0; }
     if (renderNow) render();
@@ -547,6 +738,7 @@ function applyPresentationRoute(url = location.href, { renderNow = false, direct
 
 function navigatePresentation(screen, values = {}, { replace = false, opener = document.activeElement } = {}) {
   if(ui.personalInfoDirty){discardPersonalInfoDraft(()=>navigatePresentation(screen,values,{replace,opener}));return false;}
+  if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(()=>navigatePresentation(screen,values,{replace,opener}));return false;}
   if(conversationDraftDirty){discardConversationDraft(()=>navigatePresentation(screen,values,{replace,opener}));return false;}
   const routeDefaults = screen === "pipeline-stage" || screen === "stage-transition" ? { page:"contacts", mode:"pipeline" }
     : screen === "place" ? { page:"contacts", mode:"places" }
@@ -592,6 +784,7 @@ function navigateMain(page, { mode = page === "contacts" ? "list" : ui.contactMo
 }
 
 function presentationBack() {
+  if(settingsSaveInProgress)return;
   if(ui.personalInfoDirty){discardPersonalInfoDraft(presentationBack);return;}
   if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(presentationBack);return;}
   if(conversationDraftDirty){discardConversationDraft(presentationBack);return;}
@@ -610,9 +803,7 @@ function presentationBack() {
 
 function initializePresentationHistory() {
   if (!Number.isInteger(history.state?.bridgeIndex)) history.replaceState({ ...(history.state || {}), bridgeIndex:presentationHistoryIndex, bridgeScrollY:window.scrollY }, "", presentationPath());
-  window.addEventListener("popstate", event => {
-    if (walkthrough.visible()) walkthrough.exitGuide();
-    cancelPendingScrollState();
+  const applyHistoryEvent = event => {
     const nextIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
     const direction = nextIndex < presentationHistoryIndex ? "back" : "forward";
     presentationHistoryIndex = nextIndex;
@@ -628,6 +819,42 @@ function initializePresentationHistory() {
       }
       else if (ui.routedScreen) focusPresentationEntry();
     });
+  };
+  window.addEventListener("popstate", event => {
+    if (historyNavigationRestoring) {
+      historyNavigationRestoring = false;
+      if (pendingHistoryNavigation && !pendingHistoryNavigation.confirmationOpen) restorePendingHistoryNavigation();
+      return;
+    }
+    if (historyNavigationReplaying) {
+      historyNavigationReplaying = false;
+      pendingHistoryNavigation = null;
+      applyHistoryEvent(event);
+      return;
+    }
+    if (pendingHistoryNavigation || ui.confirmation) {
+      const requestedIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
+      const delta = presentationHistoryIndex - requestedIndex;
+      if (delta) {
+        historyNavigationRestoring = true;
+        history.go(delta);
+      }
+      return;
+    }
+    if (walkthrough.visible()) walkthrough.exitGuide();
+    cancelPendingScrollState();
+    const nextIndex = Number.isInteger(event.state?.bridgeIndex) ? event.state.bridgeIndex : presentationHistoryIndex - 1;
+    const direction = nextIndex < presentationHistoryIndex ? "back" : "forward";
+    if (hasUnsavedNavigationDraft()) {
+      pendingHistoryNavigation = { url:location.href, state:event.state, nextIndex, direction, confirmationOpen:false };
+      const delta = presentationHistoryIndex - nextIndex;
+      if (delta) {
+        historyNavigationRestoring = true;
+        history.go(delta);
+      } else restorePendingHistoryNavigation();
+      return;
+    }
+    applyHistoryEvent(event);
   });
   window.addEventListener("scroll", () => {
     if(lockedDocumentScrollY!==null)return;
@@ -699,7 +926,7 @@ function deferNotificationNavigation(url) {
 }
 
 function resumePendingNotificationNavigation() {
-  if (!stateHydrated || !pendingNotificationNavigationURL || blockingModalOpen()) return false;
+  if (!stateHydrated || !pendingNotificationNavigationURL || blockingModalOpen() || hasUnsavedNavigationDraft()) return false;
   const url = pendingNotificationNavigationURL;
   pendingNotificationNavigationURL = "";
   return consumeNotificationNavigation(url);
@@ -707,7 +934,10 @@ function resumePendingNotificationNavigation() {
 
 function normalizeState(raw) {
   const base = defaultState();
-  const next = { ...base, ...(raw || {}), settings: { ...base.settings, ...(raw?.settings || {}) }, analytics: normalizeAnalyticsState(raw?.analytics), meta: { ...base.meta, ...(raw?.meta || {}) } };
+  const source = isRecord(raw) ? raw : {};
+  const sourceSettings = isRecord(source.settings) ? source.settings : {};
+  const sourceMeta = isRecord(source.meta) ? source.meta : {};
+  const next = { ...base, ...source, settings: { ...base.settings, ...sourceSettings }, analytics: normalizeAnalyticsState(isRecord(source.analytics) ? source.analytics : {}), meta: { ...base.meta, ...sourceMeta } };
   delete next.settings.theme;
   delete next.settings.accent;
   delete next.settings.compact;
@@ -726,11 +956,12 @@ function normalizeState(raw) {
   next.settings.healthNotificationsEnabled = Boolean(next.settings.healthNotificationsEnabled);
   next.settings.healthFallbackCadenceDays = Math.min(365, Math.max(1, Math.round(Number(next.settings.healthFallbackCadenceDays) || 14)));
   next.settings.healthCadencePresets = normalizeCadencePresets(next.settings.healthCadencePresets);
-  next.contacts = Array.isArray(next.contacts) ? next.contacts.map(contact => {
+  next.contacts = Array.isArray(source.contacts) ? source.contacts.filter(isRecord).map(contact => {
+    const rawStages = isRecord(contact.stages) ? contact.stages : {};
     const filteredOutAt = contact.filteredOutAt || contact.explicitFilteredOutAt || null;
-    const stageDates = { ...(contact.stageDates || {}) };
-    const stageEvents = Array.isArray(contact.stageEvents) ? contact.stageEvents.map(event => ({ ...event, id: event.id || uid(), occurredAt: event.occurredAt || event.date || contact.updatedAt || contact.createdAt || nowISO() })) : ALL_STAGES.filter(stage => Boolean(contact.stages?.[stage]?.isComplete ?? contact.stages?.[stage])).map(stage => ({ id: uid(), stage, occurredAt: stageDates[stage] || contact.updatedAt || contact.createdAt || nowISO() }));
-    const conversations = Array.isArray(contact.conversations) ? contact.conversations.map(log => {
+    const stageDates = { ...(isRecord(contact.stageDates) ? contact.stageDates : {}) };
+    const stageEvents = Array.isArray(contact.stageEvents) ? contact.stageEvents.filter(isRecord).map(event => ({ ...event, id: event.id || uid(), occurredAt: event.occurredAt || event.date || contact.updatedAt || contact.createdAt || nowISO() })) : ALL_STAGES.filter(stage => Boolean(rawStages?.[stage]?.isComplete ?? rawStages?.[stage])).map(stage => ({ id: uid(), stage, occurredAt: stageDates[stage] || contact.updatedAt || contact.createdAt || nowISO() }));
+    const conversations = Array.isArray(contact.conversations) ? contact.conversations.filter(isRecord).map(log => {
       const communicationType = log.communicationType || (log.type === "Call" ? "Call" : ["Text", "Text Message"].includes(log.type) ? "Text" : null);
       return { ...log, id: log.id || uid(), createdAt: log.createdAt || log.conversationDate || contact.updatedAt || contact.createdAt || nowISO(), conversationDate: log.conversationDate || log.createdAt || contact.updatedAt || contact.createdAt || nowISO(), isCountedConversation: Boolean(log.isCountedConversation), communicationType, direction: communicationType ? (log.direction || "Outgoing") : null, followUpCreated: Boolean(log.followUpCreated) };
     }) : [];
@@ -739,9 +970,9 @@ function normalizeState(raw) {
     const phoneCapturedAt = contact.phoneCapturedAt || (inferredCapturedPhone && firstCountedConversation ? (firstCountedConversation.conversationDate || firstCountedConversation.createdAt) : null);
     const role = ["Prospect", "Customer", "Team"].includes(contact.role) ? contact.role : "Prospect";
     const stageAliases = LEGACY_PIPELINE_ALIASES[role] || {};
-    const migratedStageValues = { ...(contact.stages || {}) };
+    const migratedStageValues = { ...rawStages };
     Object.entries(stageAliases).forEach(([legacyStage, currentStage]) => {
-      if (Boolean(contact.stages?.[legacyStage]?.isComplete ?? contact.stages?.[legacyStage])) migratedStageValues[currentStage] = true;
+      if (Boolean(rawStages?.[legacyStage]?.isComplete ?? rawStages?.[legacyStage])) migratedStageValues[currentStage] = true;
       const legacyDate = stageDates[legacyStage];
       if (legacyDate && (!stageDates[currentStage] || new Date(legacyDate) > new Date(stageDates[currentStage]))) stageDates[currentStage] = legacyDate;
     });
@@ -760,9 +991,9 @@ function normalizeState(raw) {
       };
     });
     normalizePipelineStages({ stages, stageDates, stageEvents: currentStageEvents }, PIPELINES[role]);
-    const currentStageDates = Object.fromEntries(Object.entries(stageDates).filter(([stage]) => ALL_STAGES.includes(stage)));
+    const currentStageDates = { ...stageDates };
     const healthCadenceDays = Number(contact.healthCadenceDays);
-    const followUps = Array.isArray(contact.followUps) ? contact.followUps.map(item => {
+    const followUps = Array.isArray(contact.followUps) ? contact.followUps.filter(isRecord).map(item => {
       const completedAt = item.completedAt || null;
       const canceledAt = item.canceledAt || null;
       const deletedAt = item.deletedAt || null;
@@ -783,6 +1014,7 @@ function normalizeState(raw) {
       };
     }) : [];
     return {
+      ...contact,
       id: contact.id || uid(), fullName: contact.fullName || "Unnamed Contact", phoneNumber: contact.phoneNumber || "", email: String(contact.email || "").trim(), role,
       source: contact.source === "tutorial" ? "tutorial" : "", isTutorialRecord: Boolean(contact.isTutorialRecord),
       capturedPhoneNumber: phoneCapturedAt ? inferredCapturedPhone : "", phoneCapturedAt,
@@ -797,9 +1029,15 @@ function normalizeState(raw) {
     };
   }) : [];
   archiveInactiveContacts(next.contacts, next.settings.autoArchiveInactive);
-  next.places = Array.isArray(next.places) ? next.places.map(place => ({ id: place.id || uid(), name: place.name || "Unnamed Place", isFavorite: Boolean(place.isFavorite), createdAt: place.createdAt || nowISO() })) : [];
-  next.analytics = normalizeAnalyticsState(next.analytics);
-  next.meta.achievements = next.meta.achievements && typeof next.meta.achievements === "object" ? next.meta.achievements : {};
+  next.places = Array.isArray(source.places) ? source.places.filter(isRecord).map(place => ({
+    ...place,
+    id: place.id || uid(),
+    name: place.name || "Unnamed Place",
+    isFavorite: Boolean(place.isFavorite),
+    createdAt: place.createdAt || nowISO()
+  })) : [];
+  next.analytics = normalizeAnalyticsState(isRecord(next.analytics) ? next.analytics : {});
+  next.meta.achievements = isRecord(next.meta.achievements) ? next.meta.achievements : {};
   return next;
 }
 
@@ -832,11 +1070,45 @@ function hasMeaningfulBridgeData(value) {
   );
 }
 
+function parsePersistedState(value) {
+  if (value === null || value === undefined || value === "") return null;
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!isRecord(parsed) || !["contacts", "places", "settings", "analytics", "meta"].some(key => key in parsed)) return null;
+    if ("contacts" in parsed && !Array.isArray(parsed.contacts)) return null;
+    if ("places" in parsed && !Array.isArray(parsed.places)) return null;
+    if (["settings", "analytics", "meta"].some(key => key in parsed && !isRecord(parsed[key]))) return null;
+    return normalizeState(parsed);
+  } catch { return null; }
+}
+
+async function readBestPersistedState() {
+  const local = parsePersistedState(localCache.get());
+  if (local) return local;
+  const durable = parsePersistedState(await durableCache.get());
+  return durable || defaultState();
+}
+
+function validateBackupDocument(value) {
+  if (!isRecord(value)) throw new TypeError("Bridge backup must be a JSON object");
+  if (!Array.isArray(value.contacts) || !Array.isArray(value.places)) throw new TypeError("Bridge backup is missing contacts or places");
+  for (const contact of value.contacts) if (!isRecord(contact)) throw new TypeError("Bridge backup contains an invalid contact");
+  for (const place of value.places) if (!isRecord(place)) throw new TypeError("Bridge backup contains an invalid place");
+  for (const key of ["settings", "analytics", "meta"]) {
+    if (key in value && !isRecord(value[key])) throw new TypeError(`Bridge backup contains invalid ${key}`);
+  }
+  return value;
+}
+
+function parseBackupDocument(value) {
+  let parsed;
+  try { parsed = typeof value === "string" ? JSON.parse(value) : value; }
+  catch { throw new TypeError("That backup file is not valid JSON"); }
+  return normalizeState(validateBackupDocument(parsed));
+}
+
 async function readAnonymousState() {
-  const cached = localCache.get() || await durableCache.get();
-  if (!cached) return defaultState();
-  try { return normalizeState(JSON.parse(cached)); }
-  catch { return defaultState(); }
+  return readBestPersistedState();
 }
 
 function finishStateHydration() {
@@ -984,9 +1256,7 @@ async function loadState() {
     localCache.set(snapshot);
     durableCache.set(snapshot);
   } catch {
-    const cached = localCache.get() || await durableCache.get();
-    try { state = normalizeState(cached ? JSON.parse(cached) : null); }
-    catch { state = defaultState(); }
+    state = await readBestPersistedState();
     $(".sync-status")?.replaceChildren(document.createTextNode("Local mode"));
   }
   finishStateHydration();
@@ -1425,7 +1695,7 @@ window.addEventListener("pointerdown", requestPersistentStorage, { once: true, p
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkReminders(); offerPendingCommunication(); } });
 window.addEventListener("focus", () => setTimeout(offerPendingCommunication, 120));
 window.addEventListener("beforeunload", event => {
-  if (!conversationDraftDirty) return;
+  if (!hasUnsavedNavigationDraft()) return;
   event.preventDefault();
   event.returnValue = "";
 });
@@ -1545,10 +1815,12 @@ function findFollowUpRecord(contactId, followUpId) {
   return contact && followUp ? { contact, followUp } : null;
 }
 function createFollowUp(contact, dueDate, note = "Follow up", extra = {}) {
+  const normalizedDueDate = safeISO(dueDate);
+  if (!contact || typeof contact !== "object" || !normalizedDueDate) return null;
   const createdAt = nowISO();
   const followUp = {
     id: uid(),
-    dueDate: new Date(dueDate).toISOString(),
+    dueDate: normalizedDueDate,
     note,
     status: "scheduled",
     completedAt: null,
@@ -1579,7 +1851,9 @@ function transitionFollowUp(item, status, at = nowISO()) {
   return true;
 }
 function rescheduleFollowUp(item, dueDate, at = nowISO()) {
-  const nextDueDate = new Date(dueDate).toISOString();
+  if (!item || typeof item !== "object") return false;
+  const nextDueDate = safeISO(dueDate);
+  if (!nextDueDate) return false;
   if (nextDueDate === item.dueDate) return false;
   item.rescheduleHistory = Array.isArray(item.rescheduleHistory) ? item.rescheduleHistory : [];
   item.rescheduleHistory.push({ id: uid(), fromDueDate: item.dueDate, toDueDate: nextDueDate, changedAt: at });
@@ -1644,7 +1918,7 @@ function emailHref(value) {
   const email=String(value||"").trim();
   return email&&isValidEmail(email)?`mailto:${encodeURIComponent(email)}`:"#";
 }
-function dateTimeLocalValue(value = new Date()) { const date = value instanceof Date ? value : new Date(value); const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return local.toISOString().slice(0, 16); }
+function dateTimeLocalValue(value = new Date()) { const iso = safeISO(value); if (!iso) return ""; const date = new Date(iso); const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return Number.isFinite(local.getTime()) ? local.toISOString().slice(0, 16) : ""; }
 function currentPipelineStage(contact) { return resolveCurrentPipelineStage(contact, PIPELINES[contact.role] || []); }
 function setPipelineStage(contact, nextStage, occurredAt = nowISO(), source = "user") {
   const valid = PIPELINES[contact.role] || [];
@@ -1911,6 +2185,7 @@ function render() {
   const transientModalOpen=Boolean(walkthrough.visible()||ui.confirmation||ui.quickCreateOpen||ui.peopleFiltersOpen||ui.communicationContactId||ui.actionEditId||ui.releaseNotesOpen||ui.accountMigrationOpen||ui.accountAction||(ui.settingsOpen&&ui.routedScreen!=="settings")||(ui.achievementsOpen&&ui.routedScreen!=="achievements")||(ui.pipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.pipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.customerPipelineStageDetail&&ui.routedScreen!=="pipeline-stage")||(ui.customerPipelineContactId&&ui.routedScreen!=="stage-transition")||(ui.placeDetailId&&ui.routedScreen!=="place")||(ui.detailId&&!["person","person-edit"].includes(ui.routedScreen))||(ui.activityHistoryContactId&&ui.routedScreen!=="person-timeline")||(ui.scorecardShareOpen&&ui.routedScreen!=="scorecard"));
   syncDocumentScrollLock(transientModalOpen);
   app.innerHTML = `${AppShell(renderPage(), { inert: Boolean(ui.accountAction||ui.confirmation) })}${ui.settingsOpen && ui.routedScreen!=="settings" ? settingsModal() : ""}${ui.achievementsOpen && ui.routedScreen!=="achievements" ? achievementsModal() : ""}${ui.quickCreateOpen ? quickCreateModal() : ""}${ui.peopleFiltersOpen ? peopleFilterSheet(peopleVisibleContacts().length) : ""}${ui.actionEditId ? followUpRescheduleSheet() : ""}${ui.placeDetailId && ui.routedScreen!=="place" ? placeDetailSheet(ui.placeDetailId) : ""}${ui.detailId && !["person","person-edit"].includes(ui.routedScreen) ? contactModal(ui.detailId) : ""}${ui.activityHistoryContactId && ui.routedScreen!=="person-timeline" ? activityHistoryModal(ui.activityHistoryContactId) : ""}${ui.communicationContactId ? communicationLogModal(ui.communicationContactId) : ""}${ui.scorecardShareOpen && ui.routedScreen!=="scorecard" ? scorecardShareModal() : ""}${ui.releaseNotesOpen ? releaseNotesModal() : ""}${ui.accountMigrationOpen ? accountMigrationModal() : ""}${ui.accountAction ? accountActionModal() : ""}${ui.confirmation ? confirmationDialog() : ""}`;
+  restoreRelationshipFormDraft();
   lastRenderedPresentationKey=nextPresentationKey;
   ui.routeEntryMotion="";
   lastRenderedNavSelection=nextNavSelection;
@@ -1937,7 +2212,7 @@ function render() {
       :[{transform:`translateX(${from*100}%)`,opacity:1},{transform:`translateX(${to*100}%)`,opacity:1}];
     navIndicator.animate(frames,{duration:320,easing:'cubic-bezier(.16,1,.3,1)'});
   }
-  if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
+  if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen() && !hasUnsavedNavigationDraft()) setTimeout(resumePendingNotificationNavigation, 0);
 }
 
 function sharedBrand() {
@@ -2044,7 +2319,13 @@ function accountActionFocusableElements() {
 }
 
 function closeScorecardShare() {
-  if(ui.routedScreen==="scorecard"){presentationBack();return;}
+  scorecardOperation += 1;
+  if(ui.routedScreen==="scorecard"){
+    ui.scorecardShareBusy = false;
+    ui.scorecardCreated = null;
+    presentationBack();
+    return;
+  }
   ui.scorecardShareOpen = false;
   ui.scorecardShareBusy = false;
   ui.scorecardCreated = null;
@@ -2058,7 +2339,13 @@ function closeScorecardShare() {
 }
 
 function closeSettings() {
-  if(ui.routedScreen==="settings"){presentationBack();return;}
+  if(settingsSaveInProgress||ui.accountBusy)return;
+  if(ui.routedScreen==="settings"){
+    ui.settingsExcludedDatesDraft=null;
+    ui.settingsRestRulesDraft=null;
+    presentationBack();
+    return;
+  }
   ui.settingsOpen=false;ui.settingsExcludedDatesDraft=null;ui.settingsRestRulesDraft=null;
   render();
   requestAnimationFrame(()=>{if(settingsFocusReturn?.isConnected)settingsFocusReturn.focus();settingsFocusReturn=null;});
@@ -2336,7 +2623,7 @@ function bindSharedPrimitiveEvents() {
       }
       if(!blockingModalOpen())syncDocumentScrollLock(false);
       if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
-      if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen()) setTimeout(resumePendingNotificationNavigation, 0);
+      if (pendingNotificationNavigationURL && stateHydrated && !blockingModalOpen() && !hasUnsavedNavigationDraft()) setTimeout(resumePendingNotificationNavigation, 0);
     };
     if (backdrop?.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
     else setTimeout(finish, 180);
@@ -2469,13 +2756,20 @@ function quickCaptureNoteForm(contacts) {
   return `<form id="quickNoteForm" class="quick-create-form quick-capture-composer quick-capture-wizard" data-capture-kind="note" data-capture-steps="${steps.join(",")}" data-capture-step-index="0">${quickCaptureErrorState()}${quickCaptureWizardProgress(steps)}${quickCaptureWizardStep("person","Who was it?",quickCapturePersonPicker(contacts),{first:true})}${quickCaptureWizardStep("learned","What happened?",note,{last:true,saveLabel:"Save activity"})}</form>`;
 }
 function quickCapturePlace(form) {
-  let placeId=String(form.get("placeId")||"")||null,placeName="";const newName=String(form.get("newPlaceName")||"").trim();
-  if(newName){let place=state.places.find(item=>item.name.toLowerCase()===newName.toLowerCase());if(!place){place={id:uid(),name:newName,isFavorite:form.has("favoritePlace"),createdAt:nowISO()};state.places.push(place);}else if(form.has("favoritePlace"))place.isFavorite=true;placeId=place.id;placeName=place.name;}else if(placeId){placeName=state.places.find(item=>String(item.id)===String(placeId))?.name||"";}
+  const safeForm=form&&typeof form.get==="function"?form:null;
+  let placeId=String(safeForm?.get("placeId")||"")||null,placeName="";
+  const newName=String(safeForm?.get("newPlaceName")||"").trim();
+  const places=Array.isArray(state.places)?state.places:[];
+  if(newName){
+    let place=places.find(item=>item&&String(item.name||"").trim().toLowerCase()===newName.toLowerCase());
+    if(!place){place={id:uid(),name:newName,isFavorite:Boolean(safeForm?.has?.("favoritePlace")),createdAt:nowISO()};places.push(place);}
+    else if(safeForm?.has?.("favoritePlace"))place.isFavorite=true;
+    placeId=place.id;placeName=place.name;
+  }else if(placeId){placeName=places.find(item=>String(item?.id)===String(placeId))?.name||"";}
   return {placeId,placeName};
 }
 function quickCaptureISO(value) {
-  const date=new Date(String(value||""));
-  return Number.isFinite(date.getTime())?date.toISOString():"";
+  return safeISO(value);
 }
 function quickCaptureNewContact(form,occurredAt,{conversationType="Other"}={}) {
   const fullName=String(form.get("fullName")||"").trim();const phoneNumber=String(form.get("phoneNumber")||"").trim();const email=String(form.get("email")||"").trim();const role=["Prospect","Customer","Team"].includes(String(form.get("role")))?String(form.get("role")):"Prospect";const team=role==="Team";const {placeId,placeName}=quickCapturePlace(form);const createdAt=nowISO();
@@ -2513,7 +2807,7 @@ function closeQuickCreate() {
     walkthrough.exitGuide();
     return;
   }
-  ui.quickCreateOpen=false;ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;
+  resetQuickCreateSurface();
   const backdrop=$('#quickCreateBackdrop');
   const finish=()=>{render();requestAnimationFrame(()=>{const target=quickCreateFocusReturn?.isConnected?quickCreateFocusReturn:$('[aria-label="Capture what happened"]');target?.focus({preventScroll:true});quickCreateFocusReturn=null;});};
   if(!backdrop||backdrop.dataset.uiDraggedDismiss==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches){finish();return;}
@@ -2569,7 +2863,7 @@ function setQuickCaptureStep(form,nextIndex,{direction='forward',behavior=null,r
   const panels=$$('[data-capture-step]',form);if(!panels.length)return;
   const current=Math.max(0,Math.min(panels.length-1,Number(form.dataset.captureStepIndex)||0));const next=Math.max(0,Math.min(panels.length-1,nextIndex));
   panels.forEach((panel,index)=>{panel.hidden=index!==next;panel.classList.remove('is-entering-forward','is-entering-back');});
-  ui.quickCreateStep=next;form.dataset.captureStepIndex=String(next);$$('.quick-capture-wizard__progress span',form).forEach((item,index)=>{item.classList.toggle('is-complete',index<next);item.classList.toggle('is-current',index===next);});const status=$('[data-capture-step-number]',form);if(status)status.textContent=String(next+1);syncQuickCaptureStepAction(form);if(next===panels.length-1)updateQuickCaptureReview(form);if(restore)return;
+  ui.quickCreateStep=next;form.dataset.captureStepIndex=String(next);$$('.quick-capture-wizard__progress span',form).forEach((item,index)=>{item.classList.toggle('is-complete',index<next);item.classList.toggle('is-current',index===next);});const status=$('[data-capture-step-number]',form);if(status)status.textContent=String(next+1);syncQuickCaptureStepAction(form);if(next===panels.length-1)updateQuickCaptureReview(form);if(restore)return;captureQuickCreateDraft(form);
   const panel=panels[next];panel.classList.add(direction==='back'?'is-entering-back':'is-entering-forward');requestAnimationFrame(()=>{panel.classList.remove('is-entering-forward','is-entering-back');const focusTarget=$('input:not([type="hidden"]):not([tabindex="-1"]), textarea, button',panel);focusTarget?.focus({preventScroll:true});panel.scrollIntoView({block:'start',behavior:behavior||(matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth')});});
 }
 function bindQuickCreateEvents() {
@@ -2578,7 +2872,7 @@ function bindQuickCreateEvents() {
   $('#closeQuickCreate')?.addEventListener('click',closeQuickCreate);$('#quickCreateBackdrop')?.addEventListener('click',event=>{if(event.target.id==='quickCreateBackdrop')closeQuickCreate();});
   $$('.quick-create-back').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
   $$('[data-quick-mode]').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=button.dataset.quickMode;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
-  $$('.quick-capture-composer').forEach(form=>{syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);setQuickCaptureStep(form,ui.quickCreateStep,{behavior:'auto',restore:true});applyBridgeGuideCaptureFixture(form);form.addEventListener('input',()=>syncQuickCaptureStepAction(form));form.elements.contactId?.addEventListener('change',event=>{ui.quickCreateContactId=event.target.value;syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);});form.elements.role?.addEventListener('change',()=>syncQuickCaptureFields(form));});
+  $$('.quick-capture-composer').forEach(form=>{syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);setQuickCaptureStep(form,ui.quickCreateStep,{behavior:'auto',restore:true});applyBridgeGuideCaptureFixture(form);restoreQuickCreateDraft(form);form.addEventListener('input',()=>{syncQuickCaptureStepAction(form);captureQuickCreateDraft(form);});form.addEventListener('change',()=>captureQuickCreateDraft(form));form.elements.contactId?.addEventListener('change',event=>{ui.quickCreateContactId=event.target.value;syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);captureQuickCreateDraft(form);});form.elements.role?.addEventListener('change',()=>syncQuickCaptureFields(form));});
   $$('[data-capture-person-search]').forEach(input=>input.addEventListener('input',event=>{const form=event.currentTarget.closest('form');const query=event.currentTarget.value.trim().toLowerCase();let visible=0;$$('[data-capture-person-id]',form).forEach(button=>{button.hidden=query?!String(button.dataset.captureSearchValue||'').includes(query):button.dataset.captureRecent!=='true';if(!button.hidden)visible+=1;});const count=$('[data-capture-person-count]',form);if(count)count.textContent=String(visible);const heading=$('.quick-capture-picker__heading span',form);if(heading)heading.textContent=query?'Search results':visible?'Recent people':'People';const create=$('[data-capture-new-person]',form);if(create){const exact=state.contacts.some(contact=>String(contact.fullName||'').trim().toLowerCase()===query);create.hidden=!query||exact;const label=$('[data-capture-new-person-label]',form);if(label)label.textContent=query?`“${event.currentTarget.value.trim()}”`:'new person';}}));
   $$('[data-capture-person-id]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');form.elements.contactId.value=event.currentTarget.dataset.capturePersonId;ui.quickCreateContactId=form.elements.contactId.value;if(form.elements.fullName)form.elements.fullName.value='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{delete section.dataset.captureNewPersonActive;section.hidden=true;});syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);}));
   $$('[data-capture-new-person]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const query=String($('[data-capture-person-search]',form)?.value||'').trim();form.elements.contactId.value='';ui.quickCreateContactId='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{section.dataset.captureNewPersonActive="true";section.hidden=false;});syncQuickCaptureFields(form);syncQuickCapturePickerState(form);if(form.elements.fullName){form.elements.fullName.value=query;form.elements.fullName.focus();}syncQuickCaptureStepAction(form);}));
@@ -2589,11 +2883,11 @@ function bindQuickCreateEvents() {
   $$('[data-capture-step-next]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const index=Number(form.dataset.captureStepIndex)||0;if(validateQuickCaptureStep(form,index))setQuickCaptureStep(form,index+1);}));
   $$('[data-capture-step-back]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const index=Number(form.dataset.captureStepIndex)||0;if(index<=0){ui.quickCreateMode=null;ui.quickCreateContactId='';ui.quickCreateStep=0;render();return;}setQuickCaptureStep(form,index-1,{direction:'back'});}));
   $$('.quick-capture-wizard').forEach(form=>form.addEventListener('keydown',event=>{if(event.key!=='Enter'||event.target.matches('textarea,button'))return;const index=Number(form.dataset.captureStepIndex)||0;const panels=$$('[data-capture-step]',form);if(index>=panels.length-1)return;event.preventDefault();if(validateQuickCaptureStep(form,index))setQuickCaptureStep(form,index+1);}));
-  $('#quickContactForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const fullName=String(form.get('fullName')||'').trim();if(!fullName){quickCaptureError(event.currentTarget,'Add a full name.');return;}const phone=String(form.get('phoneNumber')||'').trim();const duplicate=isCallablePhone(phone)&&state.contacts.find(contact=>normalizedPhone(contact.phoneNumber)===normalizedPhone(phone));if(duplicate){quickCaptureError(event.currentTarget,`That phone number belongs to ${duplicate.fullName}.`);return;}const contact=quickCaptureNewContact(form,nowISO());state.contacts.unshift(contact);queueSave('Contact added');closeQuickCreate();});
+  $('#quickContactForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const fullName=String(form.get('fullName')||'').trim();if(!fullName){quickCaptureError(event.currentTarget,'Add a full name.');return;}const email=String(form.get('email')||'').trim();if(!isValidEmail(email)){quickCaptureError(event.currentTarget,'Enter a valid email address or leave it blank.');return;}const phone=String(form.get('phoneNumber')||'').trim();const duplicate=isCallablePhone(phone)&&state.contacts.find(contact=>normalizedPhone(contact.phoneNumber)===normalizedPhone(phone));if(duplicate){quickCaptureError(event.currentTarget,`That phone number belongs to ${duplicate.fullName}.`);return;}const contact=quickCaptureNewContact(form,nowISO());state.contacts.unshift(contact);queueSave('Contact added');closeQuickCreate();});
   $('#quickActionForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const due=quickCaptureISO(form.get('dueDate'));if(!contact||!due){quickCaptureError(event.currentTarget,'Choose a person and a valid follow-up time.');return;}createFollowUp(contact,due,String(form.get('note')||'Follow up').trim()||'Follow up');contact.updatedAt=nowISO();queueSave('Action scheduled');closeQuickCreate();});
-  $('#quickNoteForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const notes=String(form.get('notes')||'').trim();if(!contact||!notes){quickCaptureError(event.currentTarget,'Choose a person and add a note.');return;}const conversationDate=`${String(form.get('conversationDate')||todayInput())}T12:00:00`;const occurredAt=quickCaptureISO(conversationDate)||conversationDate;applyQuickCaptureDetails(contact,form,occurredAt,'quick-other-activity');contact.conversations.push({id:uid(),type:'Note',interestLevel:contact.interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:false});contact.updatedAt=nowISO();queueSave('Activity added');closeQuickCreate();});
-  $('#quickConversationForm')?.addEventListener('submit',event=>{event.preventDefault();const element=event.currentTarget;const form=new FormData(element);const selected=state.contacts.find(contact=>String(contact.id)===String(form.get('contactId')));const fullName=String(form.get('fullName')||'').trim();const notes=String(form.get('notes')||'').trim();const occurredAt=quickCaptureISO(form.get('conversationDate'));if(!selected&&!fullName){quickCaptureError(element,'Choose a person or add a new person name.');return;}if(!notes||!occurredAt){quickCaptureError(element,'Add what happened and a valid activity time.');return;}const phone=String(form.get('phoneNumber')||'').trim();const duplicate=!selected&&isCallablePhone(phone)&&state.contacts.find(contact=>normalizedPhone(contact.phoneNumber)===normalizedPhone(phone));if(duplicate){quickCaptureError(element,`That phone number belongs to ${duplicate.fullName}. Choose them from the person list instead.`);return;}const meeting=element.dataset.captureKind==='meeting';const type=meeting?'Meeting':selected?.conversationType||String(form.get('conversationType')||'Prospecting');const contact=selected||quickCaptureNewContact(form,occurredAt,{conversationType:meeting?'Other':type});applyQuickCaptureDetails(contact,form,occurredAt,meeting?'quick-meeting':'quick-conversation');contact.conversations.push({id:uid(),type,interestLevel:contact.interestLevel,notes,createdAt:nowISO(),conversationDate:occurredAt,isCountedConversation:true});contact.updatedAt=nowISO();if(!selected)state.contacts.unshift(contact);queueSave(meeting?'Meeting saved':'Conversation saved');closeQuickCreate();});
-  $('#quickCommunicationForm')?.addEventListener('submit',event=>{event.preventDefault();const element=event.currentTarget;const form=new FormData(element);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const occurredAt=quickCaptureISO(form.get('conversationDate'));if(!contact||!occurredAt){quickCaptureError(element,'Choose a person and a valid activity time.');return;}const type=element.dataset.captureKind==='text'?'Text':'Call';const followUp=quickCaptureISO(form.get('followUpDate'));contact.conversations.push({id:uid(),type:type==='Text'?'Text Message':'Call',communicationType:type,direction:String(form.get('direction')||'Outgoing'),outcome:String(form.get('outcome')||''),durationMinutes:type==='Call'?(Number(form.get('durationMinutes'))||null):null,interestLevel:contact.interestLevel,notes:String(form.get('notes')||'').trim(),conversationDate:occurredAt,createdAt:nowISO(),isCountedConversation:false,followUpCreated:Boolean(followUp)});applyQuickCaptureDetails(contact,form,occurredAt,`quick-${type.toLowerCase()}`);contact.updatedAt=nowISO();queueSave(`${type} logged`);closeQuickCreate();});
+  $('#quickNoteForm')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const notes=String(form.get('notes')||'').trim();const rawDate=String(form.get('conversationDate')||'').trim();const conversationDate=rawDate?`${rawDate}T12:00:00`:'';const occurredAt=quickCaptureISO(conversationDate);if(!contact||!notes||!occurredAt){quickCaptureError(event.currentTarget,!contact?'Choose a person and add a note.':!notes?'Add a note.':'Choose a valid activity date.');return;}applyQuickCaptureDetails(contact,form,occurredAt,'quick-other-activity');contact.conversations=Array.isArray(contact.conversations)?contact.conversations:[];contact.conversations.push({id:uid(),type:'Note',interestLevel:contact.interestLevel,notes,createdAt:nowISO(),conversationDate:occurredAt,isCountedConversation:false});contact.updatedAt=nowISO();queueSave('Activity added');closeQuickCreate();});
+  $('#quickConversationForm')?.addEventListener('submit',event=>{event.preventDefault();const element=event.currentTarget;const form=new FormData(element);const selected=state.contacts.find(contact=>String(contact.id)===String(form.get('contactId')));const fullName=String(form.get('fullName')||'').trim();const notes=String(form.get('notes')||'').trim();const occurredAt=quickCaptureISO(form.get('conversationDate'));const email=String(form.get('email')||'').trim();if(!selected&&!fullName){quickCaptureError(element,'Choose a person or add a new person name.');return;}if(!notes||!occurredAt){quickCaptureError(element,'Add what happened and a valid activity time.');return;}if(!isValidEmail(email)){quickCaptureError(element,'Enter a valid email address or leave it blank.');return;}const phone=String(form.get('phoneNumber')||'').trim();const duplicate=!selected&&isCallablePhone(phone)&&state.contacts.find(contact=>normalizedPhone(contact.phoneNumber)===normalizedPhone(phone));if(duplicate){quickCaptureError(element,`That phone number belongs to ${duplicate.fullName}. Choose them from the person list instead.`);return;}const meeting=element.dataset.captureKind==='meeting';const type=meeting?'Meeting':selected?.conversationType||String(form.get('conversationType')||'Prospecting');const contact=selected||quickCaptureNewContact(form,occurredAt,{conversationType:meeting?'Other':type});applyQuickCaptureDetails(contact,form,occurredAt,meeting?'quick-meeting':'quick-conversation');contact.conversations=Array.isArray(contact.conversations)?contact.conversations:[];contact.conversations.push({id:uid(),type,interestLevel:contact.interestLevel,notes,createdAt:nowISO(),conversationDate:occurredAt,isCountedConversation:true});contact.updatedAt=nowISO();if(!selected)state.contacts.unshift(contact);queueSave(meeting?'Meeting saved':'Conversation saved');closeQuickCreate();});
+  $('#quickCommunicationForm')?.addEventListener('submit',event=>{event.preventDefault();const element=event.currentTarget;const form=new FormData(element);const contact=state.contacts.find(item=>String(item.id)===String(form.get('contactId')));const occurredAt=quickCaptureISO(form.get('conversationDate'));const followUpInput=String(form.get('followUpDate')||'').trim();const followUp=followUpInput?quickCaptureISO(followUpInput):'';if(!contact||!occurredAt||followUpInput&&!followUp){quickCaptureError(element,!contact?'Choose a person and a valid activity time.':!occurredAt?'Choose a valid activity time.':'Choose a valid follow-up time.');return;}const type=element.dataset.captureKind==='text'?'Text':'Call';const durationValue=safeNumber(form.get('durationMinutes'));const duration=type==='Call'&&durationValue!==null&&durationValue>=0?Math.round(durationValue):null;contact.conversations=Array.isArray(contact.conversations)?contact.conversations:[];contact.conversations.push({id:uid(),type:type==='Text'?'Text Message':'Call',communicationType:type,direction:String(form.get('direction')||'Outgoing'),outcome:String(form.get('outcome')||''),durationMinutes:duration,interestLevel:contact.interestLevel,notes:String(form.get('notes')||'').trim(),conversationDate:occurredAt,createdAt:nowISO(),isCountedConversation:false,followUpCreated:Boolean(followUp)});applyQuickCaptureDetails(contact,form,occurredAt,`quick-${type.toLowerCase()}`);contact.updatedAt=nowISO();queueSave(`${type} logged`);closeQuickCreate();});
   requestAnimationFrame(()=>(ui.quickCreateMode?$('.quick-create-form [data-capture-person-search], .quick-create-form input:not([type="hidden"]):not([tabindex="-1"]), .quick-create-form select:not([tabindex="-1"]), .quick-create-form textarea'):$('.quick-create-option'))?.focus());
 }
 function renderPage() {
@@ -3483,7 +3777,7 @@ function settingsPrivacyContent(){
 function settingsAboutContent(){
   return `<section class="settings-reference-section"><h2>About Bridge</h2><div class="settings-reference-rows"><div class="ui-settings-row"><span><strong>Version</strong><small>${escapeHTML(APP_RELEASE.version)}</small></span></div><button type="button" id="openReleaseNotes">View release notes</button></div></section><section class="settings-reference-section"><h2>Support</h2><div class="settings-reference-rows settings-support-rows"><a class="ui-settings-row" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Feedback"><span><strong>Send feedback</strong><small>Email feedback about Bridge</small></span><span class="ui-settings-row__end">${icons.chevronRight}</span></a><a class="ui-settings-row" href="mailto:fountainofyouthxs@gmail.com?subject=Bridge%20Bug%20Report"><span><strong>Report a bug</strong><small>Email a bug report</small></span><span class="ui-settings-row__end">${icons.chevronRight}</span></a></div></section>`;
 }
-function settingsPageForm(section,content,save=true){return save?`<form id="settingsForm" class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}<div class="form-actions hn-settings-save">${Button("Save settings",{tone:"primary",size:"large",type:"submit"})}</div></form>`:`<div class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}</div>`;}
+function settingsPageForm(section,content,save=true){return save?`<form id="settingsForm" class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}<div class="form-actions hn-settings-save">${Button(settingsSaveInProgress?"Saving…":"Save settings",{tone:"primary",size:"large",type:"submit",attributes:settingsSaveInProgress?'disabled aria-disabled="true"':""})}</div></form>`:`<div class="hn-settings-form settings-route-stack" data-settings-section="${escapeHTML(section)}">${content}</div>`;}
 function settingsModal({routed=false}={}){
   const s=state.settings;const section=routed?(ui.routedSection||"root"):"root";
   const excludedDates=normalizeExcludedDates(Array.isArray(ui.settingsExcludedDatesDraft)?ui.settingsExcludedDatesDraft:s.streakExcludedDates);
@@ -3643,7 +3937,8 @@ function profileTimelineIconName(event) {
 function profileTimelineEvent(event) {
   const iconName=profileTimelineIconName(event);
   const actions=event.kind==="conversation"?`<span class="profile-timeline-event__actions">${event.raw?.communicationType?`<button class="ui-icon-button edit-communication-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Edit ${escapeHTML(event.title)}">${icons.pencil}</button>`:""}<button class="ui-icon-button delete-log" data-log-id="${escapeHTML(event.raw.id)}" aria-label="Delete ${escapeHTML(event.title)}">${icons.trash}</button></span>`:"";
-  return `<article class="profile-timeline-event profile-timeline-event--${event.kind}"><span class="profile-timeline-event__icon" aria-hidden="true">${icons[iconName]}</span><div><header><strong>${escapeHTML(event.title)}</strong><time datetime="${escapeHTML(new Date(event.at).toISOString())}">${escapeHTML(fmtDate(event.at))}</time></header>${event.place?`<small>${escapeHTML(event.place)}</small>`:""}${event.meta?`<small>${escapeHTML(event.meta)}</small>`:""}${event.body?`<p>${escapeHTML(event.body)}</p>`:""}</div>${actions}</article>`;
+  const eventISO=safeISO(event.at)||"";
+  return `<article class="profile-timeline-event profile-timeline-event--${event.kind}"><span class="profile-timeline-event__icon" aria-hidden="true">${icons[iconName]}</span><div><header><strong>${escapeHTML(event.title)}</strong><time datetime="${escapeHTML(eventISO)}">${escapeHTML(fmtDate(event.at))}</time></header>${event.place?`<small>${escapeHTML(event.place)}</small>`:""}${event.meta?`<small>${escapeHTML(event.meta)}</small>`:""}${event.body?`<p>${escapeHTML(event.body)}</p>`:""}</div>${actions}</article>`;
 }
 function profileTimeline(c,limit=4) {
   const events=relationshipTimelineEvents(c);
@@ -3652,7 +3947,7 @@ function profileTimeline(c,limit=4) {
 function profileNextAction(c,active) {
   const overdue=active&&new Date(active.dueDate)<new Date();
   const firstName=String(c.fullName||"this person").trim().split(/\s+/)[0]||"this person";
-  return `<section class="relationship-profile__section profile-next-action${overdue?" is-overdue":""}" id="profileNextAction" aria-labelledby="profileNextActionTitle"><h3 id="profileNextActionTitle">Next action</h3>${active?`<div class="profile-next-action__content"><time datetime="${escapeHTML(new Date(active.dueDate).toISOString())}">${escapeHTML(fmtDateTime(active.dueDate))}${overdue?" · Overdue":""}</time><p>${escapeHTML(active.note||"Follow up")}</p><div><button class="button primary" id="completeFollowUp" type="button">${icons.check}<span>Done</span></button><button class="button subtle" data-profile-reschedule type="button">${icons.clock}<span>Reschedule</span></button></div></div>`:`<button class="profile-next-action__empty" data-profile-followup type="button"><span>Nothing scheduled with ${escapeHTML(firstName)}</span><strong>Set one</strong></button>`}</section>`;
+  return `<section class="relationship-profile__section profile-next-action${overdue?" is-overdue":""}" id="profileNextAction" aria-labelledby="profileNextActionTitle"><h3 id="profileNextActionTitle">Next action</h3>${active?`<div class="profile-next-action__content"><time datetime="${escapeHTML(safeISO(active.dueDate)||"")}">${escapeHTML(fmtDateTime(active.dueDate))}${overdue?" · Overdue":""}</time><p>${escapeHTML(active.note||"Follow up")}</p><div><button class="button primary" id="completeFollowUp" type="button">${icons.check}<span>Done</span></button><button class="button subtle" data-profile-reschedule type="button">${icons.clock}<span>Reschedule</span></button></div></div>`:`<button class="profile-next-action__empty" data-profile-followup type="button"><span>Nothing scheduled with ${escapeHTML(firstName)}</span><strong>Set one</strong></button>`}</section>`;
 }
 function profileBridgeBrief(c) {
   const lines=profileBriefLines(c);
@@ -3745,15 +4040,15 @@ function communicationLogModal(id) {
   return `<div class="modal-backdrop call-log-backdrop capture-sheet-backdrop" id="communicationLogBackdrop" data-ui-sheet-backdrop><section class="modal call-log-modal capture-detail-sheet capture-sheet" role="dialog" aria-modal="true" aria-labelledby="communicationLogTitle" data-ui-sheet><header class="modal-head capture-detail-head capture-sheet-head" data-ui-sheet-drag-region><div><span class="eyebrow">Capture</span><h2 id="communicationLogTitle">${escapeHTML(heading)}</h2></div><button class="ui-icon-button close-communication-log" aria-label="Close">${icons.close}</button></header><div class="modal-body capture-sheet-body" data-ui-sheet-scroll><form id="communicationLogForm" class="call-log-form capture-detail-form"><input type="hidden" name="communicationType" value="${type}">${relationship}${activity}${next}<p class="capture-detail-note">${escapeHTML(captureNote)}</p></form></div><footer class="form-actions capture-detail-actions"><button class="button close-communication-log" type="button">Cancel</button><button class="button primary" type="submit" form="communicationLogForm">${icons.check}${existing?"Save changes":`Save ${type.toLowerCase()}`}</button></footer></section></div>`;
 }
 
-function clearContactEdit() { ui.contactEditing=false;ui.contactEditDirty=false; }
-function discardContactEdit(onDiscard=null) {
-  if(ui.contactEditing&&ui.contactEditDirty){requestConfirmation({title:"Discard unsaved changes?",message:"Your edits to this relationship will not be saved.",confirmLabel:"Discard changes",danger:true,onConfirm:()=>{clearContactEdit();onDiscard?.();}});return false;}
+function clearContactEdit() { ui.contactEditing=false;ui.contactEditDirty=false;clearRelationshipFormDraft("contactInfoForm"); }
+function discardContactEdit(onDiscard=null,onCancel=null) {
+  if(ui.contactEditing&&ui.contactEditDirty){requestConfirmation({title:"Discard unsaved changes?",message:"Your edits to this relationship will not be saved.",confirmLabel:"Discard changes",danger:true,onConfirm:()=>{clearContactEdit();onDiscard?.();},onCancel});return false;}
   clearContactEdit();
   return true;
 }
-function clearPersonalInfoDraft(){ui.personalInfoDirty=false;}
-function discardPersonalInfoDraft(onDiscard=null){
-  if(ui.personalInfoDirty){requestConfirmation({title:"Discard Personal Info changes?",message:"Your unsaved relationship details will not be kept.",confirmLabel:"Discard changes",danger:true,onConfirm:()=>{clearPersonalInfoDraft();onDiscard?.();}});return false;}
+function clearPersonalInfoDraft(){ui.personalInfoDirty=false;clearRelationshipFormDraft("personalInfoForm");}
+function discardPersonalInfoDraft(onDiscard=null,onCancel=null){
+  if(ui.personalInfoDirty){requestConfirmation({title:"Discard Personal Info changes?",message:"Your unsaved relationship details will not be kept.",confirmLabel:"Discard changes",danger:true,onConfirm:()=>{clearPersonalInfoDraft();onDiscard?.();},onCancel});return false;}
   clearPersonalInfoDraft();
   return true;
 }
@@ -4059,7 +4354,7 @@ function bindPageEvents(){
   $$('.today-complete-action').forEach(button=>button.addEventListener('click',()=>completeTodayAction(button.dataset.todayContactId,button.dataset.followUpId)));
   $$('.edit-action').forEach(button=>button.addEventListener('click',()=>{ui.actionEditId=ui.actionEditId===button.dataset.actionId?null:button.dataset.actionId;render();}));
   $$('.cancel-action-edit').forEach(button=>button.addEventListener('click',()=>{ui.actionEditId=null;render();}));
-  $$('.action-edit-form').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();const record=findFollowUpRecord(form.dataset.followupContactId||form.dataset.contactId,form.dataset.followUpId);if(!record)return;const data=new FormData(form);const dueDate=String(data.get('dueDate')||'');const note=String(data.get('note')||'').trim()||'Follow up';if(!dueDate)return;const changed=rescheduleFollowUp(record.followUp,dueDate);if(record.followUp.note!==note){record.followUp.note=note;record.followUp.updatedAt=nowISO();}record.contact.updatedAt=nowISO();ui.actionEditId=null;queueSave(changed?'Action rescheduled':'Action updated');render();}));
+  $$('.action-edit-form').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();const record=findFollowUpRecord(form.dataset.followupContactId||form.dataset.contactId,form.dataset.followUpId);if(!record)return;const data=new FormData(form);const dueInput=String(data.get('dueDate')||'').trim();const dueDate=dueInput?safeISO(dueInput):'';const note=String(data.get('note')||'').trim()||'Follow up';if(!dueInput||!dueDate){showToast('Choose a valid follow-up time');return;}const changed=rescheduleFollowUp(record.followUp,dueDate);if(record.followUp.note!==note){record.followUp.note=note;record.followUp.updatedAt=nowISO();}record.contact.updatedAt=nowISO();ui.actionEditId=null;queueSave(changed?'Action rescheduled':'Action updated');render();}));
   $$('.complete-action').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.followupContactId||button.dataset.contactId,button.dataset.followUpId);if(!record||!transitionFollowUp(record.followUp,'completed'))return;record.contact.updatedAt=nowISO();queueSave('Action completed');render();}));
   $$('[data-followup-delete]').forEach(button=>button.addEventListener('click',()=>{const record=findFollowUpRecord(button.dataset.followupContactId||button.dataset.contactId,button.dataset.followUpId);if(!record)return;requestConfirmation({title:'Delete this action?',message:'Its history will remain available for analytics.',confirmLabel:'Delete action',danger:true,onConfirm:()=>{transitionFollowUp(record.followUp,'deleted');record.contact.updatedAt=nowISO();if(ui.actionEditId===`${record.contact.id}:${record.followUp.id}`)ui.actionEditId=null;queueSave('Action deleted');render();}});}));
   const conversationForm=$('#addContactForm');
@@ -4283,7 +4578,11 @@ async function createScorecardLink() {
 async function revokeScorecardLink(created) {
   if(!created?.token)throw new Error("Scorecard link unavailable");
   const path=`/api/scorecards/${encodeURIComponent(created.token)}`;
-  if(accountModeActive())return accountClient.request(path,{method:"DELETE"});
+  if(accountModeActive()){
+    const options={method:"DELETE"};
+    if(created.managementToken)options.headers={"X-Bridge-Management-Token":created.managementToken};
+    return accountClient.request(path,options);
+  }
   if(!created.managementToken)throw new Error("This scorecard can no longer be managed from this device");
   const response=await apiFetch(path,{method:"DELETE",headers:{Authorization:`Bearer ${created.managementToken}`,Accept:"application/json"}});
   const result=await response.json().catch(()=>({}));
@@ -4300,30 +4599,34 @@ function bindScorecardShareEvents() {
   });
   $("#scorecardShareForm")?.addEventListener("submit", async event => {
     event.preventDefault();
+    if(ui.scorecardShareBusy)return;
     const action = event.submitter?.value === "image" ? "image" : "link";
     const form = new FormData(event.currentTarget);
     ui.scorecardIncludeContacts = form.get("scorecardScope") === "contacts";
+    const operation=++scorecardOperation;
     ui.scorecardShareBusy = true;
     render();
     try {
       if (action === "image") {
         await shareScorecardImage();
-        closeScorecardShare();
+        if(operation===scorecardOperation)closeScorecardShare();
         return;
       } else {
         const created = await createScorecardLink();
+        if(operation!==scorecardOperation)return;
         ui.scorecardCreated=created;
-        ui.scorecardShareBusy=false;
-        render();
-        requestAnimationFrame(()=>$("#messageScorecardLink")?.focus());
         return;
       }
     } catch (error) {
       if (error?.name === "AbortError") return;
+      if(operation!==scorecardOperation)return;
       showToast(error?.message || "Bridge could not create a secure scorecard link");
     } finally {
-      ui.scorecardShareBusy = false;
-      render();
+      if(operation===scorecardOperation){
+        ui.scorecardShareBusy = false;
+        render();
+        if(action==="link"&&ui.scorecardCreated)requestAnimationFrame(()=>$("#messageScorecardLink")?.focus());
+      }
     }
   });
   $("#messageScorecardLink")?.addEventListener("click",()=>{if(ui.scorecardCreated?.url)messageScorecard(ui.scorecardCreated.url);});
@@ -4332,9 +4635,12 @@ function bindScorecardShareEvents() {
     if(ui.scorecardShareBusy||!ui.scorecardCreated)return;
     const scorecard=ui.scorecardCreated;
     requestConfirmation({title:"Revoke this scorecard link?",message:"Anyone with the link will lose access.",confirmLabel:"Revoke link",danger:true,onConfirm:async()=>{
+      if(ui.scorecardShareBusy||ui.scorecardCreated!==scorecard)return;
+      const operation=++scorecardOperation;
       ui.scorecardShareBusy=true;render();
-      try{await revokeScorecardLink(scorecard);ui.scorecardCreated={...scorecard,revoked:true};ui.scorecardShareBusy=false;render();showToast("Scorecard link revoked");}
-      catch(error){ui.scorecardShareBusy=false;render();showToast(error?.message||"Bridge could not revoke this scorecard link");}
+      try{await revokeScorecardLink(scorecard);if(operation!==scorecardOperation)return;ui.scorecardCreated={...scorecard,revoked:true};showToast("Scorecard link revoked");}
+      catch(error){if(operation!==scorecardOperation)return;showToast(error?.message||"Bridge could not revoke this scorecard link");}
+      finally{if(operation===scorecardOperation){ui.scorecardShareBusy=false;render();}}
     }});
   });
 }
@@ -4436,28 +4742,40 @@ function clearConversationDraft() {
   conversationDraftDirty = false;
 }
 
-function discardConversationDraft(onDiscard=null) {
-  if(conversationDraftDirty){requestConfirmation({title:"Discard this conversation draft?",message:"The information entered in this capture flow will not be saved.",confirmLabel:"Discard draft",danger:true,onConfirm:()=>{clearConversationDraft();onDiscard?.();}});return false;}
+function discardConversationDraft(onDiscard=null,onCancel=null) {
+  if(conversationDraftDirty){requestConfirmation({title:"Discard this conversation draft?",message:"The information entered in this capture flow will not be saved.",confirmLabel:"Discard draft",danger:true,onConfirm:()=>{clearConversationDraft();onDiscard?.();},onCancel});return false;}
   clearConversationDraft();
+  return true;
+}
+
+function discardNavigationDrafts(onDiscard=null,onCancel=null){
+  if(ui.personalInfoDirty){discardPersonalInfoDraft(()=>discardNavigationDrafts(onDiscard,onCancel),onCancel);return false;}
+  if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(()=>discardNavigationDrafts(onDiscard,onCancel),onCancel);return false;}
+  if(conversationDraftDirty){discardConversationDraft(()=>discardNavigationDrafts(onDiscard,onCancel),onCancel);return false;}
+  if(ui.quickCreateOpen&&quickCreateDraftDirty){discardQuickCreateDraft(()=>discardNavigationDrafts(onDiscard,onCancel),onCancel);return false;}
+  onDiscard?.();
   return true;
 }
 
 function handleAddContact(event){
   event.preventDefault(); const form=new FormData(event.currentTarget); const fullName=String(form.get('fullName')||'').trim(); if(!fullName)return;
-  let placeId=String(form.get('placeId')||'')||null, placeName=''; const newPlaceName=String(form.get('newPlaceName')||'').trim();
-  if(newPlaceName){let place=state.places.find(p=>p.name.toLowerCase()===newPlaceName.toLowerCase());if(!place){place={id:uid(),name:newPlaceName,isFavorite:form.has('favoritePlace'),createdAt:nowISO()};state.places.push(place);}else if(form.has('favoritePlace'))place.isFavorite=true;placeId=place.id;placeName=place.name;} else if(placeId){placeName=state.places.find(p=>p.id===placeId)?.name||'';}
-  const role=["Prospect","Customer","Team"].includes(String(form.get('role'))) ? String(form.get('role')) : "Prospect"; const isTeam=role==="Team"; const conversationDate=`${form.get('conversationDate')}T12:00:00`; const stages=Object.fromEntries(ALL_STAGES.map(stage=>[stage,false])); const stageDates={};
+  const rawConversationDate=String(form.get('conversationDate')||'').trim(); const conversationDate=rawConversationDate?`${rawConversationDate}T12:00:00`:''; if(!safeISO(conversationDate)){showToast('Enter a valid conversation date');return;}
+  const followUpInput=String(form.get('followUpDate')||'').trim(); const followUpDate=followUpInput?safeISO(followUpInput):''; if(followUpInput&&!followUpDate){showToast('Choose a valid follow-up time');return;}
+  const checkBackInput=String(form.get('checkBackDate')||'').trim(); const checkBackDate=checkBackInput?safeISO(checkBackInput):''; if(checkBackInput&&!checkBackDate){showToast('Choose a valid check-back time');return;}
+  const placeId=String(form.get('placeId')||'')||null; const selectedPlace=placeId&&Array.isArray(state.places)?state.places.find(p=>String(p?.id)===placeId):null; const newPlaceName=String(form.get('newPlaceName')||'').trim(); const placeName=newPlaceName||selectedPlace?.name||'';
+  if(placeId&&!selectedPlace&&!newPlaceName){showToast('Choose a saved place or leave place blank');return;}
+  const role=["Prospect","Customer","Team"].includes(String(form.get('role'))) ? String(form.get('role')) : "Prospect"; const isTeam=role==="Team"; const stages=Object.fromEntries(ALL_STAGES.map(stage=>[stage,false])); const stageDates={};
   for(const stage of ['MSA','DTM']){if(form.has(stageInputName(stage))){stages[stage]=true;stageDates[stage]=conversationDate;}}
   const selectedPipelineStage=String(form.get('pipelineStage')||'');
   if((PIPELINES[role] || []).includes(selectedPipelineStage)){stages[selectedPipelineStage]=true;stageDates[selectedPipelineStage]=conversationDate;}
   const notes=String(form.get('notes')||'').trim(); const personalInfo=String(form.get('personalInfo')||'').trim(); const phoneNumber=String(form.get('phoneNumber')||'').trim(); const email=String(form.get('email')||'').trim();
   if(!isValidEmail(email)){showToast('Enter a valid email address or leave it blank');return;}
   const duplicate=isCallablePhone(phoneNumber)&&state.contacts.find(existing=>normalizedPhone(existing.phoneNumber)===normalizedPhone(phoneNumber));
-  if(duplicate){requestConfirmation({title:"Use the existing relationship?",message:`${duplicate.fullName} already uses this phone number. Add this as a new conversation on their existing record instead?`,confirmLabel:"Add conversation",onConfirm:()=>{duplicate.conversations.push({id:uid(),type:String(form.get('conversationType')),interestLevel:duplicate.interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true});if(personalInfo&&!duplicate.personalInfo)duplicate.personalInfo=personalInfo;if(email&&!duplicate.email)duplicate.email=email;duplicate.updatedAt=nowISO();clearConversationDraft();ui.conversationStep=0;queueSave('Conversation added to existing contact');ui.page='contacts';ui.detailId=duplicate.id;render();}});return;}
-  const interestLevel=isTeam?"Unsure":String(form.get('interestLevel')||"Unsure"); const judgement=isTeam?"Good Fit":String(form.get('judgement')||"Good Fit");
-  const contact={id:uid(),fullName,phoneNumber,email,capturedPhoneNumber:phoneNumber,phoneCapturedAt:phoneNumber?conversationDate:null,role,judgement,interestLevel,conversationType:String(form.get('conversationType')),placeId,placeName,dateFirstMet:conversationDate,personalInfo,isFilteredOut:false,filteredOutAt:null,checkBackDate:form.get('checkBackDate')?new Date(String(form.get('checkBackDate'))).toISOString():null,archivedAt:null,archiveReason:null,stages,stageDates,stageEvents:Object.entries(stageDates).map(([stage,occurredAt])=>({id:uid(),stage,fromStage:null,toStage:stage,occurredAt,source:"add-new"})),followUps:[],notes:[],conversations:[{id:uid(),type:String(form.get('conversationType')),interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true}],createdAt:nowISO(),updatedAt:nowISO()};
-  if(form.get('followUpDate'))createFollowUp(contact,new Date(String(form.get('followUpDate'))).toISOString(),'Follow up');
-  if(form.get('checkBackDate'))createFollowUp(contact,new Date(String(form.get('checkBackDate'))).toISOString(),'Check back down the line');
+  if(duplicate){requestConfirmation({title:"Use the existing relationship?",message:`${duplicate.fullName} already uses this phone number. Add this as a new conversation on their existing record instead?`,confirmLabel:"Add conversation",onConfirm:()=>{const previousPersonalInfo=duplicate.personalInfo;const previousEmail=duplicate.email;applyQuickCaptureDetails(duplicate,form,conversationDate,'add-duplicate');if(previousPersonalInfo)duplicate.personalInfo=previousPersonalInfo;if(previousEmail)duplicate.email=previousEmail;else if(email)duplicate.email=email;duplicate.conversations=Array.isArray(duplicate.conversations)?duplicate.conversations:[];duplicate.conversations.push({id:uid(),type:String(form.get('conversationType')),interestLevel:duplicate.interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true});duplicate.updatedAt=nowISO();clearConversationDraft();ui.conversationStep=0;queueSave('Conversation added to existing contact');ui.page='contacts';ui.detailId=duplicate.id;render();}});return;}
+  const {placeId:committedPlaceId,placeName:committedPlaceName}=quickCapturePlace(form); const interestLevel=isTeam?"Unsure":String(form.get('interestLevel')||"Unsure"); const judgement=isTeam?"Good Fit":String(form.get('judgement')||"Good Fit");
+  const contact={id:uid(),fullName,phoneNumber,email,capturedPhoneNumber:phoneNumber,phoneCapturedAt:phoneNumber?conversationDate:null,role,judgement,interestLevel,conversationType:String(form.get('conversationType')),placeId:committedPlaceId||placeId,placeName:committedPlaceName||placeName,dateFirstMet:conversationDate,personalInfo,isFilteredOut:false,filteredOutAt:null,checkBackDate:checkBackDate||null,archivedAt:null,archiveReason:null,stages,stageDates,stageEvents:Object.entries(stageDates).map(([stage,occurredAt])=>({id:uid(),stage,fromStage:null,toStage:stage,occurredAt,source:"add-new"})),followUps:[],notes:[],conversations:[{id:uid(),type:String(form.get('conversationType')),interestLevel,notes,createdAt:nowISO(),conversationDate,isCountedConversation:true}],createdAt:nowISO(),updatedAt:nowISO()};
+  if(followUpDate)createFollowUp(contact,followUpDate,'Follow up');
+  if(checkBackDate)createFollowUp(contact,checkBackDate,'Check back down the line');
   state.contacts.unshift(contact); clearConversationDraft(); ui.conversationStep=0; queueSave('Conversation saved'); ui.page='contacts'; render();
 }
 
@@ -4473,7 +4791,13 @@ function downloadBlob(name, blob) {
 function showSignedOutAccount(message) {
   clearInterval(reminderTimer);
   reminderTimer = null;
-  navigator.serviceWorker?.controller?.postMessage({ type: "bridge-account-logout" });
+  const sendLogoutToWorker = registration => {
+    try { (registration?.active || navigator.serviceWorker?.controller)?.postMessage({ type: "bridge-account-logout" }); } catch {}
+  };
+  try {
+    if (navigator.serviceWorker?.controller) sendLogoutToWorker();
+    else navigator.serviceWorker?.ready?.then(sendLogoutToWorker).catch(() => {});
+  } catch {}
   state = defaultState();
   stateHydrated = false;
   anonymousSnapshot = null;
@@ -4513,10 +4837,10 @@ function bindSettingsEvents(){
     if(ui.accountBusy)return;
     const pending=Number(accountContext.status?.pending||0);
     requestConfirmation({title:'Sign out of Bridge?',message:pending?`${pending} pending change${pending===1?'':'s'} will remain on this device and resume after you sign in again.`:'This device will be signed out of your Bridge account.',confirmLabel:'Sign out',danger:true,onConfirm:async()=>{
+      if(ui.accountBusy)return;
       ui.accountBusy=true;render();
-      await disableBackgroundPush().catch(()=>{});
-      await accountClient.logout();
-      showSignedOutAccount(pending?'Signed out. Pending changes are preserved on this device.':'Signed out of Bridge.');
+      try{await disableBackgroundPush().catch(()=>{});await accountClient.logout();showSignedOutAccount(pending?'Signed out. Pending changes are preserved on this device.':'Signed out of Bridge.');}
+      catch(error){ui.accountBusy=false;render();showToast(error?.message||'Bridge could not sign out this device');}
     }});
   });
   $('#changeAccountPassword')?.addEventListener('click',async()=>{
@@ -4625,8 +4949,13 @@ function bindSettingsEvents(){
   $('#disablePushNotifications')?.addEventListener('click',async()=>{await disableBackgroundPush();state.settings.notificationsEnabled=false;queueSave('Background reminders disabled on this device');render();startReminderChecks();});
   $("#settingsForm")?.addEventListener("submit",async event=>{
     event.preventDefault();
+    if(settingsSaveInProgress||ui.accountBusy)return;
     const form=event.currentTarget;
     const f=new FormData(form);
+    const operation=++settingsOperation;
+    settingsSaveInProgress=true;
+    const submitButton=form.querySelector('[type="submit"]');
+    if(submitButton)submitButton.disabled=true;
     const hasControl=name=>Boolean(form.elements.namedItem(name));
     const enabledControl=name=>{const control=form.elements.namedItem(name);return Boolean(control&&!control.disabled);};
     const next={...state.settings};
@@ -4634,23 +4963,23 @@ function bindSettingsEvents(){
       const firstName=String(f.get("firstName")||"").trim();
       const lastName=String(f.get("lastName")||"").trim();
       if(accountModeActive()){
-        try{const result=await accountClient.updateAccount({firstName,lastName});if(result?.user)accountContext.user=result.user;}
-        catch(error){showToast(error?.message||"Bridge could not update the account profile");return;}
+        try{const result=await accountClient.updateAccount({firstName,lastName});if(operation!==settingsOperation)return;if(result?.user)accountContext.user=result.user;}
+        catch(error){if(operation===settingsOperation){settingsSaveInProgress=false;if(submitButton)submitButton.disabled=false;showToast(error?.message||"Bridge could not update the account profile");}return;}
       }
       next.name=[firstName,lastName].filter(Boolean).join(" ");
       next.firstName=firstName;
       next.lastName=lastName;
       next.businessName=String(f.get("businessName")||"");
     }
-    if(hasControl("dailyGoal"))next.dailyGoal=Math.min(100,Math.max(1,Number(f.get("dailyGoal"))||5));
-    if(hasControl("weeklyGoal"))next.weeklyGoal=Math.min(500,Math.max(1,Number(f.get("weeklyGoal"))||25));
-    if(hasControl("monthlyGoal"))next.monthlyGoal=Math.min(2000,Math.max(1,Number(f.get("monthlyGoal"))||100));
+    if(hasControl("dailyGoal"))next.dailyGoal=Math.min(100,Math.max(1,safeNumber(f.get("dailyGoal"))??5));
+    if(hasControl("weeklyGoal"))next.weeklyGoal=Math.min(500,Math.max(1,safeNumber(f.get("weeklyGoal"))??25));
+    if(hasControl("monthlyGoal"))next.monthlyGoal=Math.min(2000,Math.max(1,safeNumber(f.get("monthlyGoal"))??100));
     if(form.dataset.settingsSection==="goals"){
       next.streakExcludedDates=normalizeExcludedDates(ui.settingsExcludedDatesDraft);
       next.streakRestRules=normalizeRestRules(ui.settingsRestRulesDraft);
     }
-    if(hasControl("defaultFollowUpDays"))next.defaultFollowUpDays=Number(f.get("defaultFollowUpDays"))||2;
-    if(hasControl("weekStart"))next.weekStart=Number(f.get("weekStart"))||0;
+    if(hasControl("defaultFollowUpDays")){const value=safeNumber(f.get("defaultFollowUpDays"));next.defaultFollowUpDays=value??2;}
+    if(hasControl("weekStart")){const value=safeNumber(f.get("weekStart"));next.weekStart=value??0;}
     let archived=0;
     if(hasControl("autoArchiveInactive")){next.autoArchiveInactive=f.has("autoArchiveInactive");archived=archiveInactiveContacts(state.contacts,next.autoArchiveInactive);}
     if(enabledControl("notificationsEnabled"))next.notificationsEnabled=f.has("notificationsEnabled")&&notificationPermission()==="granted";
@@ -4659,10 +4988,13 @@ function bindSettingsEvents(){
     if(hasControl("dailyReminderTime"))next.dailyReminderTime=String(f.get("dailyReminderTime")||"09:00");
     if(hasControl("healthScoresVisible"))next.healthScoresVisible=f.has("healthScoresVisible");
     if(hasControl("healthFallbackCadenceDays")){
-      next.healthFallbackCadenceDays=Math.min(365,Math.max(1,Number(f.get("healthFallbackCadenceDays"))||14));
+      const value=safeNumber(f.get("healthFallbackCadenceDays"));
+      next.healthFallbackCadenceDays=Math.min(365,Math.max(1,value??14));
       next.healthCadencePresets=readHealthCadencePresets(f);
     }
+    if(operation!==settingsOperation){settingsSaveInProgress=false;return;}
     state.settings=next;
+    settingsSaveInProgress=false;
     ui.settingsExcludedDatesDraft=null;ui.settingsRestRulesDraft=null;
     applyFixedAppearance();queueSave(archived?`${archived} inactive contact${archived===1?"":"s"} archived`:"Settings saved");
     if(ui.routedScreen==="settings")presentationBack();else{ui.settingsOpen=false;render();}
@@ -4670,7 +5002,7 @@ function bindSettingsEvents(){
   });
   $('#exportBackup')?.addEventListener('click',()=>downloadFile(`bridge-backup-${todayInput()}.json`,JSON.stringify(state,null,2),'application/json'));
   $('#exportCSV')?.addEventListener('click',()=>{const rows=[['Name','Phone','Email','Role','Interest','Judgement','Conversation Type','Place','Date First Met','Pipeline'],...state.contacts.map(c=>[c.fullName,c.phoneNumber,c.email,c.role,c.interestLevel,c.judgement,c.conversationType,c.placeName,c.dateFirstMet,stageFor(c)])];downloadFile(`bridge-contacts-${todayInput()}.csv`,rows.map(r=>r.map(csvCell).join(',')).join('\n'),'text/csv');});
-  $('#importBackup')?.addEventListener('change',async event=>{const input=event.target;const file=input.files?.[0];if(!file)return;try{const imported=normalizeState(JSON.parse(await file.text()));requestConfirmation({title:'Replace current Bridge data?',message:`Restore ${imported.contacts.length} contact${imported.contacts.length===1?'':'s'} from this backup. This replaces the data currently open in Bridge.`,confirmLabel:'Restore backup',danger:true,onConfirm:()=>{state=imported;applyFixedAppearance();queueSave('Backup restored');ui.settingsOpen=false;render();},onCancel:()=>{input.value='';}});}catch{input.value='';showToast('That backup file could not be read');}});
+  $('#importBackup')?.addEventListener('change',async event=>{const input=event.target;const file=input.files?.[0];if(!file)return;try{const imported=parseBackupDocument(await file.text());requestConfirmation({title:'Replace current Bridge data?',message:`Restore ${imported.contacts.length} contact${imported.contacts.length===1?'':'s'} from this backup. This replaces the data currently open in Bridge.`,confirmLabel:'Restore backup',danger:true,onConfirm:()=>{state=imported;applyFixedAppearance();queueSave('Backup restored');ui.settingsOpen=false;render();},onCancel:()=>{input.value='';}});}catch(error){input.value='';showToast(error?.message||'That backup file could not be read');}});
 }
 function csvCell(value){return `"${String(value||'').replaceAll('"','""')}"`;}
 function downloadFile(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -4724,9 +5056,9 @@ function bindContactModalEvents(){
   }));
   $$('[data-edit-contact-info], #editContactInfo').forEach(button=>button.addEventListener('click',()=>{if(ui.routedScreen==="person")navigatePresentation("person-edit",{person:c.id},{opener:button});else{ui.contactDetailTab='overview';ui.contactEditing=true;ui.contactEditDirty=false;render();requestAnimationFrame(()=>$('#contactInfoForm input[name="fullName"]')?.focus());}}));
   $$('[data-profile-followup]').forEach(button=>button.addEventListener('click',()=>{quickCreateFocusReturn=button;ui.quickCreateOpen=true;ui.quickCreateMode="action";ui.quickCreateContactId=c.id;ui.quickCreateStep=0;render();}));
-  $$('[data-profile-reschedule]').forEach(button=>button.addEventListener('click',()=>{const active=c.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];if(!active)return;rescheduleFollowUp(active,addDays(new Date(active.dueDate),3).toISOString());c.updatedAt=nowISO();queueSave('Moved out three days');render();}));
-  $('#contactInfoForm')?.addEventListener('input',()=>{ui.contactEditDirty=true;});
-  $('#contactInfoForm')?.addEventListener('change',()=>{ui.contactEditDirty=true;});
+  $$('[data-profile-reschedule]').forEach(button=>button.addEventListener('click',()=>{const active=c.followUps.filter(isScheduledFollowUp).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate))[0];if(!active)return;const activeDate=new Date(active.dueDate);const shifted=addDays(activeDate,3);if(!Number.isFinite(activeDate.getTime())||!Number.isFinite(shifted.getTime())){showToast('This follow-up has an invalid date');return;}rescheduleFollowUp(active,addDays(new Date(active.dueDate),3).toISOString());c.updatedAt=nowISO();queueSave('Moved out three days');render();}));
+  $('#contactInfoForm')?.addEventListener('input',event=>{ui.contactEditDirty=true;captureRelationshipFormDraft(event.currentTarget);});
+  $('#contactInfoForm')?.addEventListener('change',event=>{ui.contactEditDirty=true;captureRelationshipFormDraft(event.currentTarget);});
   $('#editContactRole')?.addEventListener('change', event => {
     const team = event.target.value === "Team";
     $$('[data-edit-role-fit-field]').forEach(field => { field.hidden = team; });
@@ -4738,8 +5070,8 @@ function bindContactModalEvents(){
   $('#contactInfoForm select[name="placeId"]')?.addEventListener('change',event=>{if(event.target.value&&editNewPlaceInput){editNewPlaceInput.value='';syncEditNewPlace();}});
   syncEditNewPlace();
   $('#cancelContactInfoEdit')?.addEventListener('click',()=>{const close=()=>{if(ui.routedScreen==="person-edit")presentationBack();else render();};if(ui.contactEditing&&ui.contactEditDirty){discardContactEdit(close);return;}clearContactEdit();close();});
-  $('#contactInfoForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const nextRole=["Prospect","Customer","Team"].includes(String(f.get('role'))) ? String(f.get('role')) : c.role;const pipelineLocked=PIPELINE_STAGES.some(stage=>Boolean(c.stages?.[stage]));if(nextRole!==c.role&&pipelineLocked){showToast('Move or clear the current pipeline stage before changing this role');return;}const nextPhone=String(f.get('phoneNumber')||'').trim();const nextEmail=String(f.get('email')||'').trim();if(!isValidEmail(nextEmail)){showToast('Enter a valid email address or leave it blank');return;}const duplicate=isCallablePhone(nextPhone)&&state.contacts.find(other=>other.id!==c.id&&normalizedPhone(other.phoneNumber)===normalizedPhone(nextPhone));if(duplicate){showToast(`That phone number already belongs to ${duplicate.fullName}`);return;}c.fullName=String(f.get('fullName')).trim()||c.fullName;c.phoneNumber=nextPhone;c.email=nextEmail;c.role=nextRole;if(nextRole!=="Team"){c.interestLevel=String(f.get('interestLevel')||c.interestLevel);c.judgement=String(f.get('judgement')||c.judgement);}else{setFilteredOut(c,false,nowISO());}c.conversationType=String(f.get('conversationType'));const place=quickCapturePlace(f);c.placeId=place.placeId;c.placeName=place.placeName;const metDate=String(f.get('dateFirstMet')||'');if(metDate)c.dateFirstMet=`${metDate}T12:00:00`;c.updatedAt=nowISO();ui.contactEditing=false;ui.contactEditDirty=false;queueSave('Relationship updated');if(ui.routedScreen==="person-edit")presentationBack();else render();});
-  $('#personalInfoForm')?.addEventListener('input',()=>{ui.personalInfoDirty=true;});
+  $('#contactInfoForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const nextRole=["Prospect","Customer","Team"].includes(String(f.get('role'))) ? String(f.get('role')) : c.role;const pipelineLocked=PIPELINE_STAGES.some(stage=>Boolean(c.stages?.[stage]));if(nextRole!==c.role&&pipelineLocked){showToast('Move or clear the current pipeline stage before changing this role');return;}const nextPhone=String(f.get('phoneNumber')||'').trim();const nextEmail=String(f.get('email')||'').trim();if(!isValidEmail(nextEmail)){showToast('Enter a valid email address or leave it blank');return;}const metInput=String(f.get('dateFirstMet')||'').trim();const metDate=metInput?`${metInput}T12:00:00`:'';if(metInput&&!safeISO(metDate)){showToast('Choose a valid first-meeting date');return;}const duplicate=isCallablePhone(nextPhone)&&state.contacts.find(other=>other.id!==c.id&&normalizedPhone(other.phoneNumber)===normalizedPhone(nextPhone));if(duplicate){showToast(`That phone number already belongs to ${duplicate.fullName}`);return;}c.fullName=String(f.get('fullName')||'').trim()||c.fullName;c.phoneNumber=nextPhone;c.email=nextEmail;c.role=nextRole;if(nextRole!=="Team"){c.interestLevel=String(f.get('interestLevel')||c.interestLevel);c.judgement=String(f.get('judgement')||c.judgement);}else{setFilteredOut(c,false,nowISO());}c.conversationType=String(f.get('conversationType')||c.conversationType||'Prospecting');const place=quickCapturePlace(f);c.placeId=place.placeId;c.placeName=place.placeName;if(metDate)c.dateFirstMet=metDate;c.updatedAt=nowISO();clearRelationshipFormDraft("contactInfoForm");ui.contactEditing=false;ui.contactEditDirty=false;queueSave('Relationship updated');if(ui.routedScreen==="person-edit")presentationBack();else render();});
+  $('#personalInfoForm')?.addEventListener('input',event=>{ui.personalInfoDirty=true;captureRelationshipFormDraft(event.currentTarget);});
   $('#personalInfoForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);c.personalInfo=String(f.get('personalInfo')||'').trim();c.updatedAt=nowISO();clearPersonalInfoDraft();queueSave('Personal info saved');render();});
   const cadenceForm=$('#contactCadenceForm');
   const syncContactCadenceMode=()=>{if(!cadenceForm)return;const custom=cadenceForm.elements.healthCadenceMode?.value==='custom';const section=$('[data-contact-cadence-custom]',cadenceForm);const input=cadenceForm.elements.healthCadenceDays;if(section)section.hidden=!custom;if(input){input.disabled=!custom;input.required=custom;}};
@@ -4748,7 +5080,7 @@ function bindContactModalEvents(){
   syncContactCadenceMode();
   $('#editTrackingForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const team=c.role==="Team";const nextFiltered=team?false:f.has('isFilteredOut');const saveTracking=()=>{setFilteredOut(c,nextFiltered,nowISO());c.stageEvents=Array.isArray(c.stageEvents)?c.stageEvents:[];for(const stage of ['MSA','DTM']){const checked=f.has(stageInputName(stage));if(checked&&!c.stages[stage]){const occurredAt=nowISO();c.stageDates[stage]=occurredAt;c.stageEvents.push({id:uid(),stage,occurredAt});}c.stages[stage]=checked;}const selected=String(f.get('pipelineStage')||'');setPipelineStage(c,(PIPELINES[c.role] || []).includes(selected)?selected:'');c.updatedAt=nowISO();queueSave(nextFiltered?'Contact moved to No-Go':'Tracking updated');render();};if(nextFiltered&&!c.isFilteredOut){requestConfirmation({title:`Mark ${c.fullName} as No-Go?`,message:'They will leave the active pipeline, but their history will be preserved.',confirmLabel:'Mark No-Go',danger:true,onConfirm:saveTracking});return;}saveTracking();});
   $('#clearPipelineStage')?.addEventListener('click',()=>{requestConfirmation({title:'Clear the current pipeline stage?',message:'Historical stage activity will remain.',confirmLabel:'Clear stage',danger:true,onConfirm:()=>{setPipelineStage(c,'');c.updatedAt=nowISO();queueSave('Pipeline stage cleared');render();}});});
-  $('#addLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);c.conversations.push({id:uid(),type:String(f.get('type')),interestLevel:c.interestLevel,notes:String(f.get('notes')).trim(),createdAt:nowISO(),conversationDate:`${f.get('conversationDate')}T12:00:00`,isCountedConversation:false});c.updatedAt=nowISO();queueSave('Note added');render();});
+  $('#addLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const rawDate=String(f.get('conversationDate')||'').trim();const conversationDate=rawDate?`${rawDate}T12:00:00`:'';if(!safeISO(conversationDate)){showToast('Choose a valid activity date');return;}c.conversations=Array.isArray(c.conversations)?c.conversations:[];c.conversations.push({id:uid(),type:String(f.get('type')),interestLevel:c.interestLevel,notes:String(f.get('notes')||'').trim(),createdAt:nowISO(),conversationDate,isCountedConversation:false});c.updatedAt=nowISO();queueSave('Note added');render();});
   $('#viewAllActivity')?.addEventListener('click',event=>{if(ui.routedScreen==="person")navigatePresentation("person-timeline",{person:c.id},{opener:event.currentTarget});else{ui.activityHistoryContactId=c.id;ui.activityFilter=ui.contactDetailTab==='notes'?"Notes":"All";ui.expandedLogIds.clear();render();}});
   $$('.log-note-toggle').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.expandLogId;if(ui.expandedLogIds.has(id))ui.expandedLogIds.delete(id);else ui.expandedLogIds.add(id);render();}));
   $$('.edit-communication-log').forEach(button=>button.addEventListener('click',()=>{const log=c.conversations.find(item=>item.id===button.dataset.logId);if(log){ui.activityHistoryContactId=null;openCommunicationLog(c.id,log.communicationType||"Call",log.conversationDate||log.createdAt,log.id);}}));
@@ -4776,7 +5108,7 @@ function bindCommunicationLogEvents(){
   bindBottomSheetGesture($('.call-log-modal'),close);
   $$('.close-communication-log').forEach(button=>button.addEventListener('click',close));
   $('#communicationLogBackdrop')?.addEventListener('click',event=>{if(event.target.id==='communicationLogBackdrop')close();});
-  $('#communicationLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const occurredAt=new Date(String(f.get('conversationDate'))).toISOString();const communicationType=String(f.get('communicationType'))==='Text'?'Text':'Call';const duration=communicationType==='Call'?(Number(f.get('durationMinutes'))||null):null;const followUp=String(f.get('followUpDate')||'');let log=c.conversations.find(item=>item.id===ui.communicationLogId);const isNew=!log;if(!log){log={id:uid(),createdAt:nowISO(),isCountedConversation:false};c.conversations.push(log);}Object.assign(log,{type:communicationType==='Text'?'Text Message':'Call',communicationType,direction:String(f.get('direction')||'Outgoing'),outcome:String(f.get('outcome')),durationMinutes:duration,interestLevel:c.interestLevel,notes:String(f.get('notes')||'').trim(),conversationDate:occurredAt,isCountedConversation:false,followUpCreated:Boolean(log.followUpCreated||followUp)});if(followUp){replaceScheduledFollowUp(c,new Date(followUp).toISOString(),`${communicationType} follow-up`,{sourceCommunicationId:log.id});}for(const activity of ['MSA','DTM']){if(f.has(stageInputName(activity))&&!c.stages[activity]){c.stages[activity]=true;c.stageDates[activity]=occurredAt;c.stageEvents.push({id:uid(),stage:activity,fromStage:"",toStage:activity,occurredAt,source:"communication"});}}const nextStage=String(f.get('pipelineStage')||'');if(nextStage==='__clear')setPipelineStage(c,'',occurredAt,'communication');else if(PIPELINES[c.role].includes(nextStage))setPipelineStage(c,nextStage,occurredAt,'communication');c.updatedAt=nowISO();ui.communicationContactId=null;ui.communicationStartedAt=null;ui.communicationLogId=null;clearPendingCommunication();queueSave(isNew?`${communicationType} logged`:'Communication log updated');render();});
+  $('#communicationLogForm')?.addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.currentTarget);const occurredAt=quickCaptureISO(f.get('conversationDate'));if(!occurredAt){showToast('Choose a valid activity time');return;}const followUpInput=String(f.get('followUpDate')||'').trim();const followUpDate=followUpInput?quickCaptureISO(followUpInput):'';if(followUpInput&&!followUpDate){showToast('Choose a valid follow-up time');return;}const communicationType=String(f.get('communicationType'))==='Text'?'Text':'Call';const durationValue=safeNumber(f.get('durationMinutes'));const duration=communicationType==='Call'&&durationValue!==null&&durationValue>=0?Math.round(durationValue):null;const nextStage=String(f.get('pipelineStage')||'');const validStages=PIPELINES[c.role]||[];c.conversations=Array.isArray(c.conversations)?c.conversations:[];c.followUps=Array.isArray(c.followUps)?c.followUps:[];c.stageEvents=Array.isArray(c.stageEvents)?c.stageEvents:[];c.stages=c.stages&&typeof c.stages==='object'?c.stages:{};c.stageDates=c.stageDates&&typeof c.stageDates==='object'?c.stageDates:{};let log=c.conversations.find(item=>item&&item.id===ui.communicationLogId);const isNew=!log;if(!log)log={id:uid(),createdAt:nowISO(),isCountedConversation:false};Object.assign(log,{type:communicationType==='Text'?'Text Message':'Call',communicationType,direction:String(f.get('direction')||'Outgoing'),outcome:String(f.get('outcome')||''),durationMinutes:duration,interestLevel:c.interestLevel,notes:String(f.get('notes')||'').trim(),conversationDate:occurredAt,isCountedConversation:false,followUpCreated:Boolean(log.followUpCreated||followUpDate)});if(isNew)c.conversations.push(log);if(followUpDate)replaceScheduledFollowUp(c,followUpDate,`${communicationType} follow-up`,{sourceCommunicationId:log.id});for(const activity of ['MSA','DTM']){if(f.has(stageInputName(activity))&&!c.stages[activity]){c.stages[activity]=true;c.stageDates[activity]=occurredAt;c.stageEvents.push({id:uid(),stage:activity,fromStage:"",toStage:activity,occurredAt,source:"communication"});}}if(nextStage==='__clear')setPipelineStage(c,'',occurredAt,'communication');else if(validStages.includes(nextStage))setPipelineStage(c,nextStage,occurredAt,'communication');c.updatedAt=nowISO();ui.communicationContactId=null;ui.communicationStartedAt=null;ui.communicationLogId=null;clearPendingCommunication();queueSave(isNew?`${communicationType} logged`:'Communication log updated');render();});
 }
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
@@ -4787,6 +5119,10 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
       return;
     }
     if (blockingModalOpen()) {
+      deferNotificationNavigation(event.data.url);
+      return;
+    }
+    if (hasUnsavedNavigationDraft()) {
       deferNotificationNavigation(event.data.url);
       return;
     }

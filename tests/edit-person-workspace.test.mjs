@@ -21,8 +21,8 @@ test("Edit Person expresses place creation accurately and gates favorite state",
 test("existing place selection and same-name creation cannot create duplicate place records",()=>{
   const place=app.slice(app.indexOf("function quickCapturePlace"),app.indexOf("function quickCaptureISO"));
   const binding=app.slice(app.indexOf("const editNewPlaceInput"),app.indexOf("$('#cancelContactInfoEdit')"));
-  assert.match(place,/state\.places\.find\(item=>item\.name\.toLowerCase\(\)===newName\.toLowerCase\(\)\)/);
-  assert.match(place,/else if\(placeId\)/);
+  assert.match(place,/places\.find\(item=>item&&String\(item\.name\|\|""\)\.trim\(\)\.toLowerCase\(\)===newName\.toLowerCase\(\)\)/);
+  assert.match(place,/else if\(placeId\)\{placeName=places\.find/);
   assert.match(binding,/event\.target\.value&&editNewPlaceInput/);
   assert.match(binding,/checkbox\.disabled=!active/);
 });

@@ -76,6 +76,9 @@ edit production tables.
 Once the `USER_BACKUPS` binding is configured, logical JSON snapshots are
 stored beneath server-generated user prefixes. Object keys never come from the
 browser. Backups contain the normalized user-owned CRM state and a checksum.
+The Worker rejects snapshots larger than 5,000 logical records or 4,000,000
+UTF-8 bytes so restore and integrity checks stay within the Worker request and
+memory budget.
 
 Retention:
 

@@ -20,3 +20,11 @@ test("invalid or incomplete phone numbers never produce communication links", ()
     assert.equal(smsHref(value), null);
   }
 });
+
+test("non-coercible phone values fail closed without throwing", () => {
+  const nonCoercible = Object.create(null);
+  assert.equal(canonicalPhone(nonCoercible), null);
+  assert.equal(phoneIdentity(nonCoercible), "");
+  assert.equal(telHref(nonCoercible), null);
+  assert.equal(smsHref(nonCoercible), null);
+});

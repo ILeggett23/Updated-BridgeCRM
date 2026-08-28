@@ -9,14 +9,50 @@
     Team: Object.freeze({ default: 30 })
   });
 
-  const clamp = (value, minimum = 0, maximum = 100) => Math.min(maximum, Math.max(minimum, Number(value) || 0));
+  const asArray = value => Array.isArray(value) ? value : [];
+  const finiteNumber = value => {
+    if (value === null || value === undefined || value === "") return null;
+    try {
+      const result = Number(value);
+      return Number.isFinite(result) ? result : null;
+    } catch {
+      return null;
+    }
+  };
+  const identity = value => {
+    try { return String(value ?? ""); } catch { return ""; }
+  };
+  const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+  const isValidDate = value => value instanceof Date && Number.isFinite(value.getTime());
+  const validDateOnly = text => {
+    const [year, month, day] = text.split("-").map(Number);
+    const date = new Date(`${text}T12:00:00`);
+    return isValidDate(date) && date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day;
+  };
+  const parseDate = value => {
+    if (value instanceof Date) return new Date(value.getTime());
+    if (typeof value === "number") return Number.isFinite(value) ? new Date(value) : new Date(NaN);
+    if (value === null || value === undefined || value === "") return new Date(NaN);
+    try {
+      const text = String(value).trim();
+      if (DATE_ONLY.test(text) && !validDateOnly(text)) return new Date(NaN);
+      return text ? new Date(DATE_ONLY.test(text) ? `${text}T12:00:00` : text) : new Date(NaN);
+    } catch {
+      return new Date(NaN);
+    }
+  };
+  const clamp = (value, minimum = 0, maximum = 100) => {
+    let numeric;
+    try { numeric = Number(value); } catch { numeric = NaN; }
+    return Number.isFinite(numeric) ? Math.min(maximum, Math.max(minimum, numeric)) : minimum;
+  };
   const timestamp = value => {
     if (value === null || value === undefined || value === "") return null;
-    const result = new Date(value).getTime();
+    const result = parseDate(value).getTime();
     return Number.isFinite(result) ? result : null;
   };
   const localDayNumber = value => {
-    const date = new Date(value);
+    const date = parseDate(value);
     if (Number.isNaN(date.getTime())) return null;
     return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY);
   };
@@ -26,21 +62,24 @@
     return laterDay === null || earlierDay === null ? 0 : laterDay - earlierDay;
   };
   const addLocalDays = (value, amount) => {
-    const date = new Date(value);
+    const date = parseDate(value);
+    if (Number.isNaN(date.getTime())) return null;
     date.setDate(date.getDate() + amount);
     return date.getTime();
   };
   const round = value => Math.round(clamp(value));
-  const isActiveContact = contact => !contact?.archivedAt && !contact?.isFilteredOut;
+  const isActiveContact = contact => Boolean(contact && typeof contact === "object" && !contact.archivedAt && !contact.isFilteredOut);
+  const stageIsSelected = value => Boolean(value?.isComplete ?? value);
   const currentStage = contact => {
     const roleStages = contact?.role === "Customer"
       ? ["CNA", "Proposal", "Follow-Up", "Order Placed", "Active Customer"]
       : contact?.role === "Prospect" ? ["PQI", "QI/P", "FUP", "LA"] : [];
-    return roleStages.find(stage => Boolean(contact?.stages?.[stage])) || "";
+    return roleStages.find(stage => stageIsSelected(contact?.stages?.[stage])) || "";
   };
-  const countedConversations = contact => (contact?.conversations || [])
-    .filter(item => item?.isCountedConversation && timestamp(item.conversationDate || item.createdAt) !== null)
-    .map(item => ({ ...item, occurredAt: timestamp(item.conversationDate || item.createdAt) }))
+  const activityTimestamp = item => timestamp(item?.conversationDate) ?? timestamp(item?.createdAt);
+  const countedConversations = contact => asArray(contact?.conversations)
+    .filter(item => item && typeof item === "object" && item.isCountedConversation && activityTimestamp(item) !== null)
+    .map(item => ({ ...item, occurredAt: activityTimestamp(item) }))
     .sort((left, right) => left.occurredAt - right.occurredAt);
 
   function normalizeCadencePresets(value) {
@@ -48,32 +87,36 @@
     return Object.fromEntries(Object.entries(DEFAULT_CADENCE_PRESETS).map(([role, defaults]) => {
       const supplied = source[role] && typeof source[role] === "object" ? source[role] : {};
       const normalized = Object.fromEntries(Object.entries(defaults).map(([stage, fallback]) => {
-        const candidate = Number(supplied[stage]);
-        return [stage, Number.isFinite(candidate) && candidate >= 1 && candidate <= 365 ? Math.round(candidate) : fallback];
+        const candidate = finiteNumber(supplied[stage]);
+        return [stage, candidate !== null && candidate >= 1 && candidate <= 365 ? Math.round(candidate) : fallback];
       }));
       return [role, normalized];
     }));
   }
 
   function resolveCadence(contact, settings = {}, now = new Date()) {
-    const override = Number(contact?.healthCadenceDays);
-    if (Number.isFinite(override) && override >= 1 && override <= 365) {
+    const override = finiteNumber(contact?.healthCadenceDays);
+    if (override !== null && override >= 1 && override <= 365) {
       return { days: Math.round(override), source: "contact override", stage: currentStage(contact) };
     }
     const deadline = timestamp(contact?.checkBackDate);
     if (deadline !== null) {
-      const conversations = countedConversations(contact);
-      const baseline = conversations.at(-1)?.occurredAt || timestamp(contact?.createdAt) || timestamp(now);
-      const days = Math.max(1, Math.abs(calendarDaysBetween(deadline, baseline)) || 1);
+      const nowTime = timestamp(now) ?? Date.now();
+      const conversations = countedConversations(contact).filter(item => item.occurredAt <= nowTime);
+      const createdAt = timestamp(contact?.createdAt);
+      const baseline = conversations.at(-1)?.occurredAt ?? (createdAt !== null && createdAt <= nowTime ? createdAt : nowTime);
+      const distance = calendarDaysBetween(deadline, baseline);
+      const days = Math.max(1, Math.abs(Number.isFinite(distance) ? distance : 0));
       return { days: Math.min(365, days), source: "check-back deadline", stage: currentStage(contact), deadline: new Date(deadline).toISOString() };
     }
+    const safeSettings = settings && typeof settings === "object" ? settings : {};
     const role = ["Prospect", "Customer", "Team"].includes(contact?.role) ? contact.role : null;
-    const presets = normalizeCadencePresets(settings.healthCadencePresets);
+    const presets = normalizeCadencePresets(safeSettings.healthCadencePresets);
     const stage = currentStage(contact);
-    const preset = Number(role ? presets[role]?.[stage || "default"] : NaN);
-    if (Number.isFinite(preset) && preset > 0) return { days: preset, source: "role and stage preset", stage };
-    const fallback = Number(settings.healthFallbackCadenceDays);
-    return { days: Number.isFinite(fallback) && fallback >= 1 ? Math.round(fallback) : 14, source: "global fallback", stage };
+    const preset = finiteNumber(role ? presets[role]?.[stage || "default"] : null);
+    if (preset !== null && preset > 0) return { days: preset, source: "role and stage preset", stage };
+    const fallback = finiteNumber(safeSettings.healthFallbackCadenceDays);
+    return { days: fallback !== null && fallback >= 1 ? Math.round(fallback) : 14, source: "global fallback", stage };
   }
 
   function recencyComponent(conversations, cadenceDays, nowTime) {
@@ -113,10 +156,12 @@
   }
 
   function normalizedFollowUps(contact) {
-    return (contact?.followUps || []).map(item => {
+    return asArray(contact?.followUps).filter(item => item && typeof item === "object").map(item => {
       const due = timestamp(item.dueDate);
       const completed = timestamp(item.completedAt);
-      const status = item.status || (completed !== null ? "completed" : item.deletedAt ? "deleted" : item.canceledAt ? "canceled" : "scheduled");
+      const status = ["scheduled", "open", "completed", "canceled", "deleted"].includes(item.status)
+        ? item.status
+        : completed !== null ? "completed" : item.deletedAt ? "deleted" : item.canceledAt ? "canceled" : "scheduled";
       return { ...item, due, completed, status };
     });
   }
@@ -124,16 +169,16 @@
   function actionHealthComponent(contact, nowTime) {
     const actions = normalizedFollowUps(contact);
     const relevant = actions.filter(item => !["deleted", "canceled"].includes(item.status));
-    const workflowRequiresAction = relevant.length > 0 || Boolean(contact?.checkBackDate) || ["FUP", "Follow-Up"].includes(currentStage(contact));
+    const workflowRequiresAction = relevant.length > 0 || timestamp(contact?.checkBackDate) !== null || ["FUP", "Follow-Up"].includes(currentStage(contact));
     if (!workflowRequiresAction) return null;
-    const scheduled = relevant.filter(item => item.status === "scheduled" && item.due !== null);
-    const completed = relevant.filter(item => item.status === "completed" && item.due !== null && item.completed !== null);
+    const scheduled = relevant.filter(item => ["scheduled", "open"].includes(item.status) && item.due !== null);
+    const completed = relevant.filter(item => item.status === "completed" && item.due !== null && item.completed !== null && item.completed <= nowTime);
     const overdue = scheduled.filter(item => item.due < nowTime);
     const future = scheduled.filter(item => item.due >= nowTime);
     const coverage = overdue.length ? 0 : future.length ? 100 : completed.length ? 50 : 0;
     const onTime = completed.length ? (completed.filter(item => item.completed <= item.due).length / completed.length) * 100 : null;
     const overdueScore = scheduled.length ? (1 - (overdue.length / scheduled.length)) * 100 : null;
-    const parts = [coverage, onTime, overdueScore].filter(value => value !== null);
+    const parts = [coverage, onTime, overdueScore].filter(value => Number.isFinite(value));
     return {
       value: round(parts.reduce((total, value) => total + value, 0) / parts.length),
       records: relevant.map(item => item.id).filter(Boolean),
@@ -177,15 +222,22 @@
   function trendFor(contactId, score, analytics, calculatedAt) {
     if (score === null) return { direction: "steady", delta: 0, comparedAt: null };
     const threshold = addLocalDays(calculatedAt, -7);
-    const previous = (analytics?.contactHealthEvents || [])
-      .filter(event => event.contactId === contactId && event.formulaVersion === FORMULA_VERSION && timestamp(event.calculatedAt) <= threshold && Number.isFinite(Number(event.score)))
+    const previous = asArray(analytics?.contactHealthEvents)
+      .filter(event => {
+        const eventTime = timestamp(event?.calculatedAt);
+        const eventScore = finiteNumber(event?.score);
+        return event && identity(event.contactId) === identity(contactId) && event.formulaVersion === FORMULA_VERSION && eventTime !== null && threshold !== null && eventTime <= threshold && eventScore !== null;
+      })
       .sort((left, right) => timestamp(right.calculatedAt) - timestamp(left.calculatedAt))[0];
     if (!previous) return { direction: "steady", delta: 0, comparedAt: null };
-    const delta = Math.round(score - Number(previous.score));
+    const previousScore = finiteNumber(previous.score);
+    if (previousScore === null) return { direction: "steady", delta: 0, comparedAt: null };
+    const delta = Math.round(score - previousScore);
     return { direction: delta >= 5 ? "improving" : delta <= -5 ? "declining" : "steady", delta, comparedAt: previous.calculatedAt };
   }
 
-  function scoreContact(contact, { settings = {}, analytics = {}, now = new Date() } = {}) {
+  function scoreContact(contact, options = {}) {
+    const { settings = {}, analytics = {}, now = new Date() } = options && typeof options === "object" ? options : {};
     const calculatedAt = timestamp(now) ?? Date.now();
     const cadence = resolveCadence(contact, settings, new Date(calculatedAt));
     const conversations = countedConversations(contact).filter(item => item.occurredAt <= calculatedAt);
@@ -223,49 +275,66 @@
   }
 
   function scoreContacts(contacts, options = {}) {
-    return (contacts || []).filter(isActiveContact).map(contact => scoreContact(contact, options));
+    return asArray(contacts).filter(isActiveContact).map(contact => scoreContact(contact, options));
   }
 
   function summarizeHealth(scores) {
-    const scored = (scores || []).filter(item => item.score !== null);
+    const source = asArray(scores).filter(item => item && typeof item === "object");
+    const scored = source.filter(item => finiteNumber(item.score) !== null);
     const bands = { Strong: 0, Steady: 0, "Needs Attention": 0, "At Risk": 0, "Building Baseline": 0 };
-    for (const item of scores || []) bands[item.band] = (bands[item.band] || 0) + 1;
+    for (const item of source) bands[item.band] = (bands[item.band] || 0) + 1;
     return {
-      average: scored.length ? Math.round(scored.reduce((total, item) => total + item.score, 0) / scored.length) : null,
+      average: scored.length ? Math.round(scored.reduce((total, item) => total + finiteNumber(item.score), 0) / scored.length) : null,
       scored: scored.length,
-      total: (scores || []).length,
+      total: source.length,
       bands
     };
   }
 
   function normalizeAnalyticsState(value) {
     const source = value && typeof value === "object" ? value : {};
+    const trackingStartedAt = timestamp(source.trackingStartedAt) === null ? new Date().toISOString() : source.trackingStartedAt;
     return {
+      ...source,
       schemaVersion: SCHEMA_VERSION,
       formulaVersion: FORMULA_VERSION,
-      trackingStartedAt: source.trackingStartedAt || new Date().toISOString(),
-      dailySnapshots: Array.isArray(source.dailySnapshots) ? source.dailySnapshots : [],
-      contactHealthEvents: Array.isArray(source.contactHealthEvents) ? source.contactHealthEvents : []
+      trackingStartedAt,
+      dailySnapshots: Array.isArray(source.dailySnapshots) ? [...source.dailySnapshots] : [],
+      contactHealthEvents: Array.isArray(source.contactHealthEvents) ? [...source.contactHealthEvents] : []
     };
   }
 
   function recordHealthEvents(analytics, scores) {
     const normalized = normalizeAnalyticsState(analytics);
-    for (const score of scores || []) {
-      if (score.score === null || !score.contactId) continue;
-      const previous = normalized.contactHealthEvents
-        .filter(event => event.contactId === score.contactId && event.formulaVersion === score.formulaVersion)
-        .at(-1);
-      if (previous && previous.score === score.score && previous.band === score.band && previous.confidence === score.confidence) continue;
-      normalized.contactHealthEvents.push({
-        id: `${score.contactId}-${score.calculatedAt}`,
+    for (const score of asArray(scores)) {
+      if (!score || typeof score !== "object" || score.contactId === null || score.contactId === undefined || score.contactId === "") continue;
+      const contactIdentity = identity(score.contactId);
+      if (!contactIdentity) continue;
+      const scoreValue = finiteNumber(score.score);
+      const calculatedAt = timestamp(score.calculatedAt);
+      if (scoreValue === null || calculatedAt === null) continue;
+      const formulaVersion = score.formulaVersion || FORMULA_VERSION;
+      const event = {
+        id: `${contactIdentity}-${score.calculatedAt}`,
         contactId: score.contactId,
-        score: score.score,
+        score: scoreValue,
         band: score.band,
         confidence: score.confidence,
         calculatedAt: score.calculatedAt,
-        formulaVersion: score.formulaVersion
-      });
+        formulaVersion
+      };
+      const sameTimeIndex = normalized.contactHealthEvents.findIndex(item => item && item.id === event.id);
+      if (sameTimeIndex >= 0) {
+        const previousAtSameTime = normalized.contactHealthEvents[sameTimeIndex];
+        if (previousAtSameTime.score === event.score && previousAtSameTime.band === event.band && previousAtSameTime.confidence === event.confidence) continue;
+        normalized.contactHealthEvents[sameTimeIndex] = event;
+        continue;
+      }
+      const previous = normalized.contactHealthEvents
+        .filter(item => item && identity(item.contactId) === contactIdentity && item.formulaVersion === formulaVersion && timestamp(item.calculatedAt) !== null)
+        .sort((left, right) => timestamp(right.calculatedAt) - timestamp(left.calculatedAt))[0];
+      if (previous && previous.score === event.score && previous.band === event.band && previous.confidence === event.confidence) continue;
+      normalized.contactHealthEvents.push(event);
     }
     return normalized;
   }

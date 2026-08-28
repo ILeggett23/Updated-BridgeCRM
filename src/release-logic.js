@@ -1,45 +1,48 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.39",
-    assetVersion: "v1.3.39",
+    version: "1.3.40",
+    assetVersion: "v1.3.40",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "bridge",
-        title: "Practice safely with fake data",
-        description: "Bridge Guide now uses one isolated tutorial workspace for every user, keeps Capture synchronized, and prevents tutorial activity from reaching real records or metrics."
-      }),
-      Object.freeze({
-        icon: "people",
-        title: "Secure Bridge accounts",
-        description: "Sign in with email and password to keep your private relationship workspace synced across devices."
-      }),
-      Object.freeze({
-        icon: "people",
-        title: "Local-first when disabled",
-        description: "Local development still opens directly when cloud authentication is explicitly turned off."
-      }),
-      Object.freeze({
         icon: "circleCheck",
-        title: "Verification recovery",
-        description: "A dedicated resend action helps unverified accounts request a fresh email safely."
+        title: "Safer Capture and navigation",
+        description: "Unsaved relationship and Capture drafts now survive Back confirmations, repeated navigation, and stale async completions until you choose to discard them."
+      }),
+      Object.freeze({
+        icon: "bridge",
+        title: "Stronger data recovery",
+        description: "Bridge can recover from a corrupt browser cache using its durable copy, preserves extension fields, and validates backups before replacement."
+      }),
+      Object.freeze({
+        icon: "people",
+        title: "More reliable account sync",
+        description: "Cloud sync now handles large paginated workspaces, request races, single-use account tokens, and backup integrity more safely."
+      }),
+      Object.freeze({
+        icon: "rocket",
+        title: "Cleaner offline updates",
+        description: "The service worker refreshes the complete public shell, isolates app caches, and handles project-path launches and reminders more defensively."
       })
     ])
   });
 
   function shouldShowRelease(lastSeenVersion, release = APP_RELEASE) {
-    return String(lastSeenVersion || "") !== release.version;
+    const currentRelease = release && typeof release === "object" ? release : APP_RELEASE;
+    return String(lastSeenVersion ?? "") !== String(currentRelease.version ?? "");
   }
 
   function readLastSeenVersion(storage = global.localStorage) {
-    try { return storage?.getItem(RELEASE_STORAGE_KEY) || ""; }
+    try { return typeof storage?.getItem === "function" ? storage.getItem(RELEASE_STORAGE_KEY) || "" : ""; }
     catch { return ""; }
   }
 
   function markReleaseSeen(storage = global.localStorage, release = APP_RELEASE) {
+    const currentRelease = release && typeof release === "object" ? release : APP_RELEASE;
     try {
-      storage?.setItem(RELEASE_STORAGE_KEY, release.version);
+      if (typeof storage?.setItem !== "function") return false;
+      storage.setItem(RELEASE_STORAGE_KEY, currentRelease.version);
       return true;
     } catch {
       return false;

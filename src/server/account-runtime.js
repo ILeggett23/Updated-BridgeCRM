@@ -4,6 +4,10 @@ const ACCOUNT_LONG_SESSION_DAYS = 30;
 const ACCOUNT_PASSWORD_ITERATIONS = 100000;
 const ACCOUNT_MAX_BODY_BYTES = 4_000_000;
 const ACCOUNT_MAX_BACKUP_RECORDS = 5000;
+const ACCOUNT_MAX_PASSWORD_ITERATIONS = 1_000_000;
+const ACCOUNT_MAX_CURSOR = Number.MAX_SAFE_INTEGER;
+const ACCOUNT_MAX_CLIENT_ID = 160;
+const ACCOUNT_MAX_MUTATION_ID = 160;
 const ACCOUNT_RECORD_TYPES = new Set(["contact", "place", "settings", "analytics", "meta"]);
 const ACCOUNT_TOKEN_TTL = {
   verify_email: 24 * 60 * 60 * 1000,
@@ -44,12 +48,13 @@ function validAccountEmail(value) {
 }
 
 function validAccountPassword(value) {
-  const password = String(value || "");
+  if (typeof value !== "string") return false;
+  const password = value;
   return password.length >= 12 && password.length <= 256;
 }
 
 function safeAccountName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 80);
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 80) : "";
 }
 
 function accountToken(bytes = 32) {
@@ -74,23 +79,32 @@ async function accountFingerprint(value, env) {
 
 async function accountReadJSON(request, maxBytes = ACCOUNT_MAX_BODY_BYTES) {
   const declaredLength = Number(request.headers.get("content-length") || 0);
-  if (declaredLength > maxBytes) throw Object.assign(new Error("Request is too large"), { status: 413, code: "request_too_large" });
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw Object.assign(new Error("Request is too large"), { status: 413, code: "request_too_large" });
   const text = await request.text();
-  if (text.length > maxBytes) throw Object.assign(new Error("Request is too large"), { status: 413, code: "request_too_large" });
+  if (textEncoder.encode(text).byteLength > maxBytes) throw Object.assign(new Error("Request is too large"), { status: 413, code: "request_too_large" });
   if (!text) return {};
-  try { return JSON.parse(text); }
+  let value;
+  try { value = JSON.parse(text); }
   catch { throw Object.assign(new Error("Request body must be valid JSON"), { status: 400, code: "invalid_json" }); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw Object.assign(new Error("Request body must be a JSON object"), { status: 400, code: "invalid_body" });
+  }
+  return value;
 }
 
 async function accountHashPassword(password, salt = accountToken(18), iterations = ACCOUNT_PASSWORD_ITERATIONS) {
+  const normalizedIterations = Number(iterations);
+  if (!Number.isSafeInteger(normalizedIterations) || normalizedIterations < 1 || normalizedIterations > ACCOUNT_MAX_PASSWORD_ITERATIONS) {
+    throw Object.assign(new Error("Password hashing parameters are invalid"), { code: "invalid_password_parameters" });
+  }
   const material = await crypto.subtle.importKey("raw", textEncoder.encode(String(password)), "PBKDF2", false, ["deriveBits"]);
   const derived = await crypto.subtle.deriveBits({
     name: "PBKDF2",
     hash: "SHA-256",
     salt: textEncoder.encode(salt),
-    iterations
+    iterations: normalizedIterations
   }, material, 256);
-  return { hash: base64URL(derived), salt, iterations };
+  return { hash: base64URL(derived), salt, iterations: normalizedIterations };
 }
 
 function accountConstantTimeEqual(left, right) {
@@ -104,37 +118,40 @@ function accountConstantTimeEqual(left, right) {
 }
 
 async function accountVerifyPassword(password, user) {
-  const candidate = await accountHashPassword(password, user.password_salt, Number(user.password_iterations));
-  return accountConstantTimeEqual(candidate.hash, user.password_hash);
+  if (!validAccountPassword(password) || !user?.password_salt || !user?.password_hash) return false;
+  try {
+    const candidate = await accountHashPassword(password, user.password_salt, Number(user.password_iterations));
+    return accountConstantTimeEqual(candidate.hash, user.password_hash);
+  } catch {
+    return false;
+  }
 }
 
 async function accountRateLimit(env, request, bucket, email, options = {}) {
   const now = Date.now();
-  const windowMs = options.windowMs || 15 * 60 * 1000;
-  const limit = options.limit || 8;
-  const blockMs = options.blockMs || 30 * 60 * 1000;
+  const windowMs = Number.isSafeInteger(options.windowMs) && options.windowMs > 0 ? options.windowMs : 15 * 60 * 1000;
+  const limit = Number.isSafeInteger(options.limit) && options.limit > 0 ? options.limit : 8;
+  const blockMs = Number.isSafeInteger(options.blockMs) && options.blockMs > 0 ? options.blockMs : 30 * 60 * 1000;
   const identity = await accountFingerprint(accountIP(request) + ":" + normalizeAccountEmail(email), env);
   const key = bucket + ":" + identity;
-  const current = await env.DB.prepare("SELECT window_started_at, request_count, blocked_until FROM bridge_auth_rate_limits WHERE bucket_key = ?1").bind(key).first();
-  if (Number(current?.blocked_until || 0) > now) {
-    return { allowed: false, retryAfter: Math.ceil((Number(current.blocked_until) - now) / 1000) };
-  }
-  const stale = !current || now - Number(current.window_started_at || 0) >= windowMs;
-  const count = stale ? 1 : Number(current.request_count || 0) + 1;
-  const blockedUntil = count > limit ? now + blockMs : null;
-  await env.DB.prepare(
-    "INSERT INTO bridge_auth_rate_limits (bucket_key, window_started_at, request_count, blocked_until) VALUES (?1, ?2, ?3, ?4) " +
-    "ON CONFLICT(bucket_key) DO UPDATE SET window_started_at = excluded.window_started_at, request_count = excluded.request_count, blocked_until = excluded.blocked_until"
-  ).bind(key, stale ? now : Number(current.window_started_at), count, blockedUntil).run();
-  return blockedUntil
-    ? { allowed: false, retryAfter: Math.ceil(blockMs / 1000) }
-    : { allowed: true, remaining: Math.max(0, limit - count) };
+  const row = await env.DB.prepare(
+    "INSERT INTO bridge_auth_rate_limits (bucket_key, window_started_at, request_count, blocked_until) VALUES (?1, ?2, 1, NULL) " +
+    "ON CONFLICT(bucket_key) DO UPDATE SET " +
+      "window_started_at = CASE WHEN bridge_auth_rate_limits.blocked_until > ?2 OR bridge_auth_rate_limits.window_started_at > ?3 THEN bridge_auth_rate_limits.window_started_at ELSE CASE WHEN bridge_auth_rate_limits.window_started_at <= ?3 THEN ?2 ELSE bridge_auth_rate_limits.window_started_at END END, " +
+      "request_count = CASE WHEN bridge_auth_rate_limits.blocked_until > ?2 THEN bridge_auth_rate_limits.request_count WHEN bridge_auth_rate_limits.window_started_at <= ?3 THEN 1 ELSE bridge_auth_rate_limits.request_count + 1 END, " +
+      "blocked_until = CASE WHEN bridge_auth_rate_limits.blocked_until > ?2 THEN bridge_auth_rate_limits.blocked_until WHEN bridge_auth_rate_limits.window_started_at <= ?3 THEN NULL WHEN bridge_auth_rate_limits.request_count + 1 > ?4 THEN ?2 + ?5 ELSE NULL END " +
+    "RETURNING window_started_at, request_count, blocked_until"
+  ).bind(key, now, now - windowMs, limit, blockMs).first();
+  const blockedUntil = Number(row?.blocked_until || 0);
+  const count = Math.max(0, Number(row?.request_count || 0));
+  if (blockedUntil > now) return { allowed: false, retryAfter: Math.max(1, Math.ceil((blockedUntil - now) / 1000)) };
+  return { allowed: true, remaining: Math.max(0, limit - count) };
 }
 
 async function accountValidateTurnstile(request, env, responseToken) {
   if (env.AUTH_REQUIRE_TURNSTILE === "false") return { success: true, bypassed: true };
   if (!accountTurnstileConfigured(env)) return { success: false, configurationError: true };
-  if (!responseToken || String(responseToken).length > 2048) return { success: false };
+  if (typeof responseToken !== "string" || !responseToken || responseToken.length > 2048) return { success: false };
   try {
     const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
@@ -146,6 +163,7 @@ async function accountValidateTurnstile(request, env, responseToken) {
         idempotency_key: crypto.randomUUID()
       })
     });
+    if (!response.ok) return { success: false, serviceError: true };
     const result = await response.json();
     return { success: Boolean(result.success), hostname: result.hostname, errors: result["error-codes"] || [] };
   } catch {
@@ -242,7 +260,7 @@ function accountPublicUser(user) {
 
 async function accountSession(request, env, { required = true } = {}) {
   const token = bearerToken(request);
-  if (!token) return required ? { error: accountError("authentication_required", "Sign in to continue.", 401) } : { user: null };
+  if (!token || token.length > 256) return required ? { error: accountError("authentication_required", "Sign in to continue.", 401) } : { user: null };
   const tokenHash = await sha256(token);
   const now = accountNow();
   const row = await env.DB.prepare(
@@ -259,11 +277,11 @@ async function accountSession(request, env, { required = true } = {}) {
 }
 
 async function accountConsumeToken(env, rawToken, purpose) {
-  if (!rawToken || String(rawToken).length > 256) return null;
+  if (typeof rawToken !== "string" || !rawToken || rawToken.length > 256) return null;
   return env.DB.prepare(
     "SELECT t.id AS token_id, t.user_id, u.* FROM bridge_account_tokens t " +
     "JOIN bridge_users u ON u.id = t.user_id " +
-    "WHERE t.token_hash = ?1 AND t.purpose = ?2 AND t.used_at IS NULL AND t.expires_at > ?3 AND u.deleted_at IS NULL"
+    "WHERE t.token_hash = ?1 AND t.purpose = ?2 AND t.used_at IS NULL AND t.expires_at > ?3 AND u.disabled_at IS NULL AND u.deleted_at IS NULL"
   ).bind(await sha256(rawToken), purpose, accountNow()).first();
 }
 
@@ -276,16 +294,31 @@ async function accountNextCursor(env, userId) {
 
 function accountSafeRecord(value) {
   const source = value && typeof value === "object" ? value : {};
-  const type = String(source.type || "");
-  const id = String(source.id || "");
-  if (!ACCOUNT_RECORD_TYPES.has(type) || !id || id.length > 160) return null;
-  const expectedRevision = Math.max(0, Math.floor(Number(source.expectedRevision) || 0));
-  const deleted = Boolean(source.deleted);
+  const type = typeof source.type === "string" ? source.type : "";
+  const id = typeof source.id === "string" ? source.id : "";
+  if (!ACCOUNT_RECORD_TYPES.has(type) || !id || id.length > 160 || /[\u0000-\u001f\u007f]/u.test(id)) return null;
+  const rawRevision = source.expectedRevision == null ? 0 : Number(source.expectedRevision);
+  if (!Number.isSafeInteger(rawRevision) || rawRevision < 0 || rawRevision > ACCOUNT_MAX_CURSOR) return null;
+  if (source.deleted != null && typeof source.deleted !== "boolean") return null;
+  const expectedRevision = rawRevision;
+  const deleted = source.deleted === true;
   const payload = deleted ? null : source.payload;
   if (!deleted && (!payload || typeof payload !== "object" || Array.isArray(payload))) return null;
-  const payloadJSON = deleted ? null : JSON.stringify(payload);
-  if (payloadJSON && payloadJSON.length > 1_000_000) return null;
+  let payloadJSON = null;
+  try { payloadJSON = deleted ? null : JSON.stringify(payload); } catch { return null; }
+  if (payloadJSON && textEncoder.encode(payloadJSON).byteLength > 1_000_000) return null;
   return { type, id, expectedRevision, deleted, payloadJSON };
+}
+
+function accountSafeCursor(value, fallback = 0) {
+  if (value == null || value === "") return fallback;
+  const cursor = Number(value);
+  return Number.isSafeInteger(cursor) && cursor >= 0 && cursor <= ACCOUNT_MAX_CURSOR ? cursor : null;
+}
+
+function accountSafeIdentifier(value, maxLength) {
+  if (typeof value !== "string" || !value || value.length > maxLength || /[\u0000-\u001f\u007f]/u.test(value)) return null;
+  return value;
 }
 
 function accountRecordResponse(row) {
@@ -305,9 +338,10 @@ function accountRecordResponse(row) {
 }
 
 async function accountApplyMutation(env, userId, clientId, mutation) {
-  const previous = await env.DB.prepare("SELECT result_json FROM bridge_sync_mutations WHERE user_id = ?1 AND mutation_id = ?2").bind(userId, mutation.mutationId).first();
+  const previous = await env.DB.prepare("SELECT client_id, result_json FROM bridge_sync_mutations WHERE user_id = ?1 AND mutation_id = ?2").bind(userId, mutation.mutationId).first();
   if (previous?.result_json) {
-    try { return { ...JSON.parse(previous.result_json), idempotent: true }; } catch {}
+    if (String(previous.client_id || "") !== clientId) return { mutationId: mutation.mutationId, status: "invalid" };
+    try { return { ...JSON.parse(previous.result_json), idempotent: true }; } catch { return { mutationId: mutation.mutationId, status: "invalid" }; }
   }
   const record = accountSafeRecord(mutation.record);
   if (!record) return { mutationId: mutation.mutationId, status: "invalid" };
@@ -323,49 +357,69 @@ async function accountApplyMutation(env, userId, clientId, mutation) {
   const cursor = await accountNextCursor(env, userId);
   const revision = serverRevision + 1;
   const now = accountNow();
-  let result;
+  const result = { mutationId: mutation.mutationId, status: "applied", record: { type: record.type, id: record.id, revision, cursor, deletedAt: record.deleted ? now : null, updatedAt: now } };
+  let mutationResult;
   if (existing) {
-    const update = await env.DB.prepare(
+    const update = env.DB.prepare(
       "UPDATE bridge_crm_records SET payload_json = ?1, revision = ?2, sync_cursor = ?3, updated_at = ?4, deleted_at = ?5 " +
       "WHERE user_id = ?6 AND record_type = ?7 AND record_id = ?8 AND revision = ?9"
-    ).bind(record.payloadJSON, revision, cursor, now, record.deleted ? now : null, userId, record.type, record.id, serverRevision).run();
-    if (!update.meta?.changes) {
+    ).bind(record.payloadJSON, revision, cursor, now, record.deleted ? now : null, userId, record.type, record.id, serverRevision);
+    const receipt = env.DB.prepare(
+      "INSERT INTO bridge_sync_mutations (user_id, mutation_id, client_id, result_json, applied_at) " +
+      "SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM bridge_crm_records WHERE user_id = ?1 AND record_type = ?6 AND record_id = ?7 AND revision = ?8 AND sync_cursor = ?9)"
+    ).bind(userId, mutation.mutationId, clientId, JSON.stringify(result), now, record.type, record.id, revision, cursor);
+    const results = await env.DB.batch([update, receipt]);
+    mutationResult = results?.[0];
+    if (!mutationResult?.meta?.changes) {
       const latest = await env.DB.prepare("SELECT * FROM bridge_crm_records WHERE user_id = ?1 AND record_type = ?2 AND record_id = ?3").bind(userId, record.type, record.id).first();
       return { mutationId: mutation.mutationId, status: "conflict", serverRecord: latest ? accountRecordResponse(latest) : null };
     }
   } else {
-    const insert = await env.DB.prepare(
+    const insert = env.DB.prepare(
       "INSERT OR IGNORE INTO bridge_crm_records (user_id, record_type, record_id, payload_json, revision, sync_cursor, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8)"
-    ).bind(userId, record.type, record.id, record.payloadJSON, revision, cursor, now, record.deleted ? now : null).run();
-    if (!insert.meta?.changes) {
+    ).bind(userId, record.type, record.id, record.payloadJSON, revision, cursor, now, record.deleted ? now : null);
+    const receipt = env.DB.prepare(
+      "INSERT INTO bridge_sync_mutations (user_id, mutation_id, client_id, result_json, applied_at) " +
+      "SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM bridge_crm_records WHERE user_id = ?1 AND record_type = ?6 AND record_id = ?7 AND revision = ?8 AND sync_cursor = ?9)"
+    ).bind(userId, mutation.mutationId, clientId, JSON.stringify(result), now, record.type, record.id, revision, cursor);
+    const results = await env.DB.batch([insert, receipt]);
+    mutationResult = results?.[0];
+    if (!mutationResult?.meta?.changes) {
       const latest = await env.DB.prepare("SELECT * FROM bridge_crm_records WHERE user_id = ?1 AND record_type = ?2 AND record_id = ?3").bind(userId, record.type, record.id).first();
       return { mutationId: mutation.mutationId, status: "conflict", serverRecord: latest ? accountRecordResponse(latest) : null };
     }
   }
-  result = { mutationId: mutation.mutationId, status: "applied", record: { type: record.type, id: record.id, revision, cursor, deletedAt: record.deleted ? now : null, updatedAt: now } };
-  await env.DB.prepare("INSERT INTO bridge_sync_mutations (user_id, mutation_id, client_id, result_json, applied_at) VALUES (?1, ?2, ?3, ?4, ?5)")
-    .bind(userId, mutation.mutationId, clientId, JSON.stringify(result), now).run();
   return result;
 }
 
 async function accountPullRecords(env, userId, cursor = 0) {
+  const normalizedCursor = accountSafeCursor(cursor);
+  if (normalizedCursor == null) return { records: [], cursor: 0, hasMore: false };
   const result = await env.DB.prepare(
     "SELECT record_type, record_id, payload_json, revision, sync_cursor, updated_at, deleted_at FROM bridge_crm_records WHERE user_id = ?1 AND sync_cursor > ?2 ORDER BY sync_cursor ASC LIMIT 2000"
-  ).bind(userId, Math.max(0, Math.floor(Number(cursor) || 0))).all();
+  ).bind(userId, normalizedCursor).all();
   const current = await env.DB.prepare("SELECT next_cursor FROM bridge_user_sync WHERE user_id = ?1").bind(userId).first();
+  const records = result.results || [];
+  const hasMore = records.length === 2000;
+  const lastReturnedCursor = Number(records.at(-1)?.sync_cursor || normalizedCursor);
   return {
-    records: (result.results || []).map(accountRecordResponse),
-    cursor: Number(current?.next_cursor || 0),
-    hasMore: (result.results || []).length === 2000
+    records: records.map(accountRecordResponse),
+    cursor: hasMore ? lastReturnedCursor : Number(current?.next_cursor || normalizedCursor),
+    hasMore
   };
 }
 
-async function accountAssembleState(env, userId) {
+async function accountAssembleState(env, userId, { maxRecords = 0 } = {}) {
+  const limit = Number.isSafeInteger(maxRecords) && maxRecords > 0 ? maxRecords + 1 : 0;
   const result = await env.DB.prepare(
-    "SELECT record_type, record_id, payload_json FROM bridge_crm_records WHERE user_id = ?1 AND deleted_at IS NULL ORDER BY record_type, record_id"
+    "SELECT record_type, record_id, payload_json FROM bridge_crm_records WHERE user_id = ?1 AND deleted_at IS NULL ORDER BY record_type, record_id" + (limit ? " LIMIT " + limit : "")
   ).bind(userId).all();
+  const rows = result.results || [];
+  if (limit && rows.length > maxRecords) {
+    throw Object.assign(new Error("This Bridge account contains too many records to back up safely."), { code: "backup_too_large", status: 413 });
+  }
   const state = { contacts: [], places: [], settings: {}, analytics: {}, meta: { version: 1 } };
-  for (const row of result.results || []) {
+  for (const row of rows) {
     let payload;
     try { payload = JSON.parse(row.payload_json); } catch { continue; }
     if (row.record_type === "contact") state.contacts.push(payload);
@@ -382,8 +436,9 @@ async function accountWriteBackup(env, userId, reason = "manual") {
   const backupId = crypto.randomUUID();
   const createdAt = accountNow();
   await env.DB.prepare("INSERT INTO bridge_backup_runs (id, user_id, status, created_at) VALUES (?1, ?2, 'running', ?3)").bind(backupId, userId, createdAt).run();
+  let objectKey = "";
   try {
-    const state = await accountAssembleState(env, userId);
+    const state = await accountAssembleState(env, userId, { maxRecords: ACCOUNT_MAX_BACKUP_RECORDS - 3 });
     const document = JSON.stringify({
       format: "bridge-cloud-backup",
       version: 1,
@@ -392,20 +447,27 @@ async function accountWriteBackup(env, userId, reason = "manual") {
       reason,
       state
     });
+    const byteSize = textEncoder.encode(document).byteLength;
+    if (byteSize > ACCOUNT_MAX_BODY_BYTES) {
+      throw Object.assign(new Error("This Bridge backup is too large to store safely."), { code: "backup_too_large", status: 413 });
+    }
     const contentHash = await sha256(document);
-    const objectKey = "users/" + userId + "/backups/" + createdAt.replace(/[:.]/g, "-") + "-" + backupId + ".json";
+    objectKey = "users/" + userId + "/backups/" + createdAt.replace(/[:.]/g, "-") + "-" + backupId + ".json";
     await env.USER_BACKUPS.put(objectKey, document, {
       httpMetadata: { contentType: "application/json" },
       customMetadata: { userId, createdAt, reason, contentHash }
     });
     const retentionDays = reason === "pre-delete" ? 30 : 90;
     await env.DB.prepare("UPDATE bridge_backup_runs SET status = 'complete', object_key = ?1, content_hash = ?2, byte_size = ?3, completed_at = ?4, expires_at = ?5 WHERE id = ?6")
-      .bind(objectKey, contentHash, textEncoder.encode(document).byteLength, accountNow(), accountFuture(retentionDays * 86400000), backupId).run();
+      .bind(objectKey, contentHash, byteSize, accountNow(), accountFuture(retentionDays * 86400000), backupId).run();
     return { ok: true, id: backupId, createdAt, contentHash };
   } catch (error) {
+    if (objectKey && env.USER_BACKUPS) {
+      try { await env.USER_BACKUPS.delete(objectKey); } catch {}
+    }
     await env.DB.prepare("UPDATE bridge_backup_runs SET status = 'failed', error_message = ?1, completed_at = ?2 WHERE id = ?3")
       .bind(String(error?.message || error).slice(0, 500), accountNow(), backupId).run();
-    return { ok: false };
+    return { ok: false, code: error?.code || "backup_failed" };
   }
 }
 
@@ -430,17 +492,21 @@ function accountValidateBackupDocument(document, userId) {
   if (String(document.userId || "") !== String(userId)) {
     return { ok: false, code: "backup_owner_mismatch", message: "This backup belongs to a different Bridge account." };
   }
-  if (!document.state || typeof document.state !== "object" || !Array.isArray(document.state.contacts) || !Array.isArray(document.state.places)) {
+  if (!document.state || typeof document.state !== "object" || Array.isArray(document.state) || !Array.isArray(document.state.contacts) || !Array.isArray(document.state.places)) {
     return { ok: false, code: "invalid_backup", message: "This backup is missing required Bridge data." };
   }
   const records = accountBackupRecords(document.state);
   if (records.length > ACCOUNT_MAX_BACKUP_RECORDS) {
     return { ok: false, code: "backup_too_large", message: "This backup contains too many records to restore safely." };
   }
+  const keys = new Set();
   for (const record of records) {
     if (!accountSafeRecord({ ...record, expectedRevision: 0, deleted: false })) {
       return { ok: false, code: "invalid_backup", message: "This backup contains an invalid Bridge record." };
     }
+    const key = record.type + ":" + record.id;
+    if (keys.has(key)) return { ok: false, code: "invalid_backup", message: "This backup contains duplicate Bridge records." };
+    keys.add(key);
   }
   return { ok: true, records };
 }
@@ -449,12 +515,19 @@ async function accountReadBackup(env, userId, backupId) {
   if (!env.USER_BACKUPS) return { error: accountError("configuration_error", "Cloud backups are not configured.", 503) };
   const record = await env.DB.prepare(
     "SELECT id, object_key, content_hash, byte_size, created_at, completed_at, expires_at FROM bridge_backup_runs " +
-    "WHERE id = ?1 AND user_id = ?2 AND status = 'complete'"
-  ).bind(backupId, userId).first();
+    "WHERE id = ?1 AND user_id = ?2 AND status = 'complete' AND expires_at > ?3"
+  ).bind(backupId, userId, accountNow()).first();
   if (!record?.object_key) return { error: accountError("not_found", "Backup not found.", 404) };
   const object = await env.USER_BACKUPS.get(record.object_key);
   if (!object) return { error: accountError("not_found", "Backup file not found.", 404) };
+  const expectedBytes = Number(record.byte_size || 0);
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes <= 0 || expectedBytes > ACCOUNT_MAX_BODY_BYTES || (Number.isFinite(object.size) && object.size !== expectedBytes)) {
+    return { error: accountError("backup_checksum_failed", "This backup did not pass its integrity check.", 409) };
+  }
   const text = await object.text();
+  if (textEncoder.encode(text).byteLength > ACCOUNT_MAX_BODY_BYTES) {
+    return { error: accountError("backup_too_large", "This backup is too large to restore safely.", 409) };
+  }
   const contentHash = await sha256(text);
   if (!record.content_hash || !accountConstantTimeEqual(contentHash, record.content_hash)) {
     return { error: accountError("backup_checksum_failed", "This backup did not pass its integrity check.", 409) };
@@ -571,10 +644,22 @@ async function accountHandleAuth(request, env, url) {
         last_name: lastName,
         created_at: now
       };
-      await env.DB.prepare(
-        "INSERT INTO bridge_users (id, email_normalized, email_display, password_hash, password_salt, password_iterations, first_name, last_name, verified_at, created_at, updated_at) " +
-        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?9)"
-      ).bind(user.id, user.email_normalized, user.email_display, password.hash, password.salt, password.iterations, user.first_name, user.last_name, now).run();
+      try {
+        await env.DB.prepare(
+          "INSERT INTO bridge_users (id, email_normalized, email_display, password_hash, password_salt, password_iterations, first_name, last_name, verified_at, created_at, updated_at) " +
+          "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?9)"
+        ).bind(user.id, user.email_normalized, user.email_display, password.hash, password.salt, password.iterations, user.first_name, user.last_name, now).run();
+      } catch (error) {
+        const raced = await env.DB.prepare("SELECT * FROM bridge_users WHERE email_normalized = ?1 AND deleted_at IS NULL").bind(email).first();
+        if (!raced) throw error;
+        if (raced.verified_at) return accountJSON({ ok: true, verificationRequired: true }, 202);
+        const retryUpdate = await env.DB.prepare(
+          "UPDATE bridge_users SET email_display = ?1, password_hash = ?2, password_salt = ?3, password_iterations = ?4, first_name = ?5, last_name = ?6, updated_at = ?7 " +
+          "WHERE id = ?8 AND verified_at IS NULL AND deleted_at IS NULL"
+        ).bind(emailDisplay, password.hash, password.salt, password.iterations, firstName, lastName, now, raced.id).run();
+        if (!retryUpdate.meta?.changes) return accountJSON({ ok: true, verificationRequired: true }, 202);
+        user = { ...raced, email_display: emailDisplay, password_hash: password.hash, password_salt: password.salt, password_iterations: password.iterations, first_name: firstName, last_name: lastName, updated_at: now };
+      }
     } else {
       const update = await env.DB.prepare(
         "UPDATE bridge_users SET email_display = ?1, password_hash = ?2, password_salt = ?3, password_iterations = ?4, first_name = ?5, last_name = ?6, updated_at = ?7 " +
@@ -603,10 +688,11 @@ async function accountHandleAuth(request, env, url) {
     const user = await accountConsumeToken(env, body.token, "verify_email");
     if (!user) return accountError("invalid_token", "This verification link is invalid or expired.", 400);
     const now = accountNow();
-    await env.DB.batch([
-      env.DB.prepare("UPDATE bridge_users SET verified_at = COALESCE(verified_at, ?1), updated_at = ?1 WHERE id = ?2").bind(now, user.user_id),
-      env.DB.prepare("UPDATE bridge_account_tokens SET used_at = ?1 WHERE id = ?2").bind(now, user.token_id)
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE bridge_account_tokens SET used_at = ?1 WHERE id = ?2 AND purpose = 'verify_email' AND used_at IS NULL AND expires_at > ?3").bind(now, user.token_id, now),
+      env.DB.prepare("UPDATE bridge_users SET verified_at = COALESCE(verified_at, ?1), updated_at = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM bridge_account_tokens WHERE id = ?3 AND used_at = ?1)").bind(now, user.user_id, user.token_id)
     ]);
+    if (!results?.[0]?.meta?.changes) return accountError("invalid_token", "This verification link is invalid or expired.", 400);
     return accountJSON({ ok: true });
   }
 
@@ -648,7 +734,7 @@ async function accountHandleAuth(request, env, url) {
     const valid = user ? await accountVerifyPassword(body.password, user) : false;
     if (!valid) return accountError("invalid_credentials", "Email or password is incorrect.", 401);
     if (!user.verified_at) return accountError("email_verification_required", "Verify your email before signing in.", 403);
-    const session = await accountCreateSession(request, env, user, Boolean(body.rememberMe));
+    const session = await accountCreateSession(request, env, user, body.rememberMe === true);
     return accountJSON({ sessionToken: session.rawToken, expiresAt: session.expiresAt, user: accountPublicUser(user) });
   }
 
@@ -676,12 +762,13 @@ async function accountHandleAuth(request, env, url) {
     if (!user) return accountError("invalid_token", "This reset link is invalid or expired.", 400);
     const password = await accountHashPassword(body.password);
     const now = accountNow();
-    await env.DB.batch([
-      env.DB.prepare("UPDATE bridge_users SET password_hash = ?1, password_salt = ?2, password_iterations = ?3, updated_at = ?4 WHERE id = ?5")
-        .bind(password.hash, password.salt, password.iterations, now, user.user_id),
-      env.DB.prepare("UPDATE bridge_account_tokens SET used_at = ?1 WHERE id = ?2").bind(now, user.token_id),
-      env.DB.prepare("UPDATE bridge_sessions SET revoked_at = ?1 WHERE user_id = ?2 AND revoked_at IS NULL").bind(now, user.user_id)
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE bridge_account_tokens SET used_at = ?1 WHERE id = ?2 AND purpose = 'reset_password' AND used_at IS NULL AND expires_at > ?3").bind(now, user.token_id, now),
+      env.DB.prepare("UPDATE bridge_users SET password_hash = ?1, password_salt = ?2, password_iterations = ?3, updated_at = ?4 WHERE id = ?5 AND EXISTS (SELECT 1 FROM bridge_account_tokens WHERE id = ?6 AND used_at = ?4)")
+        .bind(password.hash, password.salt, password.iterations, now, user.user_id, user.token_id),
+      env.DB.prepare("UPDATE bridge_sessions SET revoked_at = ?1 WHERE user_id = ?2 AND revoked_at IS NULL AND EXISTS (SELECT 1 FROM bridge_account_tokens WHERE id = ?3 AND used_at = ?1)").bind(now, user.user_id, user.token_id)
     ]);
+    if (!results?.[0]?.meta?.changes) return accountError("invalid_token", "This reset link is invalid or expired.", 400);
     return accountJSON({ ok: true });
   }
 
@@ -769,21 +856,24 @@ async function accountHandleCloudData(request, env, url) {
   }
 
   if (url.pathname === ACCOUNT_API_PREFIX + "/sync/pull" && request.method === "GET") {
-    return accountJSON(await accountPullRecords(env, userId, url.searchParams.get("cursor")));
+    const cursor = accountSafeCursor(url.searchParams.get("cursor"));
+    if (cursor == null) return accountError("invalid_sync_cursor", "The sync cursor is invalid.", 400);
+    return accountJSON(await accountPullRecords(env, userId, cursor));
   }
 
   if (url.pathname === ACCOUNT_API_PREFIX + "/sync/push" && request.method === "POST") {
     const body = await accountReadJSON(request);
-    const clientId = String(body.clientId || "").slice(0, 160);
-    const mutations = Array.isArray(body.mutations) ? body.mutations.slice(0, 250) : [];
-    if (!clientId || !mutations.length) return accountError("invalid_sync", "A client ID and at least one mutation are required.", 400);
+    const clientId = accountSafeIdentifier(body.clientId, ACCOUNT_MAX_CLIENT_ID);
+    const cursor = accountSafeCursor(body.cursor);
+    const mutations = Array.isArray(body.mutations) ? body.mutations : [];
+    if (!clientId || cursor == null || !mutations.length || mutations.length > 250) return accountError("invalid_sync", "A client ID, valid cursor, and at least one mutation are required.", 400);
     const results = [];
     for (const source of mutations) {
-      const mutationId = String(source?.mutationId || "").slice(0, 160);
+      const mutationId = accountSafeIdentifier(source?.mutationId, ACCOUNT_MAX_MUTATION_ID);
       if (!mutationId) { results.push({ mutationId: "", status: "invalid" }); continue; }
       results.push(await accountApplyMutation(env, userId, clientId, { ...source, mutationId }));
     }
-    const pulled = await accountPullRecords(env, userId, Number(body.cursor || 0));
+    const pulled = await accountPullRecords(env, userId, cursor);
     return accountJSON({ results, ...pulled });
   }
 
@@ -818,6 +908,7 @@ async function accountHandleCloudData(request, env, url) {
   if (url.pathname === ACCOUNT_API_PREFIX + "/backups" && request.method === "POST") {
     const backup = await accountWriteBackup(env, userId, "manual");
     if (backup.configurationError) return accountError("configuration_error", "Cloud backups are not configured.", 503);
+    if (backup.code === "backup_too_large") return accountError("backup_too_large", "This Bridge backup is too large to store safely.", 413);
     if (!backup.ok) return accountError("backup_failed", "Bridge could not create a cloud backup.", 500);
     return accountJSON(backup, 201);
   }
