@@ -66,6 +66,31 @@ test("Insights treats date-only range endpoints as complete local days", () => {
   assert.equal(model.newPeople.length, 1);
   assert.equal(model.daySeries.length, 1);
   assert.equal(model.daySeries[0].value, 2);
+  assert.equal(model.hourSeries.length, 12);
+  assert.equal(model.hourSeries[0].value, 1);
+  assert.equal(model.hourSeries[11].value, 1);
+});
+
+test("Day activity uses local two-hour buckets without inventing time for date-only logs", () => {
+  const contact = {
+    id: "hourly",
+    role: "Prospect",
+    conversations: [
+      { id: "midnight", isCountedConversation: true, conversationDate: "2026-08-28T00:05:00" },
+      { id: "afternoon-1", isCountedConversation: true, conversationDate: "2026-08-28T14:15:00" },
+      { id: "afternoon-2", isCountedConversation: true, conversationDate: "2026-08-28T15:59:00" },
+      { id: "date-only", isCountedConversation: true, conversationDate: "2026-08-28" }
+    ],
+    stageEvents: [],
+    followUps: []
+  };
+  const model = buildInsightsModel({ contacts: [contact], places: [], range: analyticsRange({ mode: "day", anchor: "2026-08-28" }), pipelines: { Prospect: [], Customer: [] } });
+  assert.equal(model.hourSeries.length, 12);
+  assert.equal(model.hourSeries[0].value, 1);
+  assert.equal(model.hourSeries[7].value, 2);
+  assert.equal(model.hourSeries.filter(point => point.value === 0).length, 10);
+  assert.equal(model.timedConversationCount, 3);
+  assert.equal(model.unavailableConversationCount, 1);
 });
 
 test("phone capture analytics count each number once on its first capture date", () => {

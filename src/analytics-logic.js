@@ -37,6 +37,11 @@
     }
     return null;
   };
+  const hasTimeOfDay = value => {
+    if (value instanceof Date || typeof value === "number") return isValidDate(parseDate(value));
+    if (typeof value !== "string") return false;
+    return /(?:T|\s)\d{2}:\d{2}/.test(value.trim()) && isValidDate(parseDate(value));
+  };
   const eventDateValue = item => {
     for (const value of [item?.occurredAt, item?.date]) {
       if (isValidDate(parseDate(value))) return value;
@@ -269,6 +274,9 @@
     // whose created date (or due date when createdAt is absent) falls in the period.
     const followUps = allFollowUps.filter(item => followUpStatus(item) !== "deleted" && inAnalyticsRange(followUpDateValue(item), range));
     const completedFollowUps = followUps.filter(item => followUpStatus(item) === "completed");
+    const nowDate = parseDate(input.now);
+    const safeNow = isValidDate(nowDate) ? nowDate : new Date();
+    const todayKey = localDayKey(safeNow);
     const daySeries = [];
     const seriesStart = startOfDay(range.start);
     const seriesEnd = startOfDay(range.end);
@@ -278,9 +286,25 @@
       daySeries.push({
         date: dateKey,
         label: new Intl.DateTimeFormat(undefined, { weekday: "narrow" }).format(date),
+        weekday: new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date),
+        weekdayIndex: date.getDay(),
+        day: date.getDate(),
+        month: new Intl.DateTimeFormat(undefined, { month: "short" }).format(date),
+        isWeekStart: date.getDay() === 0,
+        isToday: dateKey === todayKey,
         value: conversations.filter(log => localDayKey(activityDateValue(log)) === dateKey).length
       });
     }
+    const timedConversations = conversations.filter(log => hasTimeOfDay(activityDateValue(log)));
+    const hourSeries = Array.from({ length: 12 }, (_, index) => {
+      const startHour = index * 2;
+      const endHour = startHour + 2;
+      return {
+        startHour,
+        endHour,
+        value: timedConversations.filter(log => parseDate(activityDateValue(log)).getHours() >= startHour && parseDate(activityDateValue(log)).getHours() < endHour).length
+      };
+    });
     const dailyGoalValue = finiteNumber(input.dailyGoal);
     const goal = dailyGoalValue !== null && dailyGoalValue > 0 ? Math.max(1, Math.round(dailyGoalValue)) : 5;
     const goalDays = daySeries.filter(day => day.value >= goal).length;
@@ -289,8 +313,6 @@
       const stage = currentStage(contact);
       if (stage && currentStageCounts[contact.role]) currentStageCounts[contact.role][stage] += 1;
     });
-    const nowDate = parseDate(input.now);
-    const safeNow = isValidDate(nowDate) ? nowDate : new Date();
     const suppliedStallDays = finiteNumber(input.stallDays);
     const safeStallDays = suppliedStallDays !== null ? Math.max(0, suppliedStallDays) : 21;
     const stalledRelationships = contacts.filter(contact => !contact.archivedAt && !contact.isFilteredOut && validRoles.includes(contact.role)).map(contact => {
@@ -322,6 +344,9 @@
       completedFollowUps,
       followUpCompletion: followUps.length ? Math.round(completedFollowUps.length / followUps.length * 100) : null,
       daySeries,
+      hourSeries,
+      timedConversationCount: timedConversations.length,
+      unavailableConversationCount: conversations.length - timedConversations.length,
       goal,
       goalDays,
       goalConsistency: conversations.length && daySeries.length ? Math.round(goalDays / daySeries.length * 100) : null,

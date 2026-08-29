@@ -1,29 +1,29 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.42",
-    assetVersion: "v1.3.42",
+    version: "1.3.43",
+    assetVersion: "v1.3.43",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "sparkles",
-        title: "Consistent page typography",
-        description: "Today, People, Pipeline, and Insights now share the same Newsreader title family, size, weight, spacing, and line height."
+        icon: "chart",
+        title: "Clearer conversation timelines",
+        description: "Day, Week, and Month now use distinct activity views so hours, weekday dates, and calendar-week boundaries are immediately understandable."
+      }),
+      Object.freeze({
+        icon: "calendar",
+        title: "Calendar-correct month activity",
+        description: "Every date remains visible, including zero-activity days, with subtle Sunday separators and useful month landmarks."
       }),
       Object.freeze({
         icon: "bridge",
-        title: "Stronger data recovery",
-        description: "Bridge can recover from a corrupt browser cache using its durable copy, preserves extension fields, and validates backups before replacement."
+        title: "Inspectable activity marks",
+        description: "Tap or focus a mark to see its exact interval or date and conversation count without adding dashboard clutter."
       }),
       Object.freeze({
-        icon: "people",
-        title: "More reliable account sync",
-        description: "Cloud sync now handles large paginated workspaces, request races, single-use account tokens, and backup integrity more safely."
-      }),
-      Object.freeze({
-        icon: "rocket",
-        title: "Cleaner offline updates",
-        description: "The service worker refreshes the complete public shell, isolates app caches, and handles project-path launches and reminders more defensively."
+        icon: "clock",
+        title: "A compact hourly Day view",
+        description: "Time-stamped conversations are grouped into two-hour buckets, while date-only history remains honest and proportionally compact."
       })
     ])
   });

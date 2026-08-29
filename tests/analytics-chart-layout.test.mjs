@@ -23,6 +23,31 @@ test("month analytics produces one deterministic point per local calendar day",(
 
   const february=buildInsightsModel({contacts:[],range:analyticsRange({mode:"month",anchor:"2026-02-12"}),pipelines});
   assert.equal(february.daySeries.length,28);
+  const leapFebruary=buildInsightsModel({contacts:[],range:analyticsRange({mode:"month",anchor:"2028-02-12"}),pipelines});
+  assert.equal(leapFebruary.daySeries.length,29);
+  const april=buildInsightsModel({contacts:[],range:analyticsRange({mode:"month",anchor:"2026-04-12"}),pipelines});
+  assert.equal(april.daySeries.length,30);
+});
+
+test("month landmarks preserve real Sunday week boundaries and month edges",()=>{
+  const sundayStart=buildInsightsModel({contacts:[],range:analyticsRange({mode:"month",anchor:"2026-11-15"}),pipelines,now:"2026-08-28T12:00:00"});
+  assert.equal(sundayStart.daySeries[0].day,1);
+  assert.equal(sundayStart.daySeries[0].isWeekStart,true);
+  assert.deepEqual(sundayStart.daySeries.filter(point=>point.isWeekStart).map(point=>point.day),[1,8,15,22,29]);
+
+  const midweekStart=buildInsightsModel({contacts:[contactWithDates(["2026-09-01","2026-09-30"])],range:analyticsRange({mode:"month",anchor:"2026-09-15"}),pipelines,now:"2026-08-28T12:00:00"});
+  assert.equal(midweekStart.daySeries[0].weekday,"Tue");
+  assert.equal(midweekStart.daySeries[0].isWeekStart,false);
+  assert.deepEqual(midweekStart.daySeries.filter(point=>point.isWeekStart).map(point=>point.day),[6,13,20,27]);
+  assert.equal(midweekStart.daySeries[0].value,1);
+  assert.equal(midweekStart.daySeries.at(-1).value,1);
+  assert.equal(midweekStart.daySeries.slice(1,-1).every(point=>point.value===0),true);
+});
+
+test("week series always preserves seven weekday and date associations",()=>{
+  const week=buildInsightsModel({contacts:[contactWithDates(["2026-08-23","2026-08-29"])],range:analyticsRange({mode:"week",anchor:"2026-08-28",weekStart:0}),pipelines});
+  assert.equal(week.daySeries.length,7);
+  assert.deepEqual(week.daySeries.map(point=>[point.weekday,point.day,point.value]),[["Sun",23,1],["Mon",24,0],["Tue",25,0],["Wed",26,0],["Thu",27,0],["Fri",28,0],["Sat",29,1]]);
 });
 
 test("the shared analytics chart scrolls dense months and bounds every bar",()=>{
@@ -49,6 +74,9 @@ test("day chart remains bounded for zero, one, repeated, and large activity valu
   const largeDates=Array.from({length:120},()=>"2026-08-10");
   const large=buildInsightsModel({contacts:[contactWithDates(largeDates)],range:analyticsRange({mode:"day",anchor:"2026-08-10"}),pipelines});
   assert.deepEqual(large.daySeries.map(point=>point.value),[120]);
+  assert.equal(one.hourSeries.length,12);
+  assert.equal(one.hourSeries[6].value,1);
+  assert.equal(one.hourSeries.filter(point=>point.value===0).length,11);
 
   const activity=app.slice(app.indexOf("function analyticsDetailActivity"),app.indexOf("function insightsDetailedAnalytics"));
   assert.match(activity,/Math\.max\(6,Math\.round\(point\.value\/max\*70\)\)/);
@@ -56,13 +84,18 @@ test("day chart remains bounded for zero, one, repeated, and large activity valu
   assert.match(styles,/\.analytics-detail-chart i\.has-value \{ width: min\(100%,32px\)/);
 });
 
-test("conversation values stay attached directly above their bars",()=>{
-  const chart=app.slice(app.indexOf("function insightsConversationChart"),app.indexOf("function insightsPipelineIntelligence"));
-  assert.match(chart,/insights-chart__column/);
-  assert.ok(chart.indexOf("insights-chart__value") < chart.indexOf("insights-chart__bar"));
-  assert.match(styles,/\.insights-chart__column \{[^}]*flex-direction: column;[^}]*justify-content: flex-end/);
-  assert.match(styles,/\.insights-chart__value \{[^}]*margin-bottom: 4px/);
-  assert.doesNotMatch(styles,/\.insights-chart__point \{[^}]*grid-template-rows: 17px minmax/);
+test("overview activity uses range-specific compact renderers and inspectable marks",()=>{
+  const chart=app.slice(app.indexOf("function conversationActivityDomain"),app.indexOf("function insightsPipelineIntelligence"));
+  for(const contract of ["ConversationActivityDay","ConversationActivityWeek","ConversationActivityMonth","ConversationActivityCustom","activity-tooltip","aria-label"]){
+    assert.match(chart,new RegExp(contract));
+  }
+  assert.match(chart,/model\.hourSeries\.map/);
+  assert.match(chart,/point\.isWeekStart/);
+  assert.match(chart,/point\.day/);
+  assert.match(styles,/\.activity-day__plot \{ height: 84px/);
+  assert.match(styles,/\.activity-week__plot \{ height: 112px/);
+  assert.match(styles,/\.activity-month__plot \{ height: 104px/);
+  assert.match(styles,/grid-template-columns: repeat\(var\(--activity-days\),minmax\(0,1fr\)\)/);
 });
 
 test("summary and pipeline activity consume the same selected-range model",()=>{

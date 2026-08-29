@@ -1,6 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.42";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.42";
-import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.42";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.43";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.43";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.43";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -3516,11 +3516,63 @@ function analyticsDetailPeriodControls(range) {
   const navigator=DateNavigator(range.label,{className:"analytics-date-navigator",previousClassName:"analytics-period-previous",nextClassName:"analytics-period-next",previousAttributes:`aria-label="Previous ${ui.analyticsRange} period"`,nextAttributes:`aria-label="Next ${ui.analyticsRange} period"`});
   return `<div class="analytics-detail-period">${tabs}<details class="analytics-detail-range" ${ui.analyticsRange==="custom"?"open":""}><summary><span>${escapeHTML(range.label)}</span>${icons.chevronDown}</summary><div>${navigator}<div class="analytics-period-detail">${analyticsDateControls()}</div></div></details></div>`;
 }
+function conversationActivityDomain(values) {
+  const max=Math.max(0,...values.map(value=>Number(value)||0));
+  if(max<=4)return 4;
+  if(max<=8)return 8;
+  if(max<=10)return 10;
+  if(max<=20)return Math.ceil(max/5)*5;
+  return Math.ceil(max/10)*10;
+}
+function conversationActivityHeight(value,domain,plotHeight) {
+  return value?Math.max(5,Math.round(value/domain*plotHeight)):2;
+}
+function conversationActivityCount(value) { return analyticsCountLabel(value,"conversation"); }
+function conversationActivityDate(point) {
+  return new Intl.DateTimeFormat(undefined,{weekday:"long",month:"short",day:"numeric"}).format(new Date(`${point.date}T12:00:00`));
+}
+function conversationActivityHour(hour,{compact=false}={}) {
+  const normalized=((hour%24)+24)%24;
+  const suffix=normalized<12?(compact?"a":" AM"):(compact?"p":" PM");
+  const display=normalized%12||12;
+  return `${display}${suffix}`;
+}
+function conversationActivityTooltip(title,count) {
+  return `<span class="activity-tooltip" role="tooltip"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(conversationActivityCount(count))}</small></span>`;
+}
+function conversationActivityBar({value,domain,plotHeight,label,tooltip,className=""}) {
+  const height=conversationActivityHeight(value,domain,plotHeight);
+  return `<button type="button" class="activity-mark ${value?"has-value":"is-zero"} ${className}" aria-label="${escapeHTML(label)}" title="${escapeHTML(label)}"><span class="activity-mark__plot"><i style="--activity-height:${height}px"></i></span>${conversationActivityTooltip(tooltip,value)}</button>`;
+}
+function ConversationActivityDay(model) {
+  const datePoint=model.daySeries[0];
+  if(model.conversations.length&&model.timedConversationCount===0) {
+    const label=datePoint?conversationActivityDate(datePoint):"Selected day";
+    return `<div class="activity-day-summary"><span>${escapeHTML(label)}</span><strong>${model.conversations.length}</strong><i></i><small>Conversation activity</small></div>`;
+  }
+  const domain=conversationActivityDomain(model.hourSeries.map(point=>point.value));
+  const landmarks=new Set([0,3,6,9,11]);
+  return `<div class="activity-day" style="--activity-domain:${domain}"><div class="activity-grid-lines" aria-hidden="true"><i></i><i></i></div><div class="activity-day__plot">${model.hourSeries.map((point,index)=>{const interval=`${conversationActivityHour(point.startHour)}–${conversationActivityHour(point.endHour)}`;const label=`${interval}: ${conversationActivityCount(point.value)}`;return `<div class="activity-day__bucket">${conversationActivityBar({value:point.value,domain,plotHeight:64,label,tooltip:interval})}${landmarks.has(index)?`<span>${conversationActivityHour(point.startHour,{compact:true})}</span>`:""}</div>`;}).join("")}</div>${model.unavailableConversationCount?`<p>${conversationActivityCount(model.unavailableConversationCount)} recorded without a time of day.</p>`:""}</div>`;
+}
+function ConversationActivityWeek(model) {
+  const domain=conversationActivityDomain(model.daySeries.map(point=>point.value));
+  return `<div class="activity-week" style="--activity-domain:${domain}"><div class="activity-grid-lines" aria-hidden="true"><i></i><i></i></div><div class="activity-week__plot">${model.daySeries.map(point=>{const date=conversationActivityDate(point);const label=`${date}: ${conversationActivityCount(point.value)}`;return `<div class="activity-week__day ${point.isToday?"is-today":""}">${conversationActivityBar({value:point.value,domain,plotHeight:82,label,tooltip:date})}<span class="activity-week__weekday">${escapeHTML(point.label)}</span><span class="activity-week__date">${point.day}</span></div>`;}).join("")}</div></div>`;
+}
+function ConversationActivityCalendar(model,{custom=false}={}) {
+  const domain=conversationActivityDomain(model.daySeries.map(point=>point.value));
+  const lastIndex=model.daySeries.length-1;
+  return `<div class="activity-month ${custom?"is-custom":""}" style="--activity-days:${model.daySeries.length};--activity-domain:${domain}"><div class="activity-grid-lines" aria-hidden="true"><i></i><i></i></div><div class="activity-month__plot">${model.daySeries.map((point,index)=>{const date=conversationActivityDate(point);const label=`${date}: ${conversationActivityCount(point.value)}`;const landmark=index===0||point.isWeekStart||point.isToday||index===lastIndex;return `<div class="activity-month__day ${point.isWeekStart&&index?"is-week-start":""} ${point.isToday?"is-today":""}">${conversationActivityBar({value:point.value,domain,plotHeight:80,label,tooltip:date})}${landmark?`<span class="activity-month__landmark">${point.day}</span>`:""}</div>`;}).join("")}</div><span class="activity-month__name">${escapeHTML(model.daySeries[0]?.month||"")}</span></div>`;
+}
+function ConversationActivityMonth(model) { return ConversationActivityCalendar(model); }
+function ConversationActivityCustom(model) { return model.daySeries.length===7?ConversationActivityWeek(model):ConversationActivityCalendar(model,{custom:true}); }
+function ConversationActivityChart(model) {
+  if(ui.analyticsRange==="day")return ConversationActivityDay(model);
+  if(ui.analyticsRange==="week")return ConversationActivityWeek(model);
+  if(ui.analyticsRange==="month")return ConversationActivityMonth(model);
+  return ConversationActivityCustom(model);
+}
 function insightsConversationChart(model) {
-  const total=model.conversations.length;
-  if(!total)return `<section data-guide-target="insights-conversations" class="insights-section insights-conversation" aria-labelledby="insights-conversation-title"><h2 id="insights-conversation-title">Conversation activity</h2>${emptyInline("No conversation activity","Counted conversations for this period will appear here.")}</section>`;
-  const max=Math.max(1,...model.daySeries.map(point=>point.value));
-  return `<section data-guide-target="insights-conversations" class="insights-section insights-conversation" aria-labelledby="insights-conversation-title"><h2 id="insights-conversation-title">Conversation activity</h2><div class="insights-chart-scroll"><div class="insights-chart" style="--insights-points:${model.daySeries.length}" role="img" aria-label="Conversation activity: ${escapeHTML(model.daySeries.map(point=>`${point.date} ${point.value}`).join(", "))}">${model.daySeries.map(point=>`<div class="insights-chart__point"><span class="insights-chart__column"><span class="insights-chart__value">${point.value||""}</span><span class="insights-chart__bar ${point.value?"has-value":""}" style="height:${point.value?Math.max(12,Math.round(point.value/max*100)):4}%"></span></span><span class="insights-chart__label">${escapeHTML(point.label)}</span></div>`).join("")}</div></div><details class="analytics-data-table"><summary>View data table</summary><table><thead><tr><th scope="col">Date</th><th scope="col">Count</th></tr></thead><tbody>${model.daySeries.map(point=>`<tr><th scope="row">${escapeHTML(fmtDate(point.date))}</th><td>${point.value}</td></tr>`).join("")}</tbody></table></details></section>`;
+  return `<section data-guide-target="insights-conversations" class="insights-section insights-conversation insights-conversation--${escapeHTML(ui.analyticsRange)}" aria-labelledby="insights-conversation-title"><h2 id="insights-conversation-title">Conversation activity</h2>${ConversationActivityChart(model)}<details class="analytics-data-table"><summary>View data table</summary><table><thead><tr><th scope="col">Date</th><th scope="col">Count</th></tr></thead><tbody>${model.daySeries.map(point=>`<tr><th scope="row">${escapeHTML(fmtDate(point.date))}</th><td>${point.value}</td></tr>`).join("")}</tbody></table></details></section>`;
 }
 function insightsPipelineIntelligence(model) {
   const items=model.stalledRelationships.slice(0,4);
