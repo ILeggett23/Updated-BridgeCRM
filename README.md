@@ -70,11 +70,14 @@ workflow remains available without connecting to production.
 ## App icon and brand assets
 
 The production icon is the Open Span system documented in
-[`docs/brand/icon-strategy.md`](docs/brand/icon-strategy.md). Editable masters,
-concepts, refinements, platform sources, validation boards, and the previous
-production artwork live in `assets/branding/app-icon/`.
+[`docs/brand/icon-strategy.md`](docs/brand/icon-strategy.md). The supplied
+1024 × 1024 PNG at
+`assets/branding/app-icon/final/bridge-app-icon-master.png` is the only
+canonical launcher source. Derived PWA sizes, the traced transparent UI mark,
+validation boards, and the previous production artwork live alongside it in
+`assets/branding/app-icon/`.
 
-Regenerate the committed raster outputs after changing source geometry:
+Regenerate the committed raster outputs after replacing the canonical PNG:
 
 ```bash
 npm run generate:icons

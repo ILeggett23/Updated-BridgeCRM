@@ -236,7 +236,9 @@ a { color: inherit; }
 .hidden { display: none !important; }
 #app, .app-shell, .main, .page { min-width: 0; max-width: 100%; }
 .boot { min-height: 100vh; min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--color-text-primary); background: var(--color-page); text-align: center; }
-.boot__icon { width: 92px; height: 92px; margin-bottom: 6px; border-radius: 25px; box-shadow: 0 12px 30px rgba(27, 25, 19, .10); }
+.bridge-brand-icon { width: var(--bridge-brand-icon-size); height: var(--bridge-brand-icon-size); display: block; flex: 0 0 auto; object-fit: contain; }
+.bridge-brand-icon--mark { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.boot__icon { width: 92px; height: 92px; margin-bottom: 6px; border-radius: 25px; box-shadow: none; }
 .boot strong { font-family: var(--font-editorial); font-size: 29px; font-weight: var(--font-weight-medium); line-height: 1; }
 .boot span { color: var(--color-text-tertiary); font-size: 12px; letter-spacing: .04em; }
 .brand-mark { width: 64px; height: 64px; display: block; border-radius: 20px; object-fit: cover; box-shadow: var(--shadow); }
@@ -702,7 +704,7 @@ input[type="date"]::-webkit-datetime-edit, input[type="datetime-local"]::-webkit
 .release-notes-modal { width: min(460px, 100%); max-height: min(84dvh, 720px); overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) auto; border-color: var(--color-border); border-radius: var(--radius-xl); background: var(--color-page); box-shadow: var(--shadow-raised); }
 .release-notes-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 26px 24px 10px; }
 .release-notes-header { display: grid; justify-items: center; text-align: center; }
-.release-notes-mark { width: 44px; height: 44px; margin-bottom: 12px; border-radius: 50%; box-shadow: none; }
+.release-notes-brand-icon { width: 44px; height: 44px; margin-bottom: 12px; border-radius: 12px; box-shadow: none; }
 .release-notes-header h2 { margin: 0; font-family: var(--font-editorial); font-size: 26px; font-weight: var(--font-weight-medium); letter-spacing: -.025em; line-height: 1.08; }
 .release-notes-header p { margin: 4px 0 0; color: var(--color-text-tertiary); font-size: 13px; }
 .release-notes-list { margin: 24px 0 8px; padding: 0; display: grid; gap: 18px; list-style: none; }
@@ -882,16 +884,15 @@ input[type="date"]::-webkit-datetime-edit, input[type="datetime-local"]::-webkit
 }
 
 .session-loading { min-height: 100vh; min-height: 100dvh; padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; }
-.release-notes-mark { display: grid; place-items: center; color: var(--color-brand); border: 1px solid rgba(var(--color-brand-rgb), .2); border-radius: 50%; background: var(--surface-brand-subtle); }
-.session-brand-icon { width: 72px; height: 72px; margin-bottom: 8px; display: block; border-radius: 20px; object-fit: cover; box-shadow: 0 10px 26px rgba(27, 25, 19, .09); }
-.release-notes-mark { width: 44px; height: 44px; margin: 0 auto 12px; }
-.release-notes-mark .app-icon { width: 22px; height: 22px; }
+.session-brand-icon { width: 72px; height: 72px; margin-bottom: 8px; display: block; border-radius: 20px; object-fit: contain; box-shadow: none; }
+.account-migration-brand-icon { width: 44px; height: 44px; margin: 0 auto 12px; border-radius: 12px; }
+.release-notes-brand-icon { width: 44px; height: 44px; margin: 0 auto 12px; }
 .session-loading strong { color: var(--text); font-size: 20px; }
 .session-loading span { max-width: 32ch; font-size: 14px; }
 
 .auth-shell { min-height: 100vh; min-height: 100dvh; padding: max(28px, calc(env(safe-area-inset-top) + 20px)) max(18px, env(safe-area-inset-right)) max(28px, calc(env(safe-area-inset-bottom) + 20px)) max(18px, env(safe-area-inset-left)); display: grid; place-items: center; }
 .auth-card { width: min(460px, 100%); padding: 28px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface-strong); box-shadow: var(--shadow); }
-.auth-logo { width: 58px; height: 58px; display: block; margin-bottom: 20px; border-radius: 17px; object-fit: cover; box-shadow: var(--shadow-control); }
+.auth-logo { width: 58px; height: 58px; display: block; margin-bottom: 20px; border-radius: 17px; object-fit: contain; box-shadow: none; }
 .auth-heading { display: grid; gap: 6px; margin-bottom: 22px; }
 .auth-heading > * { margin: 0; }
 .auth-heading h1 { color: var(--text); font-size: 30px; line-height: 1.08; }
@@ -2295,8 +2296,8 @@ input[type="date"]::-webkit-datetime-edit, input[type="datetime-local"]::-webkit
 .hn-auth-shell::before { content: ""; position: fixed; z-index: -1; width: min(68vw, 820px); aspect-ratio: 1; right: -28vw; top: -26vw; border: 1px solid var(--color-border); border-radius: 50%; opacity: .75; }
 .hn-auth-shell::after { content: ""; position: fixed; z-index: -1; width: min(38vw, 420px); aspect-ratio: 1; left: -20vw; bottom: -24vw; border: 1px solid var(--color-border); border-radius: 50%; opacity: .55; }
 .hn-auth-card { width: min(432px, 100%); padding: var(--space-6); border-color: var(--color-border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: var(--shadow-raised); }
-.hn-auth-brand { min-height: 30px; display: flex; align-items: center; gap: 9px; margin-bottom: var(--space-5); color: var(--color-brand); font-size: var(--type-label); font-weight: var(--font-weight-bold); letter-spacing: .16em; text-transform: uppercase; }
-.hn-auth-brand .auth-logo { width: 30px; height: 30px; margin: 0; border-radius: var(--radius-sm); box-shadow: none; }
+.hn-auth-brand { min-height: 46px; display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-5); color: var(--color-brand); font-size: var(--type-label); font-weight: var(--font-weight-bold); letter-spacing: .16em; text-transform: uppercase; }
+.hn-auth-brand .auth-logo { width: 46px; height: 46px; margin: 0; border-radius: 12px; box-shadow: none; }
 .hn-auth-card .auth-heading { gap: var(--space-2); margin-bottom: var(--space-5); }
 .hn-auth-card .auth-heading .eyebrow { color: var(--color-brand); font-size: var(--type-caption); letter-spacing: .1em; }
 .hn-auth-card .auth-heading h1 { color: var(--color-text-primary); font-family: var(--font-editorial); font-size: 34px; font-weight: var(--font-weight-regular); letter-spacing: -.035em; }

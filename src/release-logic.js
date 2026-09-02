@@ -1,12 +1,12 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.44",
-    assetVersion: "v1.3.44",
+    version: "1.3.45",
+    assetVersion: "v1.3.45",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "bridge",
+        icon: "link",
         title: "Meet Open Span",
         description: "Bridge has a distinctive new icon: one calm span with a broken support that steps forward."
       }),

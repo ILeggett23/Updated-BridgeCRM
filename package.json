@@ -1,12 +1,12 @@
 {
   "name": "bridgecrm",
-  "version": "1.3.44",
+  "version": "1.3.45",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=.env dev.mjs",
     "preview": "node --env-file-if-exists=.env dev.mjs",
-    "generate:icons": "node scripts/generate-app-icon-assets.mjs",
+    "generate:icons": "node scripts/generate-brand-icons.mjs",
     "build": "node --env-file-if-exists=.env build.mjs",
     "typecheck": "node --check src/ui-foundation.js && node --check src/app.js",
     "test": "node --env-file-if-exists=.env build.mjs && node --test tests/*.test.mjs",

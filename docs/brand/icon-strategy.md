@@ -293,18 +293,20 @@ refresh, and loading-indicator risk.
 
 ## 7. Final geometry and color
 
-- View box: `0 0 1024 1024`.
-- Master shapes: exactly two filled paths, `span` and `forward-step`.
+- Canonical source: supplied 1024 × 1024 opaque RGB PNG, preserved exactly.
+- Transparent mark trace: `0 0 1024 1024` view box with exactly two filled
+  paths, `bridge-shape` and `gold-capsule`.
 - Essential bounds: x 236–914, y 130–878.
 - Conservatively clear of launcher corners.
 - Main field: deep forest `#073E36`.
 - Primary span: warm paper `#F7F1E6`.
 - Forward support: amber `#E1A64A`.
-- Transparent in-app mark: brand forest `#0A4F44` plus amber.
-- Monochrome: both paths use one color; the gap does all identity work.
+- Transparent in-app mark: deep forest `#073E36` plus amber.
+- Maskable derivatives scale the complete source uniformly to 84% without
+  independently moving either foreground form.
 
-No gradient, shadow, bevel, texture, lighting, raster image, external font, or
-typed letter is part of the icon identity.
+No gradient, shadow, bevel, texture, lighting, external font, or typed letter is
+part of the icon identity.
 
 ## 8. Recall-test protocol
 

@@ -1,6 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.44";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.44";
-import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.44";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.45";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.45";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.45";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -10,6 +10,7 @@ const { analyticsRange, buildInsightsModel, inAnalyticsRange, uniquePhoneCapture
 const { canonicalPhone, phoneIdentity, telHref, smsHref } = globalThis.BridgeCommunication;
 const { createSnapshot, scorecardSummary } = globalThis.BridgeScorecard || {};
 const { APP_RELEASE, markReleaseSeen } = globalThis.BridgeRelease;
+const brandIcon = options => globalThis.BridgeBrandIcon?.render(options) || "";
 const {
   DEFAULT_CADENCE_PRESETS,
   FORMULA_VERSION: HEALTH_FORMULA_VERSION,
@@ -183,7 +184,6 @@ const icons = {
   phone: icon('<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>'),
   phoneCall: icon('<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>'),
   mail: icon('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
-  bridge: icon('<path d="M3 18c2-7 5-10 9-10s7 3 9 10M3 18h18M6 18v3M18 18v3M8.5 10.5V18M15.5 10.5V18"/>'),
   sort: icon('<path d="m3 8 4-4 4 4M7 4v16M21 16l-4 4-4-4M17 20V4"/>'),
   tags: icon('<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414L10 20l10-10Z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><path d="m13.5 6.5 4 4"/>'),
   archive: icon('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>'),
@@ -1141,7 +1141,7 @@ function accountSyncLabel() {
 function renderSessionLoading() {
   document.body.classList.remove("modal-open");
   const app = $("#app");
-  app.innerHTML = `<main class="session-loading"><img class="session-brand-icon" src="./bridge-icon-192.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><strong>Opening Bridge</strong><span>Checking your private workspace…</span></main>`;
+  app.innerHTML = `<main class="session-loading">${brandIcon({ variant:"app", size:72, className:"session-brand-icon" })}<strong>Opening Bridge</strong><span>Checking your private workspace…</span></main>`;
 }
 
 function cleanAccountURLParameter(name) {
@@ -1642,7 +1642,7 @@ async function sendBridgeNotification(title, options) {
   if (notificationPermission() !== "granted") return false;
   try {
     const registration = await navigator.serviceWorker.ready;
-    await registration.showNotification(title, { icon: `./bridge-icon-192.png?v=${APP_RELEASE.version}`, badge: `./bridge-icon-192.png?v=${APP_RELEASE.version}`, ...options });
+    await registration.showNotification(title, { icon: `./bridge-app-icon-192.png?v=${APP_RELEASE.version}`, badge: `./bridge-app-icon-192.png?v=${APP_RELEASE.version}`, ...options });
     return true;
   } catch { return false; }
 }
@@ -1962,7 +1962,7 @@ function accountMigrationModal() {
   const busy = ui.accountBusy ? "disabled" : "";
   return `<div class="modal-backdrop account-migration-backdrop"><section class="modal account-migration-modal hn-account-modal" role="dialog" aria-modal="true" aria-labelledby="accountMigrationTitle" aria-describedby="accountMigrationDescription">
     <header class="account-migration-header">
-      <span class="session-brand-symbol" aria-hidden="true">${icons.bridge}</span>
+      ${brandIcon({ variant:"app", size:44, className:"session-brand-icon account-migration-brand-icon" })}
       <span class="eyebrow">Private workspace</span>
       <h2 id="accountMigrationTitle">Keep your existing Bridge data?</h2>
       <p id="accountMigrationDescription">Bridge found information saved only in this browser. Choose whether to copy it into this account or begin with an empty account.</p>
@@ -2216,7 +2216,7 @@ function render() {
 }
 
 function sharedBrand() {
-  return `<div class="shared-brand"><img class="shared-brand-icon" src="./bridge-mark-transparent.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><span>Bridge CRM</span></div>`;
+  return `<div class="shared-brand">${brandIcon({ variant:"mark", size:28, className:"shared-brand-icon" })}<span>Bridge CRM</span></div>`;
 }
 
 function sharedScorecardMetricRows(metrics) {
@@ -2295,7 +2295,7 @@ function bindConfirmationEvents() {
 
 function releaseNotesModal() {
   const items = APP_RELEASE.items.map(item => `<li class="release-note-item"><div class="release-note-icon">${icons[item.icon] || icons.sparkles}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.description)}</p></div></li>`).join("");
-  return `<div class="modal-backdrop release-notes-backdrop" id="releaseNotesBackdrop"><section class="modal release-notes-modal" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle" aria-describedby="releaseNotesVersion"><div class="release-notes-scroll"><header class="release-notes-header"><span class="release-notes-mark" aria-hidden="true">${icons.bridge}</span><h2 id="releaseNotesTitle">${escapeHTML(APP_RELEASE.title)}</h2><p id="releaseNotesVersion">Version ${escapeHTML(APP_RELEASE.version)}</p></header><ul class="release-notes-list">${items}</ul></div><footer class="release-notes-actions"><button class="button primary" id="continueReleaseNotes" type="button">${icons.circleCheck}<span>Continue</span></button></footer></section></div>`;
+  return `<div class="modal-backdrop release-notes-backdrop" id="releaseNotesBackdrop"><section class="modal release-notes-modal" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle" aria-describedby="releaseNotesVersion"><div class="release-notes-scroll"><header class="release-notes-header">${brandIcon({ variant:"app", size:44, className:"release-notes-brand-icon" })}<h2 id="releaseNotesTitle">${escapeHTML(APP_RELEASE.title)}</h2><p id="releaseNotesVersion">Version ${escapeHTML(APP_RELEASE.version)}</p></header><ul class="release-notes-list">${items}</ul></div><footer class="release-notes-actions"><button class="button primary" id="continueReleaseNotes" type="button">${icons.circleCheck}<span>Continue</span></button></footer></section></div>`;
 }
 
 function releaseFocusableElements() {
@@ -3014,7 +3014,7 @@ function renderDashboard() {
   const momentum = todayMomentum(now);
   return `<section class="today-home" aria-label="Today">
     <header class="today-home__header" data-guide-target="today-overview">
-      <div class="today-home__identity"><img class="today-home__brand-mark" src="./bridge-mark-transparent.png?v=${escapeHTML(APP_RELEASE.version)}" alt=""><div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1 class="primary-page-title">${greeting}</h1></div></div>
+      <div class="today-home__identity">${brandIcon({ variant:"mark", size:36, className:"today-home__brand-mark" })}<div><p class="today-home__date">${escapeHTML(new Intl.DateTimeFormat(undefined, { weekday:"long", month:"long", day:"numeric" }).format(now))}</p><h1 class="primary-page-title">${greeting}</h1></div></div>
       ${IconButton("gear", "Settings", { attributes:'id="settingsButton" data-guide-target="settings-button"', className:"today-home__settings" })}
     </header>
     ${todayGoalProgress(dailyGoal)}
@@ -4489,7 +4489,7 @@ function scorecardBrandMark() {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
-    image.src = `./bridge-mark-transparent.png?v=${encodeURIComponent(APP_RELEASE.version)}`;
+    image.src = `./bridge-ui-mark-192.png?v=${encodeURIComponent(APP_RELEASE.version)}`;
   });
 }
 

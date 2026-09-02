@@ -1,9 +1,9 @@
-const CACHE = "bridge-app-v1.3.44";
+const CACHE = "bridge-app-v1.3.45";
 const ROOT = new URL("./", self.location.href).href;
 const APP_ROOT = new URL(ROOT);
 const FOLLOW_UP_FALLBACK = new URL("?page=followups&notification=1", APP_ROOT).href;
 try {
-  importScripts(new URL("config.js?v=1.3.44", ROOT).href);
+  importScripts(new URL("config.js?v=1.3.45", ROOT).href);
 } catch {
   // A restarted worker must still install and serve the offline shell when
   // the versioned config script is not in the browser HTTP cache yet.
@@ -14,7 +14,7 @@ const localHost = hostname === "localhost" || hostname === "127.0.0.1" || hostna
 const injectedAPI = String(self.BRIDGE_API_BASE || "").trim();
 const API_BASE = String(self.BridgeConfig?.apiBase || injectedAPI || (localHost ? self.location.origin : productionAPI)).replace(/\/+$/, "");
 const apiURL = path => `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
-const SHELL = [ROOT, new URL("index.html", ROOT).href, new URL("config.js", ROOT).href, new URL("contact-logic.js", ROOT).href, new URL("engagement-logic.js", ROOT).href, new URL("communication-logic.js", ROOT).href, new URL("analytics-logic.js", ROOT).href, new URL("relationship-health-logic.js", ROOT).href, new URL("network-logic.js", ROOT).href, new URL("scorecard-logic.js", ROOT).href, new URL("release-logic.js", ROOT).href, new URL("account-client.js", ROOT).href, new URL("ui-foundation.js", ROOT).href, new URL("walkthrough.js", ROOT).href, new URL("tutorial-fixture.js", ROOT).href, new URL("app.js", ROOT).href, new URL("styles.css", ROOT).href, new URL("manifest.webmanifest", ROOT).href, new URL("favicon.svg", ROOT).href, new URL("favicon-32.png", ROOT).href, new URL("favicon-48.png", ROOT).href, new URL("bridge-mark-transparent.png", ROOT).href, new URL("bridge-icon-monochrome.svg", ROOT).href, new URL("bridge-icon-192.png", ROOT).href, new URL("bridge-icon-512.png", ROOT).href, new URL("bridge-icon-maskable-512.png", ROOT).href, new URL("bridge-icon-1024.png", ROOT).href, new URL("apple-touch-icon.png", ROOT).href, new URL("fonts/inter-tight-latin.woff2", ROOT).href, new URL("fonts/inter-tight-latin-ext.woff2", ROOT).href, new URL("fonts/inter-tight-italic-latin.woff2", ROOT).href, new URL("fonts/inter-tight-italic-latin-ext.woff2", ROOT).href, new URL("fonts/newsreader-latin.woff2", ROOT).href, new URL("fonts/newsreader-latin-ext.woff2", ROOT).href, new URL("fonts/newsreader-italic-latin.woff2", ROOT).href, new URL("fonts/newsreader-italic-latin-ext.woff2", ROOT).href];
+const SHELL = [ROOT, new URL("index.html", ROOT).href, new URL("brand-icon.js", ROOT).href, new URL("config.js", ROOT).href, new URL("contact-logic.js", ROOT).href, new URL("engagement-logic.js", ROOT).href, new URL("communication-logic.js", ROOT).href, new URL("analytics-logic.js", ROOT).href, new URL("relationship-health-logic.js", ROOT).href, new URL("network-logic.js", ROOT).href, new URL("scorecard-logic.js", ROOT).href, new URL("release-logic.js", ROOT).href, new URL("account-client.js", ROOT).href, new URL("ui-foundation.js", ROOT).href, new URL("walkthrough.js", ROOT).href, new URL("tutorial-fixture.js", ROOT).href, new URL("app.js", ROOT).href, new URL("styles.css", ROOT).href, new URL("manifest.webmanifest", ROOT).href, new URL("favicon-16x16.png", ROOT).href, new URL("favicon-32x32.png", ROOT).href, new URL("favicon-48x48.png", ROOT).href, new URL("bridge-ui-mark.svg", ROOT).href, new URL("bridge-ui-mark-192.png", ROOT).href, new URL("bridge-app-icon-192.png", ROOT).href, new URL("bridge-app-icon-512.png", ROOT).href, new URL("bridge-app-icon-maskable-192.png", ROOT).href, new URL("bridge-app-icon-maskable-512.png", ROOT).href, new URL("bridge-app-icon-1024.png", ROOT).href, new URL("apple-touch-icon.png", ROOT).href, new URL("fonts/inter-tight-latin.woff2", ROOT).href, new URL("fonts/inter-tight-latin-ext.woff2", ROOT).href, new URL("fonts/inter-tight-italic-latin.woff2", ROOT).href, new URL("fonts/inter-tight-italic-latin-ext.woff2", ROOT).href, new URL("fonts/newsreader-latin.woff2", ROOT).href, new URL("fonts/newsreader-latin-ext.woff2", ROOT).href, new URL("fonts/newsreader-italic-latin.woff2", ROOT).href, new URL("fonts/newsreader-italic-latin-ext.woff2", ROOT).href];
 const SHELL_PATHS = new Set(SHELL.map(value => new URL(value).pathname));
 
 function publicShellResponse(response, requestURL) {
@@ -246,8 +246,8 @@ self.addEventListener("push", event => {
   const title = payload.title || "Bridge follow-up";
   const options = {
     body: payload.body || "A scheduled follow-up is ready.",
-    icon: new URL("bridge-icon-192.png?v=1.3.44", ROOT).href,
-    badge: new URL("bridge-icon-192.png?v=1.3.44", ROOT).href,
+    icon: new URL("bridge-app-icon-192.png?v=1.3.45", ROOT).href,
+    badge: new URL("bridge-app-icon-192.png?v=1.3.45", ROOT).href,
     tag: payload.tag || "bridge-followup",
     renotify: false,
     data: { url: notificationTarget(payload.url) }

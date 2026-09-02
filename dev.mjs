@@ -15,6 +15,7 @@ function sourcePath(pathname) {
 
 const staticFiles = new Map([
   ["/styles.css", ["./src/styles.css", "text/css; charset=utf-8"]],
+  ["/brand-icon.js", ["./src/brand-icon.js", "text/javascript; charset=utf-8"]],
   ["/ui-foundation.js", ["./src/ui-foundation.js", "text/javascript; charset=utf-8"]],
   ["/walkthrough.js", ["./src/walkthrough.js", "text/javascript; charset=utf-8"]],
   ["/tutorial-fixture.js", ["./src/tutorial-fixture.js", "text/javascript; charset=utf-8"]],
@@ -31,16 +32,17 @@ const staticFiles = new Map([
   ["/app.js", ["./src/app.js", "text/javascript; charset=utf-8"]],
   ["/sw.js", ["./src/sw.js", "text/javascript; charset=utf-8"]],
   ["/manifest.webmanifest", ["./src/manifest.webmanifest", "application/manifest+json; charset=utf-8"]],
-  ["/favicon.svg", ["./src/favicon.svg", "image/svg+xml; charset=utf-8"]],
-  ["/favicon-32.png", ["./src/favicon-32.png", "image/png"]],
-  ["/favicon-48.png", ["./src/favicon-48.png", "image/png"]],
+  ["/favicon-16x16.png", ["./src/favicon-16x16.png", "image/png"]],
+  ["/favicon-32x32.png", ["./src/favicon-32x32.png", "image/png"]],
+  ["/favicon-48x48.png", ["./src/favicon-48x48.png", "image/png"]],
   ["/apple-touch-icon.png", ["./src/apple-touch-icon.png", "image/png"]],
-  ["/bridge-mark-transparent.png", ["./src/bridge-mark-transparent.png", "image/png"]],
-  ["/bridge-icon-monochrome.svg", ["./src/bridge-icon-monochrome.svg", "image/svg+xml; charset=utf-8"]],
-  ["/bridge-icon-192.png", ["./src/bridge-icon-192.png", "image/png"]],
-  ["/bridge-icon-512.png", ["./src/bridge-icon-512.png", "image/png"]],
-  ["/bridge-icon-maskable-512.png", ["./src/bridge-icon-maskable-512.png", "image/png"]],
-  ["/bridge-icon-1024.png", ["./src/bridge-icon-1024.png", "image/png"]]
+  ["/bridge-ui-mark.svg", ["./src/bridge-ui-mark.svg", "image/svg+xml; charset=utf-8"]],
+  ["/bridge-ui-mark-192.png", ["./src/bridge-ui-mark-192.png", "image/png"]],
+  ["/bridge-app-icon-192.png", ["./src/bridge-app-icon-192.png", "image/png"]],
+  ["/bridge-app-icon-512.png", ["./src/bridge-app-icon-512.png", "image/png"]],
+  ["/bridge-app-icon-maskable-192.png", ["./src/bridge-app-icon-maskable-192.png", "image/png"]],
+  ["/bridge-app-icon-maskable-512.png", ["./src/bridge-app-icon-maskable-512.png", "image/png"]],
+  ["/bridge-app-icon-1024.png", ["./src/bridge-app-icon-1024.png", "image/png"]]
 ]);
 
 for (const fontFile of [

@@ -1,0 +1,68 @@
+{
+  "canonicalSha256": "baffea4921ad2709f33955dc4d823d8cbd8248f7499c1ba7d48be254bf75d46a",
+  "maskableScale": 0.84,
+  "maximumTraceDifference": 1.9450980392156862,
+  "maskableForegroundMaximumRadius": 213.96845561904678,
+  "generated": {
+    "bridge-app-icon-1024.png": {
+      "width": 1024,
+      "height": 1024,
+      "alpha": false,
+      "sha256": "baffea4921ad2709f33955dc4d823d8cbd8248f7499c1ba7d48be254bf75d46a"
+    },
+    "bridge-app-icon-192.png": {
+      "width": 192,
+      "height": 192,
+      "alpha": false,
+      "sha256": "2c01e6a72176a46c0f3a558d505693e0411198149b3a1be78cdc90ec9c9c7e52"
+    },
+    "bridge-app-icon-512.png": {
+      "width": 512,
+      "height": 512,
+      "alpha": false,
+      "sha256": "fa6fd2c4995cafa7ea350353e9b13167776d72faa70eae4e85b1b68e50bb7ec9"
+    },
+    "bridge-app-icon-maskable-192.png": {
+      "width": 192,
+      "height": 192,
+      "alpha": false,
+      "sha256": "d47dfdc9732c0b62c488d120a3182af4eeee16b6df96d3b8de68b86974d81577"
+    },
+    "bridge-app-icon-maskable-512.png": {
+      "width": 512,
+      "height": 512,
+      "alpha": false,
+      "sha256": "b1d97b9c72381b7e2d26710f5bacf05a885fa64a60c5c0c661929ab011212808"
+    },
+    "bridge-ui-mark-192.png": {
+      "width": 192,
+      "height": 192,
+      "alpha": true,
+      "sha256": "d40977345df4ef4a671372048c4ea31a1c5de4e514d4702ab938f528edd8b805"
+    },
+    "apple-touch-icon.png": {
+      "width": 180,
+      "height": 180,
+      "alpha": false,
+      "sha256": "d14b827b03b949a07d8dfaf6d8efae8165d493fc1c43c4483284dce47593d27b"
+    },
+    "favicon-16x16.png": {
+      "width": 16,
+      "height": 16,
+      "alpha": false,
+      "sha256": "16ea2955d893dd9c82d8c1a129ccc124a89fc94060a9734f0606e794f1fc11b7"
+    },
+    "favicon-32x32.png": {
+      "width": 32,
+      "height": 32,
+      "alpha": false,
+      "sha256": "2d01c627be3da5271e124198e0056ef52576d27a665fa89f9742c27db6207961"
+    },
+    "favicon-48x48.png": {
+      "width": 48,
+      "height": 48,
+      "alpha": false,
+      "sha256": "03761af1266680945680557a6d1bcde5b73c2886fcd4d0dd8389157e86ac5379"
+    }
+  }
+}
