@@ -1,6 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.43";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.43";
-import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.43";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.44";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.44";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.44";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

@@ -77,7 +77,7 @@ test("production serves scripts as JavaScript without corrupting selector helper
   assert.ok(worker.includes('url.pathname === "/network-logic.js"'));
   assert.ok(devServer.includes('["/network-logic.js", ["./src/network-logic.js"'));
   assert.ok(worker.includes('url.pathname === "/styles.css"'));
-  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.43"'));
+  assert.ok(page.includes('<script type="module" src="./app.js?v=1.3.44"'));
   assert.ok(worker.includes('url.pathname === "/ui-foundation.js"'));
   assert.ok(devServer.includes('["/ui-foundation.js", ["./src/ui-foundation.js"'));
   assert.equal(page.includes('const $ = (selector, root = document) => [...root.querySelectorAll(selector)]'), false);
@@ -112,9 +112,13 @@ test("hosted reminders remain isolated from device-local CRM state", () => {
 });
 
 test("iPhone web app assets are included in the production worker", () => {
+  assert.ok(worker.includes("favicon.svg"));
+  assert.ok(worker.includes("favicon-32.png"));
   assert.ok(worker.includes("apple-touch-icon.png"));
+  assert.ok(worker.includes("bridge-icon-monochrome.svg"));
   assert.ok(worker.includes("bridge-icon-192.png"));
   assert.ok(worker.includes("bridge-icon-512.png"));
+  assert.ok(worker.includes("bridge-icon-maskable-512.png"));
   assert.ok(worker.includes("bridge-icon-1024.png"));
   assert.ok(worker.includes("manifest.webmanifest"));
   assert.ok(worker.includes("service-worker-allowed"));
@@ -410,14 +414,14 @@ test("Settings uses a progressive preference hierarchy without changing its pers
   assert.ok(styles.includes('.hn-settings-save .button { width: 100%;'));
 });
 
-test("v1.3.43 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
-  assert.ok(page.includes("./config.js?v=1.3.43"));
-  assert.ok(page.includes("./styles.css?v=1.3.43"));
-  assert.ok(page.includes("./engagement-logic.js?v=1.3.43"));
-  assert.ok(page.includes("./release-logic.js?v=1.3.43"));
-  assert.ok(page.includes("./account-client.js?v=1.3.43"));
-  assert.ok(page.includes("./app.js?v=1.3.43"));
-  assert.ok(worker.includes("bridge-app-v1.3.43"));
+test("v1.3.44 cache busting is coordinated across scripts, styles, manifest, and service worker", () => {
+  assert.ok(page.includes("./config.js?v=1.3.44"));
+  assert.ok(page.includes("./styles.css?v=1.3.44"));
+  assert.ok(page.includes("./engagement-logic.js?v=1.3.44"));
+  assert.ok(page.includes("./release-logic.js?v=1.3.44"));
+  assert.ok(page.includes("./account-client.js?v=1.3.44"));
+  assert.ok(page.includes("./app.js?v=1.3.44"));
+  assert.ok(worker.includes("bridge-app-v1.3.44"));
 });
 
 test("the GitHub Pages client loads the real account gate while localhost can disable it", async () => {
@@ -427,9 +431,9 @@ test("the GitHub Pages client loads the real account gate while localhost can di
   assert.ok(source.includes("globalThis.BridgeConfig?.apiBase"));
   assert.ok(source.includes("const apiFetch = (path, options) => fetch(apiURL(path), options)"));
   assert.ok(source.includes('mode: "local"'));
-  assert.ok(page.indexOf("account-client.js?v=1.3.43") < page.indexOf("app.js?v=1.3.43"));
+  assert.ok(page.indexOf("account-client.js?v=1.3.44") < page.indexOf("app.js?v=1.3.44"));
   assert.ok(serviceWorker.includes('new URL("account-client.js", ROOT).href'));
-  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.43", ROOT).href)'));
+  assert.ok(serviceWorker.includes('importScripts(new URL("config.js?v=1.3.44", ROOT).href)'));
   assert.ok(serviceWorker.includes('new URL("ui-foundation.js", ROOT).href'));
   assert.ok(serviceWorker.includes("const API_BASE = String(self.BridgeConfig?.apiBase"));
   assert.ok(serviceWorker.includes('fetch(apiURL("/api/push/subscribe")'));

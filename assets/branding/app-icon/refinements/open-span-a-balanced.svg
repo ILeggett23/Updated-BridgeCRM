@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+<title id="title">Open Span A / Balanced</title><desc id="description">Black and white structural refinement for BridgeCRM app-icon evaluation.</desc>
+<rect width="1024" height="1024" fill="#FBFAF7"/>
+<g id="open-span">
+  <path id="span" fill="#1B1913" d="M226 786V430C226 248 354 126 512 126C684 126 812 260 812 434V536C812 592 766 638 710 638C654 638 608 592 608 536V438C608 366 566 320 512 320C458 320 420 366 420 438V786C420 842 374 888 318 888C262 888 226 842 226 786Z"/>
+  <path id="forward-step" fill="#1B1913" d="M716 698C716 646 758 604 810 604C862 604 904 646 904 698V788C904 840 862 882 810 882C758 882 716 840 716 788Z"/>
+</g>
+</svg>

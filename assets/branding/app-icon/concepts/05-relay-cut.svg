@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+<title id="title">Relay Cut monochrome concept</title><desc id="description">The important detail passes cleanly from memory into action.</desc>
+<rect width="1024" height="1024" fill="#FBFAF7"/>
+<g id="relay-cut">
+  <path fill="#1B1913" d="M156 226C156 170 202 124 258 124H536C592 124 638 170 638 226V462C638 518 592 564 536 564H258C202 564 156 518 156 462Z"/>
+  <path fill="#1B1913" d="M386 562C386 506 432 460 488 460H766C822 460 868 506 868 562V798C868 854 822 900 766 900H488C432 900 386 854 386 798Z"/>
+  <path fill="#FBFAF7" d="M488 460H638L536 564H386Z"/>
+</g>
+</svg>

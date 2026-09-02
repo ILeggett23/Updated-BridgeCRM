@@ -33,9 +33,14 @@ const serviceWorker = configuredAPIBase
     )
   : serviceWorkerSource;
 const appleTouchIcon = await readFile(new URL("./src/apple-touch-icon.png", import.meta.url));
+const faviconSvg = await readFile(new URL("./src/favicon.svg", import.meta.url), "utf8");
+const favicon32 = await readFile(new URL("./src/favicon-32.png", import.meta.url));
+const favicon48 = await readFile(new URL("./src/favicon-48.png", import.meta.url));
 const bridgeMarkTransparent = await readFile(new URL("./src/bridge-mark-transparent.png", import.meta.url));
+const iconMonochromeSvg = await readFile(new URL("./src/bridge-icon-monochrome.svg", import.meta.url), "utf8");
 const icon192 = await readFile(new URL("./src/bridge-icon-192.png", import.meta.url));
 const icon512 = await readFile(new URL("./src/bridge-icon-512.png", import.meta.url));
+const iconMaskable512 = await readFile(new URL("./src/bridge-icon-maskable-512.png", import.meta.url));
 const icon1024 = await readFile(new URL("./src/bridge-icon-1024.png", import.meta.url));
 const fontFileNames = [
   "inter-tight-latin.woff2",
@@ -75,9 +80,14 @@ const APP_JS = ${JSON.stringify(js)};
 const MANIFEST = ${JSON.stringify(manifest)};
 const SERVICE_WORKER = ${JSON.stringify(serviceWorker)};
 const APPLE_TOUCH_ICON_BASE64 = ${JSON.stringify(appleTouchIcon.toString("base64"))};
+const FAVICON_SVG = ${JSON.stringify(faviconSvg)};
+const FAVICON_32_BASE64 = ${JSON.stringify(favicon32.toString("base64"))};
+const FAVICON_48_BASE64 = ${JSON.stringify(favicon48.toString("base64"))};
 const BRIDGE_MARK_TRANSPARENT_BASE64 = ${JSON.stringify(bridgeMarkTransparent.toString("base64"))};
+const ICON_MONOCHROME_SVG = ${JSON.stringify(iconMonochromeSvg)};
 const ICON_192_BASE64 = ${JSON.stringify(icon192.toString("base64"))};
 const ICON_512_BASE64 = ${JSON.stringify(icon512.toString("base64"))};
+const ICON_MASKABLE_512_BASE64 = ${JSON.stringify(iconMaskable512.toString("base64"))};
 const ICON_1024_BASE64 = ${JSON.stringify(icon1024.toString("base64"))};
 const FONT_ASSETS = ${JSON.stringify(fontAssets)};
 const EMPTY_STATE = ${JSON.stringify({ contacts: [], places: [], settings: {}, meta: { version: 1 } })};
@@ -445,10 +455,15 @@ async function handleRequest(request, env) {
     if (url.pathname === "/app.js") return new Response(APP_JS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } });
     if (url.pathname === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "public, max-age=3600" } });
     if (url.pathname === "/sw.js") return new Response(SERVICE_WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+    if (url.pathname === "/favicon.svg") return new Response(FAVICON_SVG, { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/favicon-32.png") return new Response(binaryFromBase64(FAVICON_32_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/favicon-48.png") return new Response(binaryFromBase64(FAVICON_48_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/apple-touch-icon.png") return new Response(binaryFromBase64(APPLE_TOUCH_ICON_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-mark-transparent.png") return new Response(binaryFromBase64(BRIDGE_MARK_TRANSPARENT_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/bridge-icon-monochrome.svg") return new Response(ICON_MONOCHROME_SVG, { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-192.png") return new Response(binaryFromBase64(ICON_192_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-512.png") return new Response(binaryFromBase64(ICON_512_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    if (url.pathname === "/bridge-icon-maskable-512.png") return new Response(binaryFromBase64(ICON_MASKABLE_512_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     if (url.pathname === "/bridge-icon-1024.png") return new Response(binaryFromBase64(ICON_1024_BASE64), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
     const publicScorecardMatch = url.pathname.match(/^\\/s\\/([A-Za-z0-9_-]{24,128})(?:\\/(preview\\.png))?$/);
     if (publicScorecardMatch && request.method === "GET") {
@@ -672,10 +687,15 @@ await Promise.all([
   ["manifest.webmanifest", manifest]
 ].map(([fileName, contents]) => writeFile(new URL(`./dist/${fileName}`, import.meta.url), contents)));
 await Promise.all([
+  copyFile(new URL("./src/favicon.svg", import.meta.url), new URL("./dist/favicon.svg", import.meta.url)),
+  copyFile(new URL("./src/favicon-32.png", import.meta.url), new URL("./dist/favicon-32.png", import.meta.url)),
+  copyFile(new URL("./src/favicon-48.png", import.meta.url), new URL("./dist/favicon-48.png", import.meta.url)),
   copyFile(new URL("./src/apple-touch-icon.png", import.meta.url), new URL("./dist/apple-touch-icon.png", import.meta.url)),
   copyFile(new URL("./src/bridge-mark-transparent.png", import.meta.url), new URL("./dist/bridge-mark-transparent.png", import.meta.url)),
+  copyFile(new URL("./src/bridge-icon-monochrome.svg", import.meta.url), new URL("./dist/bridge-icon-monochrome.svg", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-192.png", import.meta.url), new URL("./dist/bridge-icon-192.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-512.png", import.meta.url), new URL("./dist/bridge-icon-512.png", import.meta.url)),
+  copyFile(new URL("./src/bridge-icon-maskable-512.png", import.meta.url), new URL("./dist/bridge-icon-maskable-512.png", import.meta.url)),
   copyFile(new URL("./src/bridge-icon-1024.png", import.meta.url), new URL("./dist/bridge-icon-1024.png", import.meta.url)),
   ...fontFileNames.map(fileName => copyFile(new URL(`./src/fonts/${fileName}`, import.meta.url), new URL(`./dist/fonts/${fileName}`, import.meta.url))),
   copyFile(new URL("./src/fonts/inter-tight-OFL.txt", import.meta.url), new URL("./dist/fonts/inter-tight-OFL.txt", import.meta.url)),

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="title">
+<title id="title">BridgeCRM platform-mask validation board</title>
+
+
+  <rect width="1600" height="640" fill="#FBFAF7"/>
+  <text x="70" y="70" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="700" fill="#1B1913">Platform mask resilience</text>
+  <text x="70" y="108" font-family="Inter, Arial, sans-serif" font-size="20" fill="#847D70">All essential geometry remains inside the conservative adaptive-icon safe area.</text>
+  <g transform="translate(70 170)">
+      <clipPath id="mask-0" clipPathUnits="userSpaceOnUse"><circle cx="160" cy="160" r="160"/></clipPath>
+      <g clip-path="url(#mask-0)"><g transform="scale(.3125)"><rect width="1024" height="1024" fill="#073E36"/><g id="open-span">
+  <path id="span" fill="#F7F1E6" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#E1A64A" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g></g>
+      <text x="160" y="366" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="600" fill="#1B1913">Circle</text>
+    </g>
+<g transform="translate(450 170)">
+      <clipPath id="mask-1" clipPathUnits="userSpaceOnUse"><path d="M0 82C0 28 28 0 82 0H238C292 0 320 28 320 82V238C320 292 292 320 238 320H82C28 320 0 292 0 238Z"/></clipPath>
+      <g clip-path="url(#mask-1)"><g transform="scale(.3125)"><rect width="1024" height="1024" fill="#073E36"/><g id="open-span">
+  <path id="span" fill="#F7F1E6" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#E1A64A" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g></g>
+      <text x="160" y="366" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="600" fill="#1B1913">Squircle</text>
+    </g>
+<g transform="translate(830 170)">
+      <clipPath id="mask-2" clipPathUnits="userSpaceOnUse"><rect width="320" height="320" rx="72"/></clipPath>
+      <g clip-path="url(#mask-2)"><g transform="scale(.3125)"><rect width="1024" height="1024" fill="#073E36"/><g id="open-span">
+  <path id="span" fill="#F7F1E6" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#E1A64A" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g></g>
+      <text x="160" y="366" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="600" fill="#1B1913">Rounded square</text>
+    </g>
+<g transform="translate(1210 170)">
+      <clipPath id="mask-3" clipPathUnits="userSpaceOnUse"><rect width="320" height="320"/></clipPath>
+      <g clip-path="url(#mask-3)"><g transform="scale(.3125)"><rect width="1024" height="1024" fill="#073E36"/><g id="open-span">
+  <path id="span" fill="#F7F1E6" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#E1A64A" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g></g>
+      <text x="160" y="366" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="600" fill="#1B1913">Square</text>
+    </g>
+  
+</svg>

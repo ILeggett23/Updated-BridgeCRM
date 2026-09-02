@@ -1,29 +1,29 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.43",
-    assetVersion: "v1.3.43",
+    version: "1.3.44",
+    assetVersion: "v1.3.44",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "chart",
-        title: "Clearer conversation timelines",
-        description: "Day, Week, and Month now use distinct activity views so hours, weekday dates, and calendar-week boundaries are immediately understandable."
-      }),
-      Object.freeze({
-        icon: "calendar",
-        title: "Calendar-correct month activity",
-        description: "Every date remains visible, including zero-activity days, with subtle Sunday separators and useful month landmarks."
-      }),
-      Object.freeze({
         icon: "bridge",
-        title: "Inspectable activity marks",
-        description: "Tap or focus a mark to see its exact interval or date and conversation count without adding dashboard clutter."
+        title: "Meet Open Span",
+        description: "Bridge has a distinctive new icon: one calm span with a broken support that steps forward."
       }),
       Object.freeze({
-        icon: "clock",
-        title: "A compact hourly Day view",
-        description: "Time-stamped conversations are grouped into two-hour buckets, while date-only history remains honest and proportionally compact."
+        icon: "target",
+        title: "Clear at every size",
+        description: "The same silhouette remains recognizable on your Home Screen, in search, in folders, and under platform masks."
+      }),
+      Object.freeze({
+        icon: "sparkles",
+        title: "Built for light and dark surfaces",
+        description: "Warm paper, deep Bridge green, and monochrome appearances all preserve the arch, gap, and forward step."
+      }),
+      Object.freeze({
+        icon: "archive",
+        title: "The previous icon is preserved",
+        description: "The former production artwork remains archived with checksums for exact comparison or rollback."
       })
     ])
   });

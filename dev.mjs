@@ -31,10 +31,15 @@ const staticFiles = new Map([
   ["/app.js", ["./src/app.js", "text/javascript; charset=utf-8"]],
   ["/sw.js", ["./src/sw.js", "text/javascript; charset=utf-8"]],
   ["/manifest.webmanifest", ["./src/manifest.webmanifest", "application/manifest+json; charset=utf-8"]],
+  ["/favicon.svg", ["./src/favicon.svg", "image/svg+xml; charset=utf-8"]],
+  ["/favicon-32.png", ["./src/favicon-32.png", "image/png"]],
+  ["/favicon-48.png", ["./src/favicon-48.png", "image/png"]],
   ["/apple-touch-icon.png", ["./src/apple-touch-icon.png", "image/png"]],
   ["/bridge-mark-transparent.png", ["./src/bridge-mark-transparent.png", "image/png"]],
+  ["/bridge-icon-monochrome.svg", ["./src/bridge-icon-monochrome.svg", "image/svg+xml; charset=utf-8"]],
   ["/bridge-icon-192.png", ["./src/bridge-icon-192.png", "image/png"]],
   ["/bridge-icon-512.png", ["./src/bridge-icon-512.png", "image/png"]],
+  ["/bridge-icon-maskable-512.png", ["./src/bridge-icon-maskable-512.png", "image/png"]],
   ["/bridge-icon-1024.png", ["./src/bridge-icon-1024.png", "image/png"]]
 ]);
 

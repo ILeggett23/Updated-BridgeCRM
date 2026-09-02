@@ -67,6 +67,22 @@ workflow remains available without connecting to production.
 - `dev.mjs`: dependency-free local development server
 - `tests/`: Node test suite
 
+## App icon and brand assets
+
+The production icon is the Open Span system documented in
+[`docs/brand/icon-strategy.md`](docs/brand/icon-strategy.md). Editable masters,
+concepts, refinements, platform sources, validation boards, and the previous
+production artwork live in `assets/branding/app-icon/`.
+
+Regenerate the committed raster outputs after changing source geometry:
+
+```bash
+npm run generate:icons
+```
+
+The generator uses Sharp only during asset production; the application runtime
+does not load it.
+
 The CRM opens without an account and persists data in browser localStorage and
 IndexedDB. Pipeline stage definitions and analytics remain in the production
 application logic; this migration does not change them. Use Bridge's JSON

@@ -47,6 +47,11 @@ test("the static build emits every document and service-worker dependency", asyn
     "walkthrough.js",
     "tutorial-fixture.js",
     "manifest.webmanifest",
+    "favicon.svg",
+    "favicon-32.png",
+    "favicon-48.png",
+    "bridge-icon-monochrome.svg",
+    "bridge-icon-maskable-512.png",
     "sw.js"
   ]) {
     await assert.doesNotReject(access(new URL(`dist/${file}`, root)), file);
@@ -77,7 +82,7 @@ test("service-worker cache writes reject API or redirected private responses", (
 });
 
 test("a cold offline worker can start without the versioned config HTTP cache", () => {
-  assert.match(serviceWorker, /try \{\s*importScripts\(new URL\("config\.js\?v=1\.3\.43", ROOT\)\.href\);\s*\} catch/);
+  assert.match(serviceWorker, /try \{\s*importScripts\(new URL\("config\.js\?v=1\.3\.44", ROOT\)\.href\);\s*\} catch/);
   assert.match(serviceWorker, /const productionAPI = "https:\/\/bridge-crm-api\.bridgecrm-zayway\.workers\.dev"/);
   assert.match(serviceWorker, /localHost = hostname === "localhost"/);
   assert.match(serviceWorker, /self\.BridgeConfig\?\.apiBase \|\| injectedAPI/);

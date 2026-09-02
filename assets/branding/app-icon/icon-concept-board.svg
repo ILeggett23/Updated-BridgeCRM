@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1500" viewBox="0 0 1600 1500" role="img" aria-labelledby="title">
+<title id="title">BridgeCRM app icon concept board</title>
+
+
+<rect width="1600" height="1500" fill="#F1EEE8"/>
+<text x="50" y="68" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="700" fill="#1B1913">BridgeCRM app-icon concept territories</text>
+<text x="50" y="103" font-family="Inter, Arial, sans-serif" font-size="20" fill="#847D70">Five strategic ideas in monochrome, followed by the six structural finalists.</text>
+<g transform="translate(50 138)">
+  <rect width="450" height="450" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(93 34) scale(.258)"><g id="open-span">
+  <path id="span" fill="#1B1913" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#1B1913" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g>
+  <text x="28" y="392" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Open Span</text>
+  <text x="28" y="422" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">bridge + forward gap</text>
+</g>
+<g transform="translate(550 138)">
+  <rect width="450" height="450" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(93 34) scale(.258)"><g id="held-thread">
+  <path d="M746 300C676 188 506 152 366 224C226 296 168 470 238 606C308 742 472 804 608 742C690 704 746 636 764 558" fill="none" stroke="#1B1913" stroke-width="154" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M338 686L444 576" fill="none" stroke="#1B1913" stroke-width="154" stroke-linecap="round"/>
+</g></g>
+  <text x="28" y="392" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Held Thread</text>
+  <text x="28" y="422" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">continuity + openness</text>
+</g>
+<g transform="translate(1050 138)">
+  <rect width="450" height="450" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(93 34) scale(.258)"><g id="memory-fold">
+  <path fill="#1B1913" fill-rule="evenodd" d="M284 154H648L854 360V724L700 878H334L170 714V268L284 154ZM358 328V672H646V556H532V442H646V328H358Z"/>
+  <path fill="#1B1913" d="M646 328L796 478L646 556Z"/>
+</g></g>
+  <text x="28" y="392" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Memory Fold</text>
+  <text x="28" y="422" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">retained context + reveal</text>
+</g>
+<g transform="translate(50 638)">
+  <rect width="450" height="450" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(93 34) scale(.258)"><g id="second-beat">
+  <path fill="#1B1913" d="M184 438C184 292 302 174 448 174C594 174 712 292 712 438C712 584 594 702 448 702C302 702 184 584 184 438ZM354 438C354 490 396 532 448 532C500 532 542 490 542 438C542 386 500 344 448 344C396 344 354 386 354 438Z"/>
+  <path fill="#1B1913" d="M604 676C604 580 682 502 778 502C874 502 952 580 952 676C952 772 874 850 778 850C682 850 604 772 604 676Z"/>
+</g></g>
+  <text x="28" y="392" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Second Beat</text>
+  <text x="28" y="422" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">conversation + follow-through</text>
+</g>
+<g transform="translate(550 638)">
+  <rect width="450" height="450" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(93 34) scale(.258)"><g id="relay-cut">
+  <path fill="#1B1913" d="M156 226C156 170 202 124 258 124H536C592 124 638 170 638 226V462C638 518 592 564 536 564H258C202 564 156 518 156 462Z"/>
+  <path fill="#1B1913" d="M386 562C386 506 432 460 488 460H766C822 460 868 506 868 562V798C868 854 822 900 766 900H488C432 900 386 854 386 798Z"/>
+  <path fill="#FBFAF7" d="M488 460H638L536 564H386Z"/>
+</g></g>
+  <text x="28" y="392" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Relay Cut</text>
+  <text x="28" y="422" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">handoff + usable context</text>
+</g>
+<text x="50" y="1117" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#1B1913">Refinements: Open Span and Held Thread</text>
+<g transform="translate(50 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="open-span">
+  <path id="span" fill="#1B1913" d="M226 786V430C226 248 354 126 512 126C684 126 812 260 812 434V536C812 592 766 638 710 638C654 638 608 592 608 536V438C608 366 566 320 512 320C458 320 420 366 420 438V786C420 842 374 888 318 888C262 888 226 842 226 786Z"/>
+  <path id="forward-step" fill="#1B1913" d="M716 698C716 646 758 604 810 604C862 604 904 646 904 698V788C904 840 862 882 810 882C758 882 716 840 716 788Z"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Balanced</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Open Span A</text>
+</g>
+<g transform="translate(300 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="open-span">
+  <path id="span" fill="#1B1913" d="M246 780V426C246 252 366 140 520 140C682 140 798 264 798 430V516C798 570 754 614 700 614C646 614 602 570 602 516V438C602 368 566 326 516 326C466 326 430 368 430 438V780C430 834 386 878 332 878C278 878 246 834 246 780Z"/>
+  <path id="forward-step" fill="#1B1913" d="M742 676C742 626 782 586 832 586C882 586 922 626 922 676V788C922 838 882 878 832 878C782 878 742 838 742 788Z"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Forward</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Open Span B</text>
+</g>
+<g transform="translate(550 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="open-span">
+  <path id="span" fill="#1B1913" d="M236 780V430C236 250 358 130 520 130C690 130 814 264 814 434V520C814 574 770 618 716 618C662 618 618 574 618 520V438C618 364 574 320 520 320C466 320 430 364 430 438V780C430 834 386 878 332 878C278 878 236 834 236 780Z"/>
+  <path id="forward-step" fill="#1B1913" d="M734 728C734 678 774 638 824 638C874 638 914 678 914 728V788C914 838 874 878 824 878C774 878 734 838 734 788Z"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Quiet</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Open Span C</text>
+</g>
+<g transform="translate(800 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="held-thread">
+  <path d="M746 300C676 188 506 152 366 224C226 296 168 470 238 606C308 742 472 804 608 742C690 704 746 636 764 558" fill="none" stroke="#1B1913" stroke-width="154" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M338 686L444 576" fill="none" stroke="#1B1913" stroke-width="154" stroke-linecap="round"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Loop</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Held Thread A</text>
+</g>
+<g transform="translate(1050 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="held-thread">
+  <path d="M752 322C660 180 446 164 302 286C180 390 178 584 300 700C420 814 620 798 724 666" fill="none" stroke="#1B1913" stroke-width="166" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M324 654L444 544" fill="none" stroke="#1B1913" stroke-width="166" stroke-linecap="round"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Clasp</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Held Thread B</text>
+</g>
+<g transform="translate(1300 1160)">
+  <rect width="220" height="270" rx="28" fill="#FFFFFF" stroke="#DDD7CD"/>
+  <g transform="translate(46 24) scale(.125)"><g id="held-thread">
+  <path d="M744 286C630 176 436 178 310 294C184 410 184 608 310 724C432 836 624 830 742 714" fill="none" stroke="#1B1913" stroke-width="146" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M358 702L470 578" fill="none" stroke="#1B1913" stroke-width="146" stroke-linecap="round"/>
+</g></g>
+  <text x="28" y="212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#1B1913">Release</text>
+  <text x="28" y="242" font-family="Inter, Arial, sans-serif" font-size="16" fill="#847D70">Held Thread C</text>
+</g>
+
+</svg>
