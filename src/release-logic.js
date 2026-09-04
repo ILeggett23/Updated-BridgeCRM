@@ -1,29 +1,29 @@
 (function (global) {
   const RELEASE_STORAGE_KEY = "bridgeLastSeenVersion";
   const APP_RELEASE = Object.freeze({
-    version: "1.3.45",
-    assetVersion: "v1.3.45",
+    version: "1.3.46",
+    assetVersion: "v1.3.46",
     title: "What's New",
     items: Object.freeze([
       Object.freeze({
-        icon: "link",
-        title: "Meet Open Span",
-        description: "Bridge has a distinctive new icon: one calm span with a broken support that steps forward."
+        icon: "people",
+        title: "Duplicate names stay distinct",
+        description: "People who share the same name can now coexist as independent relationships with their own history and next steps."
       }),
       Object.freeze({
-        icon: "target",
-        title: "Clear at every size",
-        description: "The same silhouette remains recognizable on your Home Screen, in search, in folders, and under platform masks."
+        icon: "userPlus",
+        title: "Capture makes the choice clear",
+        description: "When a name already exists, Capture keeps the existing matches visible and offers an explicit Add another action."
       }),
       Object.freeze({
-        icon: "sparkles",
-        title: "Built for light and dark surfaces",
-        description: "Warm paper, deep Bridge green, and monochrome appearances all preserve the arch, gap, and forward step."
+        icon: "home",
+        title: "Navigation stays anchored",
+        description: "The mobile dock now stays attached to the physical bottom edge through sheets, forms, scrolling, and viewport changes."
       }),
       Object.freeze({
-        icon: "archive",
-        title: "The previous icon is preserved",
-        description: "The former production artwork remains archived with checksums for exact comparison or rollback."
+        icon: "circleCheck",
+        title: "Existing relationship safeguards remain",
+        description: "Phone-number duplicate detection, stable IDs, cloud sync, persistence, and relationship associations continue to work as before."
       })
     ])
   });

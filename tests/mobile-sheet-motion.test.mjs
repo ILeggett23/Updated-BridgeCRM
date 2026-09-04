@@ -26,13 +26,14 @@ test("one bottom-sheet gesture controller owns Capture and shared sheets",()=>{
   assert.match(foundation,/data-ui-sheet-backdrop[\s\S]*data-ui-sheet[\s\S]*data-ui-sheet-drag-region[\s\S]*data-ui-sheet-scroll/);
 });
 
-test("modal scroll lock fixes the page and restores the exact scroll position",()=>{
+test("modal scroll lock clips the root without offsetting fixed descendants and restores scroll",()=>{
   const lock=between("function syncDocumentScrollLock","function springProgress");
   assert.match(lock,/lockedDocumentScrollY = window\.scrollY/);
-  assert.match(lock,/document\.body\.style\.position = "fixed"/);
+  assert.doesNotMatch(lock,/document\.body\.style\.(?:position|inset|width)/);
+  assert.match(lock,/document\.body\.classList\.add\("modal-open"\)/);
   assert.match(lock,/window\.scrollTo\(0, restoreY\)/);
   assert.match(app,/syncDocumentScrollLock\(transientModalOpen\)/);
-  assert.match(styles,/html\.modal-open, body\.modal-open \{[^}]*overscroll-behavior: none/);
+  assert.match(styles,/html\.modal-open, body\.modal-open \{[^}]*height: 100%;[^}]*overflow: hidden;[^}]*overscroll-behavior: none/);
   assert.match(styles,/\[data-ui-sheet-scroll\][^{]*\{[^}]*touch-action: pan-y/);
 });
 

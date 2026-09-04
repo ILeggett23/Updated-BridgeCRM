@@ -71,13 +71,13 @@ test("one reusable brand component owns app and mark variants accessibly", () =>
   assert.match(brandComponent, /function render\(\{ variant = "app", size = 48, className = "", label = "" \} = \{\}\)/);
   assert.match(brandComponent, /alt="" aria-hidden="true"/);
   assert.match(brandComponent, /--bridge-brand-icon-size:/);
-  assert.match(page, /brand-icon\.js\?v=1\.3\.45/);
+  assert.match(page, /brand-icon\.js\?v=1\.3\.46/);
   assert.match(account, /variant: "app", size: 46, className: "auth-logo"/);
   assert.match(app, /variant:"app", size:72, className:"session-brand-icon"/);
 });
 
 test("login, boot, loading, migration, release notes, and Today use approved variants", () => {
-  assert.match(page, /class="brand-mark boot__icon" src="\.\/bridge-app-icon-192\.png\?v=1\.3\.45"/);
+  assert.match(page, /class="brand-mark boot__icon" src="\.\/bridge-app-icon-192\.png\?v=1\.3\.46"/);
   assert.match(account, /<div class="hn-auth-brand">\$\{brandIcon\(\{ variant: "app", size: 46, className: "auth-logo" \}\)\}<span>Bridge CRM<\/span><\/div>/);
   assert.match(app, /account-migration-brand-icon/);
   assert.match(app, /release-notes-brand-icon/);

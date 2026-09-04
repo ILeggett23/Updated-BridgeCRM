@@ -16,7 +16,7 @@
         const localHost = location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
         if (!("serviceWorker" in navigator) || (location.protocol !== "https:" && !localHost)) return;
         const registerCurrentWorker = () => setTimeout(
-          () => navigator.serviceWorker.register("./sw.js?v=1.3.45").catch(() => {}),
+          () => navigator.serviceWorker.register("./sw.js?v=1.3.46").catch(() => {}),
           1000
         );
         if (document.readyState === "complete") registerCurrentWorker();
@@ -24,30 +24,30 @@
       })();
     </script>
     <title>Bridge CRM</title>
-    <link rel="manifest" href="./manifest.webmanifest?v=1.3.45" />
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.3.45" />
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.3.45" />
-    <link rel="icon" type="image/png" sizes="48x48" href="./favicon-48x48.png?v=1.3.45" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.3.45" />
+    <link rel="manifest" href="./manifest.webmanifest?v=1.3.46" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=1.3.46" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=1.3.46" />
+    <link rel="icon" type="image/png" sizes="48x48" href="./favicon-48x48.png?v=1.3.46" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=1.3.46" />
     <link rel="preload" href="./fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="./fonts/newsreader-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=1.3.45" data-bridge-styles />
-    <script src="./brand-icon.js?v=1.3.45"></script>
+    <link rel="stylesheet" href="./styles.css?v=1.3.46" data-bridge-styles />
+    <script src="./brand-icon.js?v=1.3.46"></script>
   </head>
   <body>
-    <div id="app"><div class="boot"><img class="brand-mark boot__icon" src="./bridge-app-icon-192.png?v=1.3.45" alt="" aria-hidden="true" /><strong>Bridge</strong><span>Relationships that move forward</span></div></div>
+    <div id="app"><div class="boot"><img class="brand-mark boot__icon" src="./bridge-app-icon-192.png?v=1.3.46" alt="" aria-hidden="true" /><strong>Bridge</strong><span>Relationships that move forward</span></div></div>
     <div id="bridgeGuideRoot"></div>
     <div id="toast" role="status" aria-live="polite"></div>
-    <script src="./config.js?v=1.3.45"></script>
-    <script src="./contact-logic.js?v=1.3.45"></script>
-    <script src="./engagement-logic.js?v=1.3.45"></script>
-    <script src="./communication-logic.js?v=1.3.45"></script>
-    <script src="./analytics-logic.js?v=1.3.45"></script>
-    <script src="./relationship-health-logic.js?v=1.3.45"></script>
-    <script src="./network-logic.js?v=1.3.45"></script>
-    <script src="./scorecard-logic.js?v=1.3.45"></script>
-    <script src="./release-logic.js?v=1.3.45"></script>
-    <script src="./account-client.js?v=1.3.45"></script>
-    <script type="module" src="./app.js?v=1.3.45" data-bridge-app></script>
+    <script src="./config.js?v=1.3.46"></script>
+    <script src="./contact-logic.js?v=1.3.46"></script>
+    <script src="./engagement-logic.js?v=1.3.46"></script>
+    <script src="./communication-logic.js?v=1.3.46"></script>
+    <script src="./analytics-logic.js?v=1.3.46"></script>
+    <script src="./relationship-health-logic.js?v=1.3.46"></script>
+    <script src="./network-logic.js?v=1.3.46"></script>
+    <script src="./scorecard-logic.js?v=1.3.46"></script>
+    <script src="./release-logic.js?v=1.3.46"></script>
+    <script src="./account-client.js?v=1.3.46"></script>
+    <script type="module" src="./app.js?v=1.3.46" data-bridge-app></script>
   </body>
 </html>

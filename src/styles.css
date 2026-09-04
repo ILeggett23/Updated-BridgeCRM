@@ -212,7 +212,7 @@ html { min-width: 0; min-height: 100%; overflow-x: clip; background: var(--bg); 
 body { margin: 0; width: 100%; min-width: 0; min-height: 100vh; min-height: 100dvh; overflow-x: clip; color: var(--text); background: var(--bg); font: var(--font-weight-regular) 16px/1.5 var(--font-sans); font-optical-sizing: auto; letter-spacing: 0; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 html, body { scrollbar-width: none; }
 html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
-html.modal-open, body.modal-open { overflow: hidden; overscroll-behavior: none; }
+html.modal-open, body.modal-open { height: 100%; overflow: hidden; overscroll-behavior: none; }
 button, input, select, textarea { max-width: 100%; min-width: 0; font: inherit; color: inherit; }
 input, textarea { background-color: transparent; }
 button, select { cursor: pointer; }
@@ -4783,21 +4783,21 @@ body .bridge-pattern-shell > .main {
    not turn it into visible empty space beneath the primary dock or the short
    Capture chooser. */
 @media (max-width: 767px) {
-  :root { --nav-interaction-inset: 16px; }
+  :root { --nav-bottom-inset: max(var(--safe-bottom), 16px); }
   html, body, #app { background: var(--color-page); }
   body .bridge-pattern-shell > .bridge-pattern-nav {
-    height: calc(var(--nav-height) + var(--nav-interaction-inset)) !important;
-    padding-bottom: var(--nav-interaction-inset) !important;
+    height: calc(var(--nav-height) + var(--nav-bottom-inset)) !important;
+    padding-bottom: var(--nav-bottom-inset) !important;
     border-top-color: var(--color-surface-soft) !important;
     background: var(--color-page) !important;
     box-shadow: var(--shadow-nav) !important;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--nav-interaction-inset) + 3px); }
+  body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--nav-bottom-inset) + 3px); }
   body .bridge-pattern-shell > .main {
-    padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-7)) !important;
-    scroll-padding-bottom: calc(var(--nav-height) + var(--nav-interaction-inset) + var(--space-5));
+    padding-bottom: calc(var(--nav-height) + var(--nav-bottom-inset) + var(--space-7)) !important;
+    scroll-padding-bottom: calc(var(--nav-height) + var(--nav-bottom-inset) + var(--space-5));
   }
   .quick-create-modal:not(.has-step) .modal-body { padding-bottom: var(--space-4); }
 }
@@ -4936,19 +4936,9 @@ body .bridge-pattern-nav .quick-create-button { z-index: 3; }
 }
 
 @media (max-width: 767px) {
-  :root { --nav-lift: 10px; }
-  body .bridge-pattern-shell > .bridge-pattern-nav {
-    height: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-lift)) !important;
-    padding-bottom: calc(var(--safe-bottom) + var(--nav-lift)) !important;
-  }
-  body .bridge-pattern-nav .nav-selection-indicator { bottom: calc(var(--safe-bottom) + var(--nav-lift) + 3px); }
-  body .bridge-pattern-shell > .main {
-    padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-lift) + var(--space-7)) !important;
-    scroll-padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-lift) + var(--space-6));
-  }
   .relationship-profile--editor {
-    padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-lift) + var(--space-5));
-    scroll-padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-lift) + 72px);
+    padding-bottom: calc(var(--nav-height) + var(--nav-bottom-inset) + var(--space-5));
+    scroll-padding-bottom: calc(var(--nav-height) + var(--nav-bottom-inset) + 72px);
   }
   .relationship-profile--editor .contact-edit-actions {
     position: static;

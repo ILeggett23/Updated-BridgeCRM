@@ -28,7 +28,7 @@ test("capture detail sheet separates its header, scrolling form, and action foot
   assert.match(modal,/type="submit" form="communicationLogForm"/);
   assert.match(styles,/\.capture-detail-sheet \.modal-head \.ui-icon-button \{[^}]*border: 0;[^}]*border-radius: 50%/);
   assert.match(app,/transientModalOpen=Boolean\([^\n]*ui\.communicationContactId/);
-  assert.match(styles,/html\.modal-open, body\.modal-open \{ overflow: hidden; overscroll-behavior: none; \}/);
+  assert.match(styles,/html\.modal-open, body\.modal-open \{ height: 100%; overflow: hidden; overscroll-behavior: none; \}/);
 });
 
 test("Cancel and Close discard while Save retains production timeline and analytics writes",()=>{

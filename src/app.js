@@ -1,6 +1,6 @@
-import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.45";
-import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.45";
-import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.45";
+import { createBridgeFrontendFoundation } from "./ui-foundation.js?v=1.3.46";
+import { createBridgeWalkthrough } from "./walkthrough.js?v=1.3.46";
+import { BRIDGE_GUIDE_CAPTURE_CONTENT, BRIDGE_GUIDE_CONTACT_ID, createBridgeGuideFixture } from "./tutorial-fixture.js?v=1.3.46";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -1139,7 +1139,7 @@ function accountSyncLabel() {
 }
 
 function renderSessionLoading() {
-  document.body.classList.remove("modal-open");
+  syncDocumentScrollLock(false);
   const app = $("#app");
   app.innerHTML = `<main class="session-loading">${brandIcon({ variant:"app", size:72, className:"session-brand-icon" })}<strong>Opening Bridge</strong><span>Checking your private workspace…</span></main>`;
 }
@@ -2386,9 +2386,6 @@ function syncDocumentScrollLock(shouldLock) {
     if (lockedDocumentScrollY !== null) return;
     cancelPendingScrollState();
     lockedDocumentScrollY = window.scrollY;
-    document.body.style.position = "fixed";
-    document.body.style.inset = `${-lockedDocumentScrollY}px 0 auto`;
-    document.body.style.width = "100%";
     document.body.classList.add("modal-open");
     document.documentElement.classList.add("modal-open");
     return;
@@ -2399,9 +2396,6 @@ function syncDocumentScrollLock(shouldLock) {
   const restoreY = lockedDocumentScrollY;
   const previousBehavior = document.documentElement.style.scrollBehavior;
   lockedDocumentScrollY = null;
-  document.body.style.removeProperty("position");
-  document.body.style.removeProperty("inset");
-  document.body.style.removeProperty("width");
   document.documentElement.style.scrollBehavior = "auto";
   window.scrollTo(0, restoreY);
   document.documentElement.style.scrollBehavior = previousBehavior;
@@ -2445,7 +2439,7 @@ function positionLockedGuideTarget(target, restoreY = null) {
       ? Math.min(maxScroll, Math.max(0, target.getBoundingClientRect().top + lockedDocumentScrollY - (window.innerHeight - target.getBoundingClientRect().height) / 2))
       : lockedDocumentScrollY;
   lockedDocumentScrollY = nextY;
-  document.body.style.inset = `${-nextY}px 0 auto`;
+  window.scrollTo({ top:nextY, left:0, behavior:"auto" });
 }
 
 function springProgress(seconds, { stiffness, damping }) {
@@ -2684,6 +2678,7 @@ function ActivitySelector({ selected = [], label = "Relevant activity", hint = "
   return `<fieldset class="activity-selector"><legend>${escapeHTML(label)}</legend><p>${escapeHTML(hint)}</p><div>${["MSA","DTM"].map(stage=>`<label class="activity-selector__option"><input type="checkbox" name="${stageInputName(stage)}" value="${stage}" ${active.has(stage)?"checked":""}><span><strong>${stage}</strong><small>${stage==="MSA"?"Made aware":"Drop the message"}</small></span></label>`).join("")}</div></fieldset>`;
 }
 function quickCaptureRecentContacts(contacts,limit=6) { const ordered=[...contacts].sort((left,right)=>new Date(peopleActivityAt(right)||0)-new Date(peopleActivityAt(left)||0)||String(left.fullName||"").localeCompare(String(right.fullName||"")));const selectedIndex=ordered.findIndex(contact=>String(contact.id)===String(ui.quickCreateContactId||""));if(selectedIndex>0)ordered.unshift(...ordered.splice(selectedIndex,1));return ordered.slice(0,limit); }
+function quickCaptureNewPersonLabel(query,contacts=state.contacts) { const name=String(query||"").trim();if(!name)return "new person";const exact=contacts.some(contact=>String(contact.fullName||"").trim().toLowerCase()===name.toLowerCase());return exact?`another “${name}”`:`“${name}”`; }
 function quickCapturePersonPicker(contacts,{allowNew=false}={}) {
   const selectedId=String(ui.quickCreateContactId||"");
   const recent=quickCaptureRecentContacts(contacts);
@@ -2873,7 +2868,7 @@ function bindQuickCreateEvents() {
   $$('.quick-create-back').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=null;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
   $$('[data-quick-mode]').forEach(button=>button.addEventListener('click',()=>{ui.quickCreateMode=button.dataset.quickMode;ui.quickCreateContactId="";ui.quickCreateStep=0;render();}));
   $$('.quick-capture-composer').forEach(form=>{syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);setQuickCaptureStep(form,ui.quickCreateStep,{behavior:'auto',restore:true});applyBridgeGuideCaptureFixture(form);restoreQuickCreateDraft(form);form.addEventListener('input',()=>{syncQuickCaptureStepAction(form);captureQuickCreateDraft(form);});form.addEventListener('change',()=>captureQuickCreateDraft(form));form.elements.contactId?.addEventListener('change',event=>{ui.quickCreateContactId=event.target.value;syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);captureQuickCreateDraft(form);});form.elements.role?.addEventListener('change',()=>syncQuickCaptureFields(form));});
-  $$('[data-capture-person-search]').forEach(input=>input.addEventListener('input',event=>{const form=event.currentTarget.closest('form');const query=event.currentTarget.value.trim().toLowerCase();let visible=0;$$('[data-capture-person-id]',form).forEach(button=>{button.hidden=query?!String(button.dataset.captureSearchValue||'').includes(query):button.dataset.captureRecent!=='true';if(!button.hidden)visible+=1;});const count=$('[data-capture-person-count]',form);if(count)count.textContent=String(visible);const heading=$('.quick-capture-picker__heading span',form);if(heading)heading.textContent=query?'Search results':visible?'Recent people':'People';const create=$('[data-capture-new-person]',form);if(create){const exact=state.contacts.some(contact=>String(contact.fullName||'').trim().toLowerCase()===query);create.hidden=!query||exact;const label=$('[data-capture-new-person-label]',form);if(label)label.textContent=query?`“${event.currentTarget.value.trim()}”`:'new person';}}));
+  $$('[data-capture-person-search]').forEach(input=>input.addEventListener('input',event=>{const form=event.currentTarget.closest('form');const query=event.currentTarget.value.trim().toLowerCase();let visible=0;$$('[data-capture-person-id]',form).forEach(button=>{button.hidden=query?!String(button.dataset.captureSearchValue||'').includes(query):button.dataset.captureRecent!=='true';if(!button.hidden)visible+=1;});const count=$('[data-capture-person-count]',form);if(count)count.textContent=String(visible);const heading=$('.quick-capture-picker__heading span',form);if(heading)heading.textContent=query?'Search results':visible?'Recent people':'People';const create=$('[data-capture-new-person]',form);if(create){create.hidden=!query;const label=$('[data-capture-new-person-label]',form);if(label)label.textContent=quickCaptureNewPersonLabel(event.currentTarget.value);}}));
   $$('[data-capture-person-id]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');form.elements.contactId.value=event.currentTarget.dataset.capturePersonId;ui.quickCreateContactId=form.elements.contactId.value;if(form.elements.fullName)form.elements.fullName.value='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{delete section.dataset.captureNewPersonActive;section.hidden=true;});syncQuickCaptureFields(form,{hydrateRelationship:true});syncQuickCapturePickerState(form);syncQuickCaptureStepAction(form);}));
   $$('[data-capture-new-person]').forEach(button=>button.addEventListener('click',event=>{const form=event.currentTarget.closest('form');const query=String($('[data-capture-person-search]',form)?.value||'').trim();form.elements.contactId.value='';ui.quickCreateContactId='';$$('[data-new-person-name],[data-new-person-fields]',form).forEach(section=>{section.dataset.captureNewPersonActive="true";section.hidden=false;});syncQuickCaptureFields(form);syncQuickCapturePickerState(form);if(form.elements.fullName){form.elements.fullName.value=query;form.elements.fullName.focus();}syncQuickCaptureStepAction(form);}));
   $$('[data-capture-place-search]').forEach(input=>input.addEventListener('input',event=>{const form=event.currentTarget.closest('form');const query=event.currentTarget.value.trim().toLowerCase();$$('[data-capture-place-list] [data-capture-place-id]',form).forEach(button=>{button.hidden=Boolean(query&&!String(button.dataset.captureSearchValue||'').includes(query));});const create=$('[data-capture-new-place]',form);if(create){const exact=state.places.some(place=>String(place.name||'').trim().toLowerCase()===query);create.hidden=!query||exact;const label=$('[data-capture-new-place-label]',form);if(label)label.textContent=query?`“${event.currentTarget.value.trim()}”`:'place';}}));

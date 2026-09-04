@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.3.45";
+  const VERSION = "1.3.46";
   const variants = Object.freeze({
     app: `./bridge-app-icon-192.png?v=${VERSION}`,
     mark: `./bridge-ui-mark.svg?v=${VERSION}`

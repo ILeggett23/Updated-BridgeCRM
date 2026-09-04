@@ -16,13 +16,15 @@ test("mobile navigation uses safe-area clearance without a selected-tab glow", (
   const indicator = remediation.slice(remediation.indexOf("body .bridge-pattern-nav .nav-selection-indicator"), remediation.indexOf("body .bridge-pattern-nav .quick-create-button"));
   assert.doesNotMatch(indicator, /radial-gradient/);
   assert.match(styles, /bridge-pattern-shell > \.bridge-pattern-nav[\s\S]*?box-shadow: var\(--shadow-nav\)/);
-  assert.match(remediation, /height: calc\(var\(--nav-height\) \+ var\(--safe-bottom\) \+ var\(--nav-lift\)\)/);
-  assert.match(remediation, /padding-bottom: calc\(var\(--safe-bottom\) \+ var\(--nav-lift\)\)/);
+  assert.match(styles, /--nav-bottom-inset: max\(var\(--safe-bottom\), 16px\)/);
+  assert.match(styles, /height: calc\(var\(--nav-height\) \+ var\(--nav-bottom-inset\)\)/);
+  assert.match(styles, /padding-bottom: var\(--nav-bottom-inset\)/);
+  assert.doesNotMatch(styles, /--nav-lift/);
   assert.match(remediation, /\.quick-create-button \{ z-index: 3; \}/);
 });
 
 test("edit person actions no longer cover mobile form fields", () => {
-  assert.match(remediation, /\.relationship-profile--editor \{[\s\S]*?padding-bottom: calc\(var\(--nav-height\) \+ var\(--safe-bottom\) \+ var\(--nav-lift\) \+ var\(--space-5\)\)/);
+  assert.match(remediation, /\.relationship-profile--editor \{[\s\S]*?padding-bottom: calc\(var\(--nav-height\) \+ var\(--nav-bottom-inset\) \+ var\(--space-5\)\)/);
   assert.match(remediation, /\.relationship-profile--editor \.contact-edit-actions \{[\s\S]*?position: static;[\s\S]*?background: transparent;/);
 });
 

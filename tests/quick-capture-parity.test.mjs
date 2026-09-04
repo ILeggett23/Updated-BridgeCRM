@@ -70,6 +70,23 @@ test("Real person and place pickers never rely on demo records",()=>{
   assert.doesNotMatch(`${people}${places}`,/Jasmine|Mario|Onyx Coffee|mock|seed/i);
 });
 
+test("an exact name match still offers a separately identified new person",()=>{
+  const match=app.match(/function quickCaptureNewPersonLabel\([^\n]+/);
+  assert.ok(match,"duplicate-name prompt helper should remain available");
+  const label=new Function(`${match[0]}; return quickCaptureNewPersonLabel;`)();
+  const contacts=[{id:"person-1",fullName:"James"}];
+  assert.equal(label("James",contacts),'another “James”');
+  assert.equal(label("  james  ",contacts),'another “james”');
+  assert.equal(label("Jamie",contacts),'“Jamie”');
+  assert.equal(label("",contacts),"new person");
+
+  const binding=sourceBetween("function bindQuickCreateEvents","function renderPage");
+  const personBinding=binding.slice(binding.indexOf("[data-capture-person-search]"),binding.indexOf("[data-capture-place-search]"));
+  assert.match(personBinding,/create\.hidden=!query/);
+  assert.match(personBinding,/quickCaptureNewPersonLabel\(event\.currentTarget\.value\)/);
+  assert.doesNotMatch(personBinding,/create\.hidden=!query\|\|exact/);
+});
+
 test("Conversation and follow-up share an explicit, touch-safe selected-person contract",()=>{
   const picker=sourceBetween("function quickCapturePersonPicker","function quickCapturePlaceActivityMap");
   const binding=sourceBetween("function syncQuickCapturePickerState","function updateQuickCaptureReview");

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+const accountClient = await readFile(new URL("../src/account-client.js", import.meta.url), "utf8");
 
 function selectLatestBackup(backups) {
   const start = app.indexOf("function cloudBackupTimestamp");
@@ -57,4 +58,40 @@ test("scorecard PNG generation has no stale undefined theme reference", () => {
   assert.match(preview, /RELATIONSHIP ACTIVITY/);
   assert.match(preview, /drawScorecardMetric\(context, metric/);
   assert.doesNotMatch(preview, /\bdark\b/);
+});
+
+test("same-name people receive independent IDs and survive independent lifecycle operations", () => {
+  const start = app.indexOf("function quickCaptureNewContact");
+  const end = app.indexOf("function applyQuickCaptureDetails", start);
+  assert.ok(start >= 0 && end > start);
+  let sequence = 0;
+  const create = new Function(
+    "uid", "quickCapturePlace", "nowISO", "quickCaptureISO", "ALL_STAGES", "stageInputName", "PIPELINES", "setPipelineStage",
+    `${app.slice(start, end)}; return quickCaptureNewContact;`
+  )(
+    () => `person-${++sequence}`,
+    () => ({ placeId:null, placeName:"" }),
+    () => "2026-09-03T12:00:00.000Z",
+    () => null,
+    ["MSA", "DTM", "PQI"],
+    stage => stage,
+    { Prospect:["PQI"], Customer:[], Team:[] },
+    () => {}
+  );
+  const form = values => ({ get:key => values[key] ?? "", has:() => false });
+  const first = create(form({ fullName:"James", email:"first@example.com", role:"Prospect" }), "2026-09-01T12:00:00.000Z");
+  const second = create(form({ fullName:"James", email:"second@example.com", role:"Prospect" }), "2026-09-02T12:00:00.000Z");
+  assert.equal(first.fullName, "James");
+  assert.equal(second.fullName, "James");
+  assert.notEqual(first.id, second.id);
+
+  const restored = JSON.parse(JSON.stringify([first, second]));
+  restored.find(person => person.id === first.id).email = "edited@example.com";
+  assert.equal(restored.find(person => person.id === second.id).email, "second@example.com");
+  const afterDelete = restored.filter(person => person.id !== first.id);
+  assert.deepEqual(afterDelete.map(person => person.id), [second.id]);
+
+  assert.match(app, /state\.contacts=state\.contacts\.filter\(x=>x\.id!==c\.id\)/);
+  assert.match(accountClient, /recordKey\("contact", contact\.id\)/);
+  assert.match(accountClient, /new Map\(\(next\.contacts \|\| \[\]\)\.map\(item => \[String\(item\.id\), item\]\)\)/);
 });
